@@ -1,0 +1,6 @@
+{
+  "name": "Blue Hills Designers",
+  "description": "Uganda's most premium digital menswear boutique for modern African gentlemen and corporate executives.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

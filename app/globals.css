@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
+  
+  --color-primary: #1C4D8D;
+  --color-secondary: #C6A15B;
+  --color-luxury: #1D2B3F;
+  --color-luxury-card: #F7F5F0;
+
+  --color-exec-navy: #1D2B3F;
+  --color-corp-blue: #1C4D8D;
+  --color-steel-blue: #657892;
+  --color-sky-blue: #B9CDE5;
+  --color-champ-gold: #C6A15B;
+  --color-ivory: #F7F5F0;
+}
+
+/* Custom scrollbar and smooth animation support */
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1D2B3F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #657892;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C6A15B;
+}
