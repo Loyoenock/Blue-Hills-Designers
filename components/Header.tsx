@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { cart, currentUser, users, login, logout, wishlist } = useStore();
+  const { cart, currentUser, users, login, logout, wishlist, syncFromSupabase } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -22,13 +22,14 @@ export default function Header() {
     const t = setTimeout(() => {
       setMounted(true);
     }, 0);
+    syncFromSupabase();
     return () => clearTimeout(t);
-  }, []);
+  }, [syncFromSupabase]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleQuickLogin = (email: string) => {
-    login(email);
+  const handleQuickLogin = async (email: string) => {
+    await login(email);
     setRoleSwitcherOpen(false);
     router.refresh();
   };
@@ -170,8 +171,8 @@ export default function Header() {
 
                     {currentUser && (
                       <button
-                        onClick={() => {
-                          logout();
+                        onClick={async () => {
+                          await logout();
                           setRoleSwitcherOpen(false);
                           router.refresh();
                         }}

@@ -114,7 +114,7 @@ export default function Account() {
     setTimeout(() => setProfileSuccess(false), 3000);
   };
 
-  const handlePasswordUpdateSubmit = (e: React.FormEvent) => {
+  const handlePasswordUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess(false);
@@ -128,12 +128,14 @@ export default function Account() {
       return;
     }
 
-    const res = updatePassword(newPassword);
+    const res = await updatePassword(newPassword);
     if (res.success) {
       setPasswordSuccess(true);
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
+    } else {
+      setPasswordError(res.error || "Failed to update security password.");
     }
   };
 
@@ -151,8 +153,8 @@ export default function Account() {
           </div>
           
           <button 
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               router.push('/');
             }}
             className="border border-red-500/30 hover:border-red-500/50 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-semibold px-4 py-2 rounded transition-all uppercase tracking-wider font-mono cursor-pointer shadow-sm"

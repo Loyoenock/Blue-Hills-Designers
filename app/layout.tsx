@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en" className={`${manrope.variable} ${cormorant.variable}`}>
+    <html lang="en" className={`${manrope.variable} ${cormorant.variable}`} data-scroll-behavior="smooth">
       <body className="font-sans antialiased bg-[#F7F5F0] text-[#1D2B3F] selection:bg-[#1C4D8D]/30 selection:text-[#1D2B3F]" suppressHydrationWarning>
         {children}
       </body>

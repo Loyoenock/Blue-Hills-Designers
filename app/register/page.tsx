@@ -25,6 +25,7 @@ export default function Register() {
   const [agreed, setAgreed] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -38,7 +39,7 @@ export default function Register() {
 
   if (!mounted) return null;
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccess(false);
@@ -53,14 +54,21 @@ export default function Register() {
       return;
     }
 
-    const res = register(name, email, phone);
-    if (res.success) {
-      setSuccess(true);
-      setTimeout(() => {
-        router.push('/account');
-      }, 1500);
-    } else {
-      setErrorMsg(res.error || "An error occurred compiling your elite registry.");
+    setIsLoading(true);
+    try {
+      const res = await register(name, email, phone, password);
+      if (res.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          router.push('/account');
+        }, 1500);
+      } else {
+        setErrorMsg(res.error || "An error occurred compiling your elite registry.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "An error occurred compiling your elite registry.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -195,14 +203,24 @@ export default function Register() {
                 </label>
               </div>
 
-              <div className="pt-2">
+               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                  disabled={isLoading}
+                  className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   id="register-btn-final"
                 >
-                  <span>Compile Client Registry</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-t-transparent border-[#F7F5F0] rounded-full animate-spin"></span>
+                      <span>Compiling Elite Registry...</span>
+                    </span>
+                  ) : (
+                    <>
+                      <span>Compile Client Registry</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
               </div>
             </form>

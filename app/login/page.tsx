@@ -23,6 +23,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,19 +37,26 @@ export default function Login() {
 
   if (!mounted) return null;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccess(false);
+    setIsLoading(true);
 
-    const res = login(email);
-    if (res.success) {
-      setSuccess(true);
-      setTimeout(() => {
-        router.push('/account');
-      }, 1500);
-    } else {
-      setErrorMsg(res.error || 'Login authorized keys mismatch.');
+    try {
+      const res = await login(email, password);
+      if (res.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          router.push('/account');
+        }, 1500);
+      } else {
+        setErrorMsg(res.error || 'Login authorized keys mismatch.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'An unexpected authentication error occurred.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -149,11 +157,21 @@ export default function Login() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-3.5 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                  disabled={isLoading}
+                  className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-3.5 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   id="login-btn-final"
                 >
-                  <span>Authorize Sign In</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-t-transparent border-[#F7F5F0] rounded-full animate-spin"></span>
+                      <span>Verifying Credentials...</span>
+                    </span>
+                  ) : (
+                    <>
+                      <span>Authorize Sign In</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -170,16 +188,23 @@ export default function Login() {
                 {users.map((u) => (
                   <button
                     key={u.id}
-                    onClick={() => {
+                    disabled={isLoading}
+                    onClick={async () => {
                       setEmail(u.email);
                       setPassword('securityKeysApproved');
-                      login(u.email);
-                      setSuccess(true);
-                      setTimeout(() => {
-                        router.push(u.role === 'Customer' ? '/account' : '/admin');
-                      }, 1000);
+                      setIsLoading(true);
+                      const res = await login(u.email, 'securityKeysApproved');
+                      setIsLoading(false);
+                      if (res.success) {
+                        setSuccess(true);
+                        setTimeout(() => {
+                          router.push(u.role === 'Customer' ? '/account' : '/admin');
+                        }, 1000);
+                      } else {
+                        setErrorMsg(res.error || 'Quick login failed.');
+                      }
                     }}
-                    className="bg-[#B9CDE5]/10 hover:bg-[#B9CDE5]/20 border border-[#657892]/25 p-2.5 rounded-lg text-left transition-all flex justify-between items-center cursor-pointer shadow-sm"
+                    className="bg-[#B9CDE5]/10 hover:bg-[#B9CDE5]/20 border border-[#657892]/25 p-2.5 rounded-lg text-left transition-all flex justify-between items-center cursor-pointer shadow-sm disabled:opacity-55"
                   >
                     <div>
                       <span className="text-xs font-bold text-[#1D2B3F] block">{u.name}</span>
