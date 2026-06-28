@@ -936,6 +936,29 @@ export const useStore = create<StoreState>()(
           });
 
           if (error) {
+            // Check if this error looks like a network or connection/offline issue (like AuthRetryableFetchError or network fetch failure)
+            const isConnectionError =
+              error.message?.includes('fetch') ||
+              error.message?.includes('Network') ||
+              error.message?.includes('Failed to fetch') ||
+              error.message?.includes('connect') ||
+              error.status === 0 ||
+              !error.status;
+
+            if (isConnectionError) {
+              const localUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+              if (localUser) {
+                set({ currentUser: localUser });
+                get().addAuditLog(
+                  'User Login',
+                  `Offline local fallback login successful for ${localUser.name}.`,
+                  localUser.id,
+                  localUser.name,
+                  localUser.role
+                );
+                return { success: true };
+              }
+            }
             return { success: false, error: error.message };
           }
 
