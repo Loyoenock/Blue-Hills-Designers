@@ -26,6 +26,7 @@ export default function Register() {
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAlreadyRegisteredModal, setShowAlreadyRegisteredModal] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -60,13 +61,37 @@ export default function Register() {
       if (res.success) {
         setSuccess(true);
         setTimeout(() => {
-          router.push('/account');
+          router.push('/login');
         }, 1500);
       } else {
-        setErrorMsg(res.error || "An error occurred compiling your elite registry.");
+        const errorText = res.error || '';
+        const isAlreadyRegistered = 
+          errorText.toLowerCase().includes('already registered') || 
+          errorText.toLowerCase().includes('already exists') || 
+          errorText.toLowerCase().includes('email_exists') ||
+          errorText.toLowerCase().includes('email already') ||
+          errorText.toLowerCase().includes('user_already_exists');
+        
+        if (isAlreadyRegistered) {
+          setShowAlreadyRegisteredModal(true);
+        } else {
+          setErrorMsg(errorText || "An error occurred compiling your elite registry.");
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "An error occurred compiling your elite registry.");
+      const errorText = err.message || '';
+      const isAlreadyRegistered = 
+        errorText.toLowerCase().includes('already registered') || 
+        errorText.toLowerCase().includes('already exists') || 
+        errorText.toLowerCase().includes('email_exists') ||
+        errorText.toLowerCase().includes('email already') ||
+        errorText.toLowerCase().includes('user_already_exists');
+      
+      if (isAlreadyRegistered) {
+        setShowAlreadyRegisteredModal(true);
+      } else {
+        setErrorMsg(errorText || "An error occurred compiling your elite registry.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +142,7 @@ export default function Register() {
             {success && (
               <div className="bg-[#C6A15B]/10 border border-[#C6A15B]/30 rounded-lg p-4 flex gap-3 text-[#1D2B3F] text-xs font-mono font-bold">
                 <Check className="w-5 h-5 shrink-0" />
-                <span>Registry compiled successfully. Opening client profile...</span>
+                <span>Registry compiled successfully. Directing to sign-in page...</span>
               </div>
             )}
 
@@ -237,6 +262,50 @@ export default function Register() {
 
       <Footer />
       <MobileNav />
+
+      {/* Account Already Registered Popup Modal */}
+      {showAlreadyRegisteredModal && (
+        <div className="fixed inset-0 bg-[#1D2B3F]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#F7F5F0] border border-[#C6A15B]/40 rounded-2xl max-w-md w-full p-6 md:p-8 shadow-2xl relative"
+            id="already-registered-popup"
+          >
+            <div className="text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-[#C6A15B]/10 flex items-center justify-center mx-auto text-[#C6A15B]">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              
+              <div className="space-y-1.5">
+                <h3 className="font-serif text-2xl text-[#1D2B3F] font-bold">Registry Already Exists</h3>
+                <p className="text-[10px] uppercase tracking-widest text-[#657892] font-mono font-semibold">Security Alert</p>
+              </div>
+
+              <p className="text-xs text-[#657892] font-light leading-relaxed">
+                An elite gentleman&apos;s registry already exists for <strong className="font-semibold text-[#1D2B3F]">{email}</strong>. Please sign in to access your bespoke orders, bookings, and private atelier profile.
+              </p>
+
+              <div className="pt-4 space-y-2">
+                <Link 
+                  href="/login" 
+                  className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-white text-center py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all block shadow-sm cursor-pointer"
+                  id="modal-signin-btn"
+                >
+                  Proceed to Sign In
+                </Link>
+                <button 
+                  onClick={() => setShowAlreadyRegisteredModal(false)}
+                  className="w-full bg-transparent hover:bg-black/5 text-[#657892] py-3 rounded-lg text-xs font-mono uppercase tracking-wider transition-all border border-[#657892]/20 cursor-pointer"
+                  id="modal-close-btn"
+                >
+                  Close & Edit Detail
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

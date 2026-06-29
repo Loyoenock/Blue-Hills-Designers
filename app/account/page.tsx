@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { 
   User, ShoppingBag, MapPin, Key, ChevronRight, Award, 
-  Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3
+  Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
@@ -155,11 +155,12 @@ export default function Account() {
           <button 
             onClick={async () => {
               await logout();
-              router.push('/');
             }}
-            className="border border-red-500/30 hover:border-red-500/50 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-semibold px-4 py-2 rounded transition-all uppercase tracking-wider font-mono cursor-pointer shadow-sm"
+            className="flex items-center gap-2 border border-[#C6A15B]/30 hover:border-[#C6A15B]/60 bg-[#C6A15B]/10 hover:bg-[#C6A15B]/20 text-[#C6A15B] text-xs font-semibold px-4 py-2.5 rounded-lg transition-all uppercase tracking-wider font-mono cursor-pointer shadow-sm"
+            id="account-logout-btn"
           >
-            Terminate Session
+            <LogOut className="w-3.5 h-3.5" />
+            Sign Out
           </button>
         </div>
       </div>

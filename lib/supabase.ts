@@ -3,22 +3,70 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 let supabaseClientInstance: SupabaseClient | null = null;
 let supabaseAdminInstance: SupabaseClient | null = null;
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function retryableFetch(url: string, options?: RequestInit, maxRetries = 3, initialDelayMs = 500): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const response = await fetch(url, options);
+      
+      // Retry on 5xx server errors (including 503, common during Supabase database sleep cold start)
+      if (!response.ok && response.status >= 500 && attempt < maxRetries) {
+        attempt++;
+        const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
+        console.warn(`Supabase server returned status ${response.status} for ${url}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
+        await delay(delayTime);
+        continue;
+      }
+      
+      return response;
+    } catch (err: any) {
+      const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
+      const isConnectionError = 
+        errMsg.toLowerCase().includes('fetch') ||
+        errMsg.toLowerCase().includes('network') ||
+        errMsg.toLowerCase().includes('connect') ||
+        err?.name === 'TypeError';
+
+      if (isConnectionError && attempt < maxRetries) {
+        attempt++;
+        const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
+        console.warn(`Supabase connection error for ${url}: ${errMsg}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
+        await delay(delayTime);
+        continue;
+      }
+      
+      throw err;
+    }
+  }
+}
+
 /**
  * Returns the standard Supabase client for public/anonymous access.
  * Uses lazy initialization to prevent startup crashes when keys are missing.
  */
-export function getSupabaseClient(): SupabaseClient {
+export function getSupabaseClient(): SupabaseClient | null {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null;
+  }
+
   if (!supabaseClientInstance) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error(
-        'Supabase configuration is incomplete. Please ensure both SUPABASE_URL and SUPABASE_ANON_KEY are configured in your environment variables.'
-      );
-    }
-
-    supabaseClientInstance = createClient(supabaseUrl, supabaseAnonKey);
+    supabaseClientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        fetch: (url, options) => {
+          const isGet = !options || !options.method || options.method.toUpperCase() === 'GET';
+          const fetchOptions: RequestInit = { ...options };
+          if (isGet) {
+            fetchOptions.cache = 'no-store';
+          }
+          return retryableFetch(url as string, fetchOptions);
+        }
+      }
+    });
   }
   return supabaseClientInstance;
 }
@@ -46,6 +94,16 @@ export function getSupabaseAdmin(): SupabaseClient {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
+      },
+      global: {
+        fetch: (url, options) => {
+          const isGet = !options || !options.method || options.method.toUpperCase() === 'GET';
+          const fetchOptions: RequestInit = { ...options };
+          if (isGet) {
+            fetchOptions.cache = 'no-store';
+          }
+          return retryableFetch(url as string, fetchOptions);
+        }
       }
     });
   }

@@ -39,49 +39,46 @@ export default function AIStylist() {
     setInput('');
     setIsLoading(true);
 
-    // Append user message cleanly
-    setMessages(prev => {
-      const userMsg: ChatMessage = {
-        id: `user-msg-${prev.length + 1}`,
-        role: 'user',
-        content: textToSend
-      };
+    const userMsg: ChatMessage = {
+      id: `user-msg-${messages.length + 1}`,
+      role: 'user',
+      content: textToSend
+    };
 
-      // We trigger the fetch async with the updated messages
-      fetch('/api/gemini', {
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+
+    try {
+      const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...prev, userMsg].map(m => ({
+          messages: updatedMessages.map(m => ({
             role: m.role,
             content: m.content
           }))
         })
-      })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('API line disconnected');
-        }
-        const data = await response.json();
-        setMessages(curr => [...curr, {
-          id: `model-msg-${curr.length + 1}`,
-          role: 'model',
-          content: data.text
-        }]);
-      })
-      .catch(() => {
-        setMessages(curr => [...curr, {
-          id: `error-msg-${curr.length + 1}`,
-          role: 'model',
-          content: 'I apologize, Sir. A brief tailoring interruption occurred on our digital desk. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.'
-        }]);
-      })
-      .finally(() => {
-        setIsLoading(false);
       });
 
-      return [...prev, userMsg];
-    });
+      if (!response.ok) {
+        throw new Error('API line disconnected');
+      }
+
+      const data = await response.json();
+      setMessages(curr => [...curr, {
+        id: `model-msg-${curr.length + 1}`,
+        role: 'model',
+        content: data.text
+      }]);
+    } catch {
+      setMessages(curr => [...curr, {
+        id: `error-msg-${curr.length + 1}`,
+        role: 'model',
+        content: 'I apologize, Sir. A brief tailoring interruption occurred on our digital desk. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.'
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

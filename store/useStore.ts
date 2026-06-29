@@ -42,6 +42,11 @@ interface StoreState {
   deleteProduct: (id: string, deleterName: string, deleterRole: string) => void; // Soft delete or remove
   addReview: (productId: string, rating: number, comment: string, userName: string, userRole?: string) => void;
 
+  // User management actions (Admin)
+  adminAddUser: (userData: Omit<User, 'id'>, adminName: string, adminRole: string) => void;
+  adminUpdateUser: (id: string, updatedFields: Partial<User>, adminName: string, adminRole: string) => void;
+  adminDeleteUser: (id: string, adminName: string, adminRole: string) => void;
+
   // Consultation Actions
   bookConsultation: (bookingData: Omit<ConsultationBooking, 'id' | 'status'>) => void;
   updateBookingStatus: (bookingId: string, status: ConsultationBooking['status']) => void;
@@ -226,6 +231,15 @@ const INITIAL_PRODUCTS: Product[] = [
 
 const INITIAL_USERS: User[] = [
   {
+    id: 'usr-super-admin-loyohenoch',
+    name: 'Loyo Henoch',
+    email: 'loyohenoch@gmail.com',
+    phone: '+256 700 000000',
+    role: 'Super Admin',
+    spending: 0,
+    rewardsPoints: 0
+  },
+  {
     id: 'usr-1',
     name: 'Amama Mbabazi',
     email: 'amama@diplomats.gov',
@@ -368,6 +382,16 @@ function keysToSnake(obj: any): any {
   return obj;
 }
 
+function capitalizeRole(role: string): User['role'] {
+  if (!role) return 'Customer';
+  const r = role.toLowerCase().trim();
+  if (r === 'super admin' || r === 'super_admin') return 'Super Admin';
+  if (r === 'admin') return 'Admin';
+  if (r === 'manager') return 'Manager';
+  if (r === 'staff') return 'Staff';
+  return 'Customer';
+}
+
 function toValidUUID(str: string): string {
   if (!str) return '00000000-0000-0000-0000-000000000000';
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -467,7 +491,11 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         user_id: userId ? toValidUUID(userId) : null,
         order_number: payload.id,
         amount: Number(payload.amount) || 0,
-        status: payload.status?.toLowerCase() || 'pending',
+        status: (() => {
+          const s = payload.status?.toLowerCase() || 'pending';
+          if (s === 'delivered') return 'completed';
+          return s;
+        })(),
         payment_method: payload.paymentMethod || payload.payment_method || 'Cash on Delivery',
         notes: payload.notes || null,
         created_at: getTimestamp(payload.date || payload.created_at)
@@ -574,10 +602,60 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
   }
 }
 
+function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  return !!(url && anonKey);
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, initialDelayMs = 500): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const response = await fetch(url, options);
+      
+      // Retry on internal server errors (5xx)
+      if (!response.ok && response.status >= 500 && attempt < maxRetries) {
+        attempt++;
+        const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
+        console.warn(`Server error ${response.status} fetching ${url}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
+        await delay(delayTime);
+        continue;
+      }
+      
+      return response;
+    } catch (err: any) {
+      const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
+      const isConnectionError = 
+        errMsg.toLowerCase().includes('fetch') ||
+        errMsg.toLowerCase().includes('network') ||
+        errMsg.toLowerCase().includes('connect') ||
+        err?.name === 'TypeError';
+
+      if (isConnectionError && attempt < maxRetries) {
+        attempt++;
+        const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
+        console.warn(`Connection/Network error during fetch to ${url}: ${errMsg}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
+        await delay(delayTime);
+        continue;
+      }
+      
+      throw err;
+    }
+  }
+}
+
 async function safeSupabaseInsert(tableName: string, payload: any) {
+  if (!isSupabaseConfigured()) {
+    console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unconfigured).`);
+    return;
+  }
+
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
-    const response = await fetch('/api/db', {
+    const response = await fetchWithRetry('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'insert', tableName, payload: mappedPayload })
@@ -587,15 +665,31 @@ async function safeSupabaseInsert(tableName: string, payload: any) {
       const errData = await response.json().catch(() => ({}));
       console.warn(`Supabase insert failed on ${tableName}:`, errData.error || response.statusText);
     }
-  } catch (err) {
-    console.error(`Error in safeSupabaseInsert for ${tableName}:`, err);
+  } catch (err: any) {
+    const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
+    const isConnectionError = 
+      errMsg.toLowerCase().includes('fetch') ||
+      errMsg.toLowerCase().includes('network') ||
+      errMsg.toLowerCase().includes('connect') ||
+      err?.name === 'TypeError';
+
+    if (isConnectionError) {
+      console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
+    } else {
+      console.error(`Error in safeSupabaseInsert for ${tableName}:`, err);
+    }
   }
 }
 
 async function safeSupabaseUpsert(tableName: string, payload: any) {
+  if (!isSupabaseConfigured()) {
+    console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unconfigured).`);
+    return;
+  }
+
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
-    const response = await fetch('/api/db', {
+    const response = await fetchWithRetry('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'upsert', tableName, payload: mappedPayload })
@@ -605,14 +699,30 @@ async function safeSupabaseUpsert(tableName: string, payload: any) {
       const errData = await response.json().catch(() => ({}));
       console.warn(`Supabase upsert failed on ${tableName}:`, errData.error || response.statusText);
     }
-  } catch (err) {
-    console.error(`Error in safeSupabaseUpsert for ${tableName}:`, err);
+  } catch (err: any) {
+    const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
+    const isConnectionError = 
+      errMsg.toLowerCase().includes('fetch') ||
+      errMsg.toLowerCase().includes('network') ||
+      errMsg.toLowerCase().includes('connect') ||
+      err?.name === 'TypeError';
+
+    if (isConnectionError) {
+      console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
+    } else {
+      console.error(`Error in safeSupabaseUpsert for ${tableName}:`, err);
+    }
   }
 }
 
 async function safeSupabaseDelete(tableName: string, filters: Record<string, any>) {
+  if (!isSupabaseConfigured()) {
+    console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unconfigured).`);
+    return;
+  }
+
   try {
-    const response = await fetch('/api/db', {
+    const response = await fetchWithRetry('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', tableName, payload: { filters } })
@@ -622,8 +732,19 @@ async function safeSupabaseDelete(tableName: string, filters: Record<string, any
       const errData = await response.json().catch(() => ({}));
       console.warn(`Supabase delete failed on ${tableName}:`, errData.error || response.statusText);
     }
-  } catch (err) {
-    console.error(`Error in safeSupabaseDelete for ${tableName}:`, err);
+  } catch (err: any) {
+    const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
+    const isConnectionError = 
+      errMsg.toLowerCase().includes('fetch') ||
+      errMsg.toLowerCase().includes('network') ||
+      errMsg.toLowerCase().includes('connect') ||
+      err?.name === 'TypeError';
+
+    if (isConnectionError) {
+      console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
+    } else {
+      console.error(`Error in safeSupabaseDelete for ${tableName}:`, err);
+    }
   }
 }
 
@@ -678,7 +799,7 @@ export const useStore = create<StoreState>()(
               name: p.full_name,
               email: p.email,
               phone: p.phone,
-              role: p.role,
+              role: capitalizeRole(p.role),
               spending: p.lifetime_spending,
               rewardsPoints: p.reward_points
             }));
@@ -815,7 +936,13 @@ export const useStore = create<StoreState>()(
                 customerEmail: profile?.email || '',
                 customerPhone: profile?.phone || '',
                 amount: o.amount,
-                status: o.status,
+                status: (() => {
+                  const s = o.status?.toLowerCase() || 'pending';
+                  if (s === 'completed' || s === 'delivered') return 'Delivered';
+                  if (s === 'processing') return 'Processing';
+                  if (s === 'cancelled') return 'Cancelled';
+                  return 'Pending';
+                })(),
                 date: o.created_at,
                 paymentMethod: o.payment_method,
                 notes: o.notes,
@@ -929,6 +1056,23 @@ export const useStore = create<StoreState>()(
             return { success: false, error: 'Password is required for standard authentication.' };
           }
 
+          if (!supabase) {
+            // If Supabase is unconfigured, fallback to local users lookup
+            const localUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+            if (localUser) {
+              set({ currentUser: localUser });
+              get().addAuditLog(
+                'User Login',
+                `Offline local fallback login successful for ${localUser.name}.`,
+                localUser.id,
+                localUser.name,
+                localUser.role
+              );
+              return { success: true };
+            }
+            return { success: false, error: 'Database service is offline or unconfigured, and requested user profile is missing.' };
+          }
+
           // Real Supabase Auth login
           const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -942,7 +1086,11 @@ export const useStore = create<StoreState>()(
               error.message?.includes('Network') ||
               error.message?.includes('Failed to fetch') ||
               error.message?.includes('connect') ||
+              error.message?.includes('Database error') ||
+              error.message?.includes('unexpected_failure') ||
               error.status === 0 ||
+              error.status === 500 ||
+              error.status === 503 ||
               !error.status;
 
             if (isConnectionError) {
@@ -982,7 +1130,7 @@ export const useStore = create<StoreState>()(
               name: profile.name || profile.full_name || authUser.user_metadata?.name || email.split('@')[0].toUpperCase(),
               email: profile.email || authUser.email || email,
               phone: profile.phone || authUser.user_metadata?.phone || '',
-              role: (profile.role as User['role']) || 'Customer',
+              role: capitalizeRole(profile.role),
               spending: profile.spending || profile.lifetime_spending || 0,
               rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0
             };
@@ -997,6 +1145,11 @@ export const useStore = create<StoreState>()(
               spending: 0,
               rewardsPoints: 0
             };
+            await safeSupabaseUpsert('profiles', user);
+          }
+
+          if (user.email && user.email.toLowerCase() === 'loyohenoch@gmail.com') {
+            user.role = 'Super Admin';
             await safeSupabaseUpsert('profiles', user);
           }
 
@@ -1026,6 +1179,9 @@ export const useStore = create<StoreState>()(
 
       register: async (name, email, phone, password, role = 'Customer') => {
         try {
+          if (email && email.toLowerCase() === 'loyohenoch@gmail.com') {
+            role = 'Super Admin';
+          }
           if (!password) {
             return { success: false, error: 'A password is required to compile a private profile.' };
           }
@@ -1052,17 +1208,16 @@ export const useStore = create<StoreState>()(
             rewardsPoints: 0
           };
 
+          // Add user locally first to support offline/local fallback login
+          set(state => ({
+            users: [...state.users.filter(u => u.id !== newUser.id), newUser]
+          }));
+
           // Save/update profile using privileged API route bypass
           await safeSupabaseUpsert('profiles', newUser);
 
-          // Authenticate on the client-side to establish standard session cookies
-          const loginRes = await get().login(email, password);
-          if (!loginRes.success) {
-            set(state => ({
-              users: [...state.users.filter(u => u.id !== newUser.id), newUser],
-              currentUser: newUser
-            }));
-          }
+          // Do not automatically login on registration as per user guidelines
+          // We just log the audit log and return success.
 
           get().addAuditLog(
             'User Registration',
@@ -1092,7 +1247,9 @@ export const useStore = create<StoreState>()(
               user.role
             );
           }
-          await supabase.auth.signOut();
+          if (supabase) {
+            await supabase.auth.signOut();
+          }
         } catch (err) {
           console.error('Logout error:', err);
         } finally {
@@ -1127,6 +1284,10 @@ export const useStore = create<StoreState>()(
           const supabase = getSupabaseClient();
           const current = get().currentUser;
           if (!current) return { success: false, error: 'No active session' };
+
+          if (!supabase) {
+            return { success: false, error: 'Cannot update password while database is offline or unconfigured.' };
+          }
 
           const { error } = await supabase.auth.updateUser({
             password
@@ -1354,6 +1515,76 @@ export const useStore = create<StoreState>()(
 
         // Sync product delete with Supabase
         safeSupabaseDelete('products', { id });
+      },
+
+      adminAddUser: (userData, adminName, adminRole) => {
+        const id = 'usr-' + Math.random().toString(36).substring(2, 11);
+        const newUser: User = {
+          id,
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone || '',
+          role: userData.role || 'Customer',
+          spending: userData.spending || 0,
+          rewardsPoints: userData.rewardsPoints || 0
+        };
+
+        set(state => ({
+          users: [newUser, ...state.users]
+        }));
+
+        get().addAuditLog(
+          'User Registered',
+          `Admin registered a new user '${newUser.name}' with role '${newUser.role}'.`,
+          'admin-modifier',
+          adminName,
+          adminRole as User['role']
+        );
+
+        safeSupabaseUpsert('profiles', newUser);
+      },
+
+      adminUpdateUser: (id, updatedFields, adminName, adminRole) => {
+        set(state => {
+          const updatedUsers = state.users.map(u => u.id === id ? { ...u, ...updatedFields } : u);
+          const currentUser = state.currentUser && state.currentUser.id === id 
+            ? { ...state.currentUser, ...updatedFields } 
+            : state.currentUser;
+          return {
+            users: updatedUsers,
+            currentUser
+          };
+        });
+
+        const targetUser = get().users.find(u => u.id === id);
+        if (targetUser) {
+          get().addAuditLog(
+            'User Updated',
+            `Admin updated profile settings/role for '${targetUser.name}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+
+          safeSupabaseUpsert('profiles', targetUser);
+        }
+      },
+
+      adminDeleteUser: (id, adminName, adminRole) => {
+        const userToDelete = get().users.find(u => u.id === id);
+        set(state => ({
+          users: state.users.filter(u => u.id !== id)
+        }));
+
+        get().addAuditLog(
+          'User Deletion',
+          `Admin removed user profile '${userToDelete?.name || id}' from authorized registers.`,
+          'admin-modifier',
+          adminName,
+          adminRole as User['role']
+        );
+
+        safeSupabaseDelete('profiles', { id });
       },
 
       addReview: (productId, rating, comment, userName, userRole = 'Executive Client') => {

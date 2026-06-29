@@ -57,7 +57,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid action specified' }, { status: 400 });
     }
   } catch (err: any) {
-    console.error('Database proxy API error:', err);
+    const isConnectionError = 
+      err?.message?.includes('fetch') ||
+      err?.message?.includes('Network') ||
+      err?.message?.includes('Failed to fetch') ||
+      err?.message?.includes('connect') ||
+      err?.name === 'TypeError';
+
+    if (isConnectionError) {
+      console.warn('Database proxy connection issue (Supabase offline):', err.message || 'Failed to fetch');
+    } else {
+      console.error('Database proxy API error:', err);
+    }
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }

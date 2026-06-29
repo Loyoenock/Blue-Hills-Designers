@@ -3,13 +3,17 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, password, role } = await req.json();
+    let { name, email, phone, password, role } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required.' },
         { status: 400 }
       );
+    }
+
+    if (email && email.toLowerCase() === 'loyohenoch@gmail.com') {
+      role = 'Super Admin';
     }
 
     const supabaseAdmin = getSupabaseAdmin();
@@ -26,6 +30,30 @@ export async function POST(req: NextRequest) {
     let fallbackToLocal = false;
     let errorMessage = '';
 
+    const isRetryableOrNetworkError = (err: any): boolean => {
+      if (!err) return false;
+      const name = err.name || '';
+      const message = err.message || '';
+      const status = typeof err.status === 'number' ? err.status : undefined;
+
+      // If it is a standard validation/client error (e.g. status < 500), it's not a network/retryable error
+      if (status !== undefined && status < 500) {
+        return false;
+      }
+
+      return (
+        (status !== undefined && status >= 500) ||
+        name === 'AuthRetryableFetchError' ||
+        message.toLowerCase().includes('database error') ||
+        message.toLowerCase().includes('unexpected_failure') ||
+        message.toLowerCase().includes('fetch') ||
+        message.toLowerCase().includes('network') ||
+        message.toLowerCase().includes('failed to fetch') ||
+        message.toLowerCase().includes('connect') ||
+        Object.keys(err).length === 0
+      );
+    };
+
     try {
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email,
@@ -40,20 +68,14 @@ export async function POST(req: NextRequest) {
       });
 
       if (error) {
-        console.error('Supabase admin createUser error:', error);
         errorMessage = error.message;
-        // If it is a network error, retryable error, or standard fetch error, trigger fallback
-        const isNetworkOrAuthError =
-          error.name === 'AuthRetryableFetchError' ||
-          error.message?.includes('fetch') ||
-          error.message?.includes('network') ||
-          error.message?.includes('Failed to fetch') ||
-          error.message?.includes('connect') ||
-          !error.message;
+        const isNetworkOrAuthError = isRetryableOrNetworkError(error);
 
         if (isNetworkOrAuthError) {
+          console.warn('Supabase service appears offline or unreachable (retryable auth fetch error). Enabling local registration fallback.');
           fallbackToLocal = true;
         } else {
+          console.error('Supabase admin createUser error:', error);
           return NextResponse.json(
             { success: false, error: error.message },
             { status: 400 }
@@ -63,13 +85,17 @@ export async function POST(req: NextRequest) {
         authUser = data?.user;
       }
     } catch (err: any) {
-      console.error('Exception during Supabase admin createUser:', err);
       errorMessage = err.message || '';
+      if (isRetryableOrNetworkError(err)) {
+        console.warn('Exception during Supabase admin createUser (retryable/network connection error):', errorMessage);
+      } else {
+        console.error('Exception during Supabase admin createUser:', err);
+      }
       fallbackToLocal = true;
     }
 
     if (fallbackToLocal || !authUser) {
-      console.log('Falling back to local/offline user registration due to auth error:', errorMessage);
+      console.log('Falling back to local/offline user registration due to auth connection issue:', errorMessage);
       // Generate a deterministic or random UUID for local registration fallback
       const localUuid = typeof crypto?.randomUUID === 'function'
         ? crypto.randomUUID()

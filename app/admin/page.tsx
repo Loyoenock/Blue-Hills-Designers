@@ -8,7 +8,7 @@ import {
   BarChart, Calendar, ChevronRight, Compass, CreditCard, DollarSign, 
   Download, Edit, Eye, Filter, Grid, HelpCircle, Layers, LogOut, 
   Plus, Printer, RefreshCw, Search, ShieldAlert, ShoppingBag, 
-  Trash2, TrendingUp, Users, X, FileText, CheckCircle
+  Trash2, TrendingUp, Users, X, FileText, CheckCircle, Upload
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
@@ -21,11 +21,26 @@ export default function Admin() {
   const router = useRouter();
   const { 
     currentUser, login, products, orders, users, auditLogs, 
-    addProduct, updateProduct, deleteProduct, updateOrderStatus 
+    addProduct, updateProduct, deleteProduct, updateOrderStatus,
+    adminAddUser, adminUpdateUser, adminDeleteUser
   } = useStore();
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'logs'>('dashboard');
+
+  // Form and search/filter states for User Management
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('All');
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [uName, setUName] = useState('');
+  const [uEmail, setUEmail] = useState('');
+  const [uPhone, setUPhone] = useState('');
+  const [uRole, setURole] = useState<User['role']>('Customer');
+  const [uSpending, setUSpending] = useState(0);
+  const [uRewardsPoints, setURewardsPoints] = useState(0);
+  const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Fast bypass for testing/evaluation
   useEffect(() => {
@@ -37,6 +52,8 @@ export default function Admin() {
 
   // Form states for ADD / EDIT Product
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [imageSourceMode, setImageSourceMode] = useState<'url' | 'upload'>('url');
+  const [isDragging, setIsDragging] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [pName, setPName] = useState('');
   const [pDesc, setPDesc] = useState('');
@@ -73,6 +90,7 @@ export default function Admin() {
   const canModifyOrders = userRole === 'Super Admin' || userRole === 'Admin' || userRole === 'Manager' || userRole === 'Staff';
   const canDeleteProducts = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeLogs = userRole === 'Super Admin' || userRole === 'Admin';
+  const canModifyUsers = userRole === 'Super Admin' || userRole === 'Admin';
 
   if (!isAuthorized) {
     return (
@@ -133,6 +151,15 @@ export default function Admin() {
     return matchSearch && matchStatus;
   });
 
+  // Filter users list
+  const filteredUsers = users.filter(u => {
+    const matchSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                        u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+                        (u.phone && u.phone.toLowerCase().includes(userSearch.toLowerCase()));
+    const matchRole = userRoleFilter === 'All' || u.role === userRoleFilter;
+    return matchSearch && matchRole;
+  });
+
   // Handle open Product create/edit modal
   const handleOpenProductModal = (prod: Product | null = null) => {
     if (!canModifyProducts) {
@@ -149,6 +176,13 @@ export default function Admin() {
       setPSizes(prod.sizes);
       setPColors(prod.colors);
       setPImages(prod.images);
+      
+      // Auto-detect mode based on image type
+      if (prod.images && prod.images[0] && prod.images[0].startsWith('data:')) {
+        setImageSourceMode('upload');
+      } else {
+        setImageSourceMode('url');
+      }
     } else {
       setEditingProduct(null);
       setPName('');
@@ -159,8 +193,37 @@ export default function Admin() {
       setPSizes(['48R', '50R', '52R']);
       setPColors(['Midnight Navy', 'Charcoal']);
       setPImages(['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg']);
+      setImageSourceMode('url');
     }
     setIsProductModalOpen(true);
+  };
+
+  const handleImageFile = (file: File) => {
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setPImages([reader.result]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageFile(file);
+    }
+  };
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleImageFile(file);
+    }
   };
 
   // Save product (create or update)
@@ -213,6 +276,78 @@ export default function Admin() {
       deleteProduct(productToDelete.id, operatorName, operatorRole);
       setIsDeleteModalOpen(false);
       setProductToDelete(null);
+    }
+  };
+
+  // User form modal helpers
+  const handleOpenUserModal = (user: User | null = null) => {
+    if (!canModifyUsers) {
+      alert("Security alert: Your role level does not authorize user mutations.");
+      return;
+    }
+    if (user) {
+      setEditingUser(user);
+      setUName(user.name);
+      setUEmail(user.email);
+      setUPhone(user.phone || '');
+      setURole(user.role);
+      setUSpending(user.spending);
+      setURewardsPoints(user.rewardsPoints);
+    } else {
+      setEditingUser(null);
+      setUName('');
+      setUEmail('');
+      setUPhone('');
+      setURole('Customer');
+      setUSpending(0);
+      setURewardsPoints(0);
+    }
+    setIsUserModalOpen(true);
+  };
+
+  const handleSaveUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    const adminName = currentUser?.name || 'Master Admin';
+    const adminRole = currentUser?.role || 'Super Admin';
+
+    if (editingUser) {
+      adminUpdateUser(editingUser.id, {
+        name: uName,
+        email: uEmail,
+        phone: uPhone,
+        role: uRole,
+        spending: Number(uSpending),
+        rewardsPoints: Number(uRewardsPoints)
+      }, adminName, adminRole);
+    } else {
+      adminAddUser({
+        name: uName,
+        email: uEmail,
+        phone: uPhone,
+        role: uRole,
+        spending: Number(uSpending),
+        rewardsPoints: Number(uRewardsPoints)
+      }, adminName, adminRole);
+    }
+    setIsUserModalOpen(false);
+  };
+
+  const handleOpenDeleteUserModal = (user: User) => {
+    if (!canModifyUsers) {
+      alert("Security alert: Your role level does not authorize user hard deletions.");
+      return;
+    }
+    setUserToDelete(user);
+    setIsDeleteUserModalOpen(true);
+  };
+
+  const handleConfirmDeleteUser = () => {
+    if (userToDelete) {
+      const adminName = currentUser?.name || 'Master Admin';
+      const adminRole = currentUser?.role || 'Super Admin';
+      adminDeleteUser(userToDelete.id, adminName, adminRole);
+      setIsDeleteUserModalOpen(false);
+      setUserToDelete(null);
     }
   };
 
@@ -655,7 +790,7 @@ export default function Admin() {
               </motion.div>
             )}
 
-            {/* SUB-TAB 4: AUTHORIZED STAFF LIST */}
+            {/* SUB-TAB 4: AUTHORIZED STAFF LIST & USER MANAGEMENT */}
             {activeTab === 'users' && (
               <motion.div 
                 key="users"
@@ -664,36 +799,127 @@ export default function Admin() {
                 exit={{ opacity: 0 }}
                 className="space-y-6"
               >
-                <h3 className="font-serif text-xl text-white font-bold border-b border-white/5 pb-3">Authorized Atelier Staff Keys</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {users.map((u) => (
-                    <div key={u.id} className="bg-[#111111] border border-white/10 rounded-2xl p-6 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-0.5">
-                          <h4 className="font-serif text-base text-white font-bold">{u.name}</h4>
-                          <p className="text-[10px] text-white/40 font-mono">{u.email}</p>
-                        </div>
-                        <span className={`text-[9px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                          u.role === 'Super Admin' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                          u.role === 'Admin' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                          u.role === 'Manager' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                          u.role === 'Staff' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
-                          'bg-white/5 text-white/50'
-                        }`}>
-                          {u.role}
-                        </span>
-                      </div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
+                  <div>
+                    <h3 className="font-serif text-xl text-white font-bold">User & Atelier Access Directory</h3>
+                    <p className="text-xs text-white/40">Manage staff roles, customer profiles, spending metrics, and loyalty keys.</p>
+                  </div>
+                  {canModifyUsers && (
+                    <button
+                      onClick={() => handleOpenUserModal(null)}
+                      className="bg-[#20D9A1] hover:bg-[#1bb887] text-black font-semibold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer font-mono"
+                    >
+                      <Plus className="w-4 h-4" /> Add New Profile
+                    </button>
+                  )}
+                </div>
 
-                      <div className="bg-black/30 border border-white/5 rounded-xl p-3 text-[10px] text-white/40 leading-relaxed font-mono space-y-1">
-                        <span className="text-white font-bold uppercase text-[8px] block tracking-widest text-[#20D9A1]">Active Authorization Scope</span>
-                        {u.role === 'Super Admin' && <p>✓ Full system mutations, override settings, hard-deletions, security audit decryption.</p>}
-                        {u.role === 'Admin' && <p>✓ Operations override, apparel modification, stock allocations, order dispatches.</p>}
-                        {u.role === 'Manager' && <p>✓ Product addition, details modification, dispatch updates.</p>}
-                        {u.role === 'Staff' && <p>✓ Courier dispatch tracking, client order notes modification.</p>}
-                        {u.role === 'Customer' && <p>✓ Private lounge profile, loyalty rewards tracker, personal trunk checks.</p>}
-                      </div>
+                {/* Filter and Search Controls */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search profiles by name, email, phone..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="w-full bg-[#111111] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-white/30 focus:border-[#20D9A1] outline-none transition-all font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 bg-[#111111] border border-white/10 rounded-xl px-3 py-1">
+                    <Filter className="text-white/40 w-3.5 h-3.5" />
+                    <select
+                      value={userRoleFilter}
+                      onChange={(e) => setUserRoleFilter(e.target.value)}
+                      className="bg-transparent border-none text-xs text-white outline-none cursor-pointer pr-4 py-1"
+                    >
+                      <option value="All" className="bg-[#111111]">All Roles</option>
+                      <option value="Super Admin" className="bg-[#111111]">Super Admin</option>
+                      <option value="Admin" className="bg-[#111111]">Admin</option>
+                      <option value="Manager" className="bg-[#111111]">Manager</option>
+                      <option value="Staff" className="bg-[#111111]">Staff</option>
+                      <option value="Customer" className="bg-[#111111]">Customer</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Grid of Users */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {filteredUsers.length === 0 ? (
+                    <div className="xl:col-span-2 bg-[#111111] border border-dashed border-white/10 rounded-2xl p-12 text-center text-white/40">
+                      <Users className="w-10 h-10 mx-auto opacity-30 mb-3 text-white" />
+                      <p className="font-serif font-bold text-lg text-white mb-1">No profiles matched your filters</p>
+                      <p className="text-xs font-mono">Try adjusting your search criteria or register a new profile.</p>
                     </div>
-                  ))}
+                  ) : (
+                    filteredUsers.map((u) => (
+                      <div key={u.id} className="bg-[#111111] border border-white/10 rounded-2xl p-6 flex flex-col justify-between space-y-4 hover:border-white/20 transition-all">
+                        <div>
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="space-y-1">
+                              <h4 className="font-serif text-lg text-white font-bold tracking-tight">{u.name}</h4>
+                              <p className="text-[10px] text-white/40 font-mono flex items-center gap-1.5">
+                                <span className="text-[#20D9A1]">ID:</span> {u.id}
+                              </p>
+                              <p className="text-xs text-white/60 font-mono">{u.email}</p>
+                              {u.phone && <p className="text-xs text-white/50 font-mono">Tel: {u.phone}</p>}
+                            </div>
+                            <span className={`text-[9px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full ${
+                              u.role === 'Super Admin' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                              u.role === 'Admin' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                              u.role === 'Manager' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                              u.role === 'Staff' ? 'bg-yellow-500/10 text-[#20D9A1] border border-yellow-500/20' :
+                              'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              {u.role}
+                            </span>
+                          </div>
+
+                          {/* Stats / Spending / Rewards section */}
+                          <div className="grid grid-cols-2 gap-4 mt-4 bg-black/20 rounded-xl p-3 border border-white/5 font-mono text-[11px]">
+                            <div>
+                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Boutique Spending</span>
+                              <span className="text-white font-bold text-sm">${u.spending?.toLocaleString() || '0'}</span>
+                            </div>
+                            <div>
+                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Rewards Points</span>
+                              <span className="text-[#20D9A1] font-bold text-sm">{u.rewardsPoints?.toLocaleString() || '0'} pts</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-black/40 border border-white/5 rounded-xl p-3 text-[10px] text-white/40 leading-relaxed font-mono space-y-1 mt-4">
+                            <span className="text-white font-bold uppercase text-[8px] block tracking-widest text-[#20D9A1]">Active Authorization Scope</span>
+                            {u.role === 'Super Admin' && <p>✓ Full system mutations, override settings, hard-deletions, security audit decryption.</p>}
+                            {u.role === 'Admin' && <p>✓ Operations override, apparel modification, stock allocations, order dispatches.</p>}
+                            {u.role === 'Manager' && <p>✓ Product addition, details modification, dispatch updates.</p>}
+                            {u.role === 'Staff' && <p>✓ Courier dispatch tracking, client order notes modification.</p>}
+                            {u.role === 'Customer' && <p>✓ Private lounge profile, loyalty rewards tracker, personal trunk checks.</p>}
+                          </div>
+                        </div>
+
+                        {/* Actions row */}
+                        {canModifyUsers && (
+                          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                            <button
+                              onClick={() => handleOpenUserModal(u)}
+                              className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-xs uppercase font-mono px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                            >
+                              <Edit className="w-3.5 h-3.5" /> Edit
+                            </button>
+                            {/* Prevent deleting oneself */}
+                            {currentUser?.id !== u.id && (
+                              <button
+                                onClick={() => handleOpenDeleteUserModal(u)}
+                                className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-semibold text-xs uppercase font-mono px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}
@@ -818,15 +1044,104 @@ export default function Admin() {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Image URL</label>
-                  <input 
-                    type="text" 
-                    value={pImages[0] || ''} 
-                    onChange={(e) => setPImages([e.target.value])} 
-                    className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none font-mono"
-                    required
-                  />
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Apparel Image</label>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => setImageSourceMode('upload')}
+                        className={`text-[9px] uppercase tracking-widest font-mono px-2 py-0.5 rounded transition-all ${imageSourceMode === 'upload' ? 'bg-[#20D9A1]/10 text-[#20D9A1] border border-[#20D9A1]/20' : 'text-white/40 hover:text-white/60'}`}
+                      >
+                        Upload File
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setImageSourceMode('url')}
+                        className={`text-[9px] uppercase tracking-widest font-mono px-2 py-0.5 rounded transition-all ${imageSourceMode === 'url' ? 'bg-[#20D9A1]/10 text-[#20D9A1] border border-[#20D9A1]/20' : 'text-white/40 hover:text-white/60'}`}
+                      >
+                        Image URL
+                      </button>
+                    </div>
+                  </div>
+
+                  {imageSourceMode === 'upload' ? (
+                    <div className="space-y-2">
+                      <div 
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragging(true);
+                        }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleImageDrop}
+                        onClick={() => document.getElementById('product-image-file-input')?.click()}
+                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                          isDragging ? 'border-[#20D9A1] bg-[#20D9A1]/5' : 'border-white/10 hover:border-white/20 bg-black/40'
+                        }`}
+                      >
+                        <input 
+                          type="file"
+                          id="product-image-file-input"
+                          accept="image/*"
+                          onChange={handleImageFileChange}
+                          className="hidden"
+                        />
+                        <Upload className="w-5 h-5 text-white/40" />
+                        <span className="text-white/60 text-xs">
+                          Drag & drop apparel image here, or <span className="text-[#20D9A1] underline">browse</span>
+                        </span>
+                        <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">
+                          Supports PNG, JPG, WEBP, SVG
+                        </span>
+                      </div>
+                      {pImages[0] && (
+                        <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded p-2">
+                          <div className="relative w-12 h-12 rounded overflow-hidden bg-black flex-shrink-0">
+                            <img 
+                              src={pImages[0]} 
+                              alt="Apparel Preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white/80 font-mono text-[10px] truncate">
+                              {pImages[0].startsWith('data:') ? 'Local Uploaded File' : pImages[0]}
+                            </p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setPImages([])}
+                            className="text-red-400 hover:text-red-300 px-2 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input 
+                        type="text" 
+                        value={pImages[0] || ''} 
+                        onChange={(e) => setPImages([e.target.value])} 
+                        placeholder="https://example.com/image.jpg"
+                        className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none font-mono"
+                        required={imageSourceMode === 'url'}
+                      />
+                      {pImages[0] && (
+                        <div className="relative h-24 rounded-lg overflow-hidden bg-black border border-white/5 flex items-center justify-center">
+                          <img 
+                            src={pImages[0]} 
+                            alt="URL Preview" 
+                            className="max-h-full max-w-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 flex justify-end gap-3">
@@ -972,6 +1287,174 @@ export default function Admin() {
                   className="bg-white/5 hover:bg-white/10 text-white px-5 py-2 rounded text-xs uppercase font-semibold"
                 >
                   Close Record
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* USER MANAGEMENT FORM MODAL */}
+      <AnimatePresence>
+        {isUserModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsUserModalOpen(false)}
+              className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.98, opacity: 0, y: 10 }}
+              className="fixed inset-4 max-w-md mx-auto bg-[#111111] border border-white/10 rounded-2xl z-50 overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl h-fit max-h-[90vh]"
+              id="user-form-modal"
+            >
+              <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                <h3 className="font-serif text-lg text-white font-bold">
+                  {editingUser ? 'Amend Client Profile Key' : 'Create Atelier Profile Key'}
+                </h3>
+                <button onClick={() => setIsUserModalOpen(false)} className="text-white/60 hover:text-white p-1">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveUser} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={uName}
+                    onChange={(e) => setUName(e.target.value)}
+                    placeholder="Enter full name"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:border-[#20D9A1] outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={uEmail}
+                    onChange={(e) => setUEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:border-[#20D9A1] outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">Contact Line</label>
+                  <input
+                    type="text"
+                    value={uPhone}
+                    onChange={(e) => setUPhone(e.target.value)}
+                    placeholder="e.g. +256701234567"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:border-[#20D9A1] outline-none transition-all font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">Authority Role</label>
+                    <select
+                      value={uRole}
+                      onChange={(e) => setURole(e.target.value as any)}
+                      className="w-full bg-[#1A1A1A] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-[#20D9A1] transition-all"
+                    >
+                      <option value="Super Admin" className="bg-[#111111]">Super Admin</option>
+                      <option value="Admin" className="bg-[#111111]">Admin</option>
+                      <option value="Manager" className="bg-[#111111]">Manager</option>
+                      <option value="Staff" className="bg-[#111111]">Staff</option>
+                      <option value="Customer" className="bg-[#111111]">Customer</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold font-mono">Loyalty Points</label>
+                    <input
+                      type="number"
+                      value={uRewardsPoints}
+                      onChange={(e) => setURewardsPoints(Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold font-mono">Lounge Spending (USD)</label>
+                  <input
+                    type="number"
+                    value={uSpending}
+                    onChange={(e) => setUSpending(Number(e.target.value))}
+                    placeholder="0"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                  />
+                </div>
+
+                <div className="pt-4 flex justify-end gap-3 border-t border-white/5 font-mono">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsUserModalOpen(false)}
+                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl text-xs uppercase font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="bg-[#20D9A1] hover:bg-[#1bb887] text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer"
+                  >
+                    Authorize Profile
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* USER DELETION SAFETY MODAL */}
+      <AnimatePresence>
+        {isDeleteUserModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteUserModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-sm h-fit bg-[#111111] border border-red-500/20 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="user-delete-safety-modal"
+            >
+              <div className="space-y-3 text-center">
+                <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
+                <h4 className="font-serif text-base text-white font-bold uppercase tracking-wider">Confirm Profile Revocation</h4>
+                <p className="text-[11px] text-white/40 leading-relaxed max-w-xs mx-auto">
+                  Sir, are you absolutely certain you intend to revoke authorized clearance for <span className="text-white font-semibold">&ldquo;{userToDelete?.name}&rdquo;</span> ({userToDelete?.role})? This protocol will wipe access logs.
+                </p>
+              </div>
+
+              <div className="flex gap-3 font-mono">
+                <button 
+                  onClick={() => setIsDeleteUserModalOpen(false)}
+                  className="bg-white/5 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold border border-white/10 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmDeleteUser}
+                  className="bg-red-500 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold hover:bg-red-600 transition-colors cursor-pointer"
+                >
+                  Confirm Wipe
                 </button>
               </div>
             </motion.div>
