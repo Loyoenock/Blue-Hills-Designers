@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, User, HelpCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useStore } from '../store/useStore';
 
 interface ChatMessage {
   id: string;
@@ -11,6 +12,7 @@ interface ChatMessage {
 }
 
 export default function AIStylist() {
+  const { currentUser } = useStore();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -28,6 +30,17 @@ export default function AIStylist() {
     { label: 'Lubowa Showroom Lounge', text: 'How can I visit your Lubowa Shopping Mall showroom to try on clothes?' },
     { label: 'Camel Hair Overcoat Offer', text: 'What are the details of the Lubowa Camel Hair Executive Overcoat on special offer?' }
   ];
+
+  const getFormattedContent = (msg: ChatMessage) => {
+    if (msg.id === 'welcome' && currentUser) {
+      if (msg.content.startsWith('Hello!')) {
+        return msg.content.replace('Hello!', `Hello, ${currentUser.name}!`);
+      } else if (msg.content.startsWith('Good day, Executive.')) {
+        return msg.content.replace('Good day, Executive.', `Good day, Mr. ${currentUser.name}.`);
+      }
+    }
+    return msg.content;
+  };
 
   useEffect(() => {
     if (messages.length > 1 && containerRef.current) {
@@ -60,8 +73,9 @@ export default function AIStylist() {
         body: JSON.stringify({
           messages: updatedMessages.map(m => ({
             role: m.role,
-            content: m.content
-          }))
+            content: getFormattedContent(m)
+          })),
+          userName: currentUser ? currentUser.name : undefined
         })
       });
 
@@ -76,10 +90,11 @@ export default function AIStylist() {
         content: data.text
       }]);
     } catch {
+      const greeting = currentUser ? `Mr. ${currentUser.name}` : 'Sir';
       setMessages(curr => [...curr, {
         id: `error-msg-${curr.length + 1}`,
         role: 'model',
-        content: 'I apologize, Sir. A brief concierge connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.'
+        content: `I apologize, ${greeting}. A brief concierge connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.`
       }]);
     } finally {
       setIsLoading(false);
@@ -95,7 +110,7 @@ export default function AIStylist() {
       <div className="max-w-5xl mx-auto px-4 md:px-8">
         <div className="text-center mb-12">
           <span className="text-xs uppercase tracking-[0.3em] text-[#C6A15B] font-semibold">
-            Personal Concierge
+            Personal assistant
           </span>
           <h2 className="font-serif text-3xl md:text-5xl tracking-tight text-[#F7F5F0] mt-3">
             Elite AI Personal Stylist
@@ -169,7 +184,7 @@ export default function AIStylist() {
                           : 'bg-[#B9CDE5]/30 border border-[#657892]/10 text-[#1D2B3F] rounded-tl-none font-light'
                       }`}
                     >
-                      {msg.content}
+                      {getFormattedContent(msg)}
                     </div>
                     {msg.role === 'user' && (
                       <div className="w-8 h-8 rounded-full bg-[#1C4D8D]/10 flex items-center justify-center shrink-0 border border-[#657892]/10 text-[#1D2B3F]">

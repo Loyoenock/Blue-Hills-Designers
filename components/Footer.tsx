@@ -51,11 +51,9 @@ export default function Footer() {
             Blue Hills
           </h4>
           <ul className="space-y-3">
-            {[
-              { name: "Men's Circle", href: '/#join-circle' },
+            {[         
               { name: 'Speak to Personal Stylist', href: '/#stylist' },
-              { name: 'The Gentlemen\'s Circle', href: '/#join-circle' },
-              { name: 'Standard Sizing Guide', href: '/shop' },
+              { name: 'The Gentlemen\'s Circle', href: '/#join-circle' },            
             ].map((link) => (
               <li key={link.name}>
                 <Link 

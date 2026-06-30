@@ -53,7 +53,7 @@ Tone Guidelines:
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages, userName } = await req.json();
     
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages thread.' }, { status: 400 });
@@ -64,13 +64,17 @@ export async function POST(req: NextRequest) {
     if (!client) {
       // Return a highly-curated luxury simulated response if Gemini API key is missing
       const lastUserMessage = messages[messages.length - 1]?.content || "";
-      const simulatedReply = getSimulatedStylistReply(lastUserMessage);
+      const simulatedReply = getSimulatedStylistReply(lastUserMessage, userName);
       return NextResponse.json({ text: simulatedReply, simulated: true });
     }
 
     // Convert messages to Gemini's format: we can use models.generateContent with a constructed prompt
     // combining the system instructions and the chat history.
-    let fullPrompt = `${SYSTEM_INSTRUCTIONS}\n\nClient Conversation History:\n`;
+    let fullPrompt = `${SYSTEM_INSTRUCTIONS}\n\n`;
+    if (userName) {
+      fullPrompt += `CRITICAL GUIDELINE: The customer you are speaking to is logged in. Their name is "${userName}". You MUST address them by their name (e.g. "Mr. ${userName}", "Sir ${userName}", or "Gentleman ${userName}") in your responses to show elite high-class personal recognition. Avoid generic greetings if you know their name.\n\n`;
+    }
+    fullPrompt += `Client Conversation History:\n`;
     for (const msg of messages) {
       const speaker = msg.role === 'user' ? 'Client' : 'Stylist Concierge';
       fullPrompt += `${speaker}: ${msg.content}\n`;
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
       contents: fullPrompt,
     });
 
-    const replyText = response.text || "I apologize, Executive. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?";
+    const replyText = response.text || (userName ? `I apologize, Mr. ${userName}. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?` : "I apologize, Executive. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?");
     return NextResponse.json({ text: replyText });
 
   } catch (error: any) {
@@ -94,12 +98,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function getSimulatedStylistReply(query: string): string {
+function getSimulatedStylistReply(query: string, userName?: string): string {
   const q = query.toLowerCase();
+  const greetingName = userName ? `Mr. ${userName}` : "Sir";
+  const directName = userName ? `${userName}` : "Sir";
+  const executiveTitle = userName ? userName : "Executive";
   
   // First, address questions about opening days, hours, or schedule
   if (q.includes('hour') || q.includes('open') || q.includes('time') || q.includes('day') || q.includes('saturday') || q.includes('sunday') || q.includes('friday') || q.includes('schedule') || q.includes('when')) {
-    return `Good day, Sir. To assist with your schedule, our Lubowa Shopping Mall showroom operating hours are:
+    return `Good day, ${greetingName}. To assist with your schedule, our Lubowa Shopping Mall showroom operating hours are:
     
 *   **Sunday to Friday**: 9:00 AM to 7:00 PM
 *   **Saturdays**: Closed
@@ -108,35 +115,35 @@ We would be delighted to host you for a styling consultation at any time during 
   }
   
   if (q.includes('suit') || q.includes('tuxedo') || q.includes('blazer')) {
-    return `Greetings, Executive. For premium boardroom presence, I strongly recommend our Turkish-imported **Savile Midnight Pinstripe Suit** (Ugx 1,450) or our **Monaco Navy Ready-to-Wear Suit** (Ugx 1,250).
+    return `Greetings, ${executiveTitle}. For premium boardroom presence, I strongly recommend our Turkish-imported **Savile Midnight Pinstripe Suit** (Ugx 1,450) or our **Monaco Navy Ready-to-Wear Suit** (Ugx 1,250).
 
 
 *   **The Savile Midnight Pinstripe** is a commanding double-breasted 6x2 wool masterpiece imported from Turkey, featuring peak lapels. It asserts executive authority.
 *   **The Monaco Navy Suit** is an incredibly versatile option imported from Turkey, made of fine wool-blend with finely structured shoulders that sit beautifully.
 
-Would you like me to reserve a sizing or styling consultation for you at our Lubowa showroom this week?`;
+Would you like me to reserve a sizing or styling consultation for you at our Lubowa showroom this week, ${greetingName}?`;
   }
   
   if (q.includes('shoe') || q.includes('oxford') || q.includes('loaf') || q.includes('monk')) {
-    return `Welcome back, Sir. Our imported shoe collection is globally renowned. I recommend pairing your suits with:
+    return `Welcome back, ${greetingName}. Our imported shoe collection is globally renowned. I recommend pairing your suits with:
 
 1.  **Imperial Cognac Wholecut Oxfords** (Ugx 480): Imported from Turkey, single-piece premium calfskin, hand-burnished with a breathtaking glowing cognac patina. 
 2.  **Obsidian Double Monk Straps** (Ugx 520): Imported from Turkey, full-grain black calfskin with gunmetal buckles and a chiseled toe—perfect for high-powered diplomatic conferences.
 
-Shall I secure your size in our showroom repository?`;
+Shall I secure your size in our showroom repository, ${greetingName}?`;
   }
 
   if (q.includes('shirt') || q.includes('poplin')) {
-    return `An exceptional selection, Sir. A gentleman is defined by the crispness of his shirt.
+    return `An exceptional selection, ${greetingName}. A gentleman is defined by the crispness of his shirt.
 
 *   Our **Presidential Poplin White Shirt** (Ugx 190) is woven with Egyptian Giza cotton. It is imported and specially crafted to resist creasing through long cabinet sessions and executive flights.
 *   Alternatively, the UK-imported **Crisp Poplin Herringbone Shirt Set** (Ugx 220) provides two-ply royal oxford cotton shirts featuring French cuffs, complete with structured collars.
 
-Which size may I prepare for your wardrobe?`;
+Which size may I prepare for your wardrobe, ${directName}?`;
   }
 
   if (q.includes('price') || q.includes('cost') || q.includes('discount')) {
-    return `Indeed, Sir. At Blue Hills Designers, our pricing reflects the premium, imported nature of our garments:
+    return `Indeed, ${greetingName}. At Blue Hills Designers, our pricing reflects the premium, imported nature of our garments:
 *   **Ready-to-Wear Suits** range from Ugx 1,250 to Ugx 1,450.
 *   **Premium Egyptian Cotton Shirts** start at Ugx 190.
 *   **Turkish Calfskin Footwear** begins at Ugx 480.
@@ -145,7 +152,7 @@ Which size may I prepare for your wardrobe?`;
 Every garment is hand-couriered to your office or residence in Kampala with our compliments.`;
   }
 
-  return `Good day, Sir. I am your Blue Hills Personal Styling Concierge. 
+  return `Good day, ${greetingName}. I am your Blue Hills Personal Styling Concierge. 
 
 Whether you are preparing for an upcoming diplomatic summit, a boardroom merger presentation, or an executive networking session, I am here to coordinate your visual presence.
 
