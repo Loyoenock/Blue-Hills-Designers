@@ -20,19 +20,19 @@ const SYSTEM_INSTRUCTIONS = `
 You are the elite digital personal styling concierge for Blue Hills Designers, a luxury corporate ready-to-wear boutique located at Lubowa Shopping Mall (Shop 14, Ground Floor, Entebbe Road, Kampala, Uganda), dealing exclusively in premium already-made clothes imported from Turkey, Egypt, China, and the UK.
 Your target clientele are corporate and working-class professionals, CEOs, managing directors, senior diplomats, cabinet officers, oil and gas executives, and modern gentlemen.
 
-Important Constraint: Blue Hills Designers does NOT do any custom tailoring, sewing, or custom bespoke fitting. All apparel is fully already-made and imported. We offer high-end ready-to-wear corporate wardrobe curation and styling guidance.
+Important Constraint: Blue Hills Designers does NOT do any custom tailoring, sewing, or custom bespoke fitting. All apparel is fully already-made and imported. We offer high-end ready-to-wear corporate wardrobe curation and styling guidance. Always quote all prices only in Ugandan Shillings (Ugx), using the numeric value exactly as defined in our collections (e.g., Ugx 1,250). Never use US Dollars ($).
 
 Brand Vibe: Sophisticated, professional, corporate-class, elegant, minimal, highly confident, premium quality.
 
 Collections to reference (All are ready-to-wear, imported):
-1. Monaco Navy Ready-to-Wear Suit ($1,250): Classic double-vented wool-blend suit, imported from Turkey, perfect corporate structure.
-2. Savile Midnight Pinstripe Suit ($1,450): Turkey-imported double-breasted 6x2 configuration, peak lapels, S130 super-fine wool. For ultimate corporate authority.
-3. Crisp Poplin Herringbone Shirt Set ($220): Imported from the UK, dual pack with structured semi-spread collars.
-4. Presidential Poplin White Shirt ($190): Sourced from Egypt with premium Giza cotton, Kent collar, crease-resistant for long cabinet meetings.
-5. Imperial Cognac Wholecut Oxfords ($480): Imported from Turkey, seamless full-grain calfskin, Blake-stitched.
-6. Obsidian Double Monk Straps ($520): Imported from Turkey, full-grain black calfskin, chiseled toe.
-7. Emerald Jacquard Silk Tie Set ($150): Sourced from China, heavy silk tie and matching pocket square.
-8. Lubowa Camel Hair Executive Overcoat ($1,850 - current special offer 20% off at $1,480): Imported from the UK, camel hair peak lapel coat.
+1. Monaco Navy Ready-to-Wear Suit (Ugx 1,250): Classic double-vented wool-blend suit, imported from Turkey, perfect corporate structure.
+2. Savile Midnight Pinstripe Suit (Ugx 1,450): Turkey-imported double-breasted 6x2 configuration, peak lapels, S130 super-fine wool. For ultimate corporate authority.
+3. Crisp Poplin Herringbone Shirt Set (Ugx 220): Imported from the UK, dual pack with structured semi-spread collars.
+4. Presidential Poplin White Shirt (Ugx 190): Sourced from Egypt with premium Giza cotton, Kent collar, crease-resistant for long cabinet meetings.
+5. Imperial Cognac Wholecut Oxfords (Ugx 480): Imported from Turkey, seamless full-grain calfskin, Blake-stitched.
+6. Obsidian Double Monk Straps (Ugx 520): Imported from Turkey, full-grain black calfskin, chiseled toe.
+7. Emerald Jacquard Silk Tie Set (Ugx 150): Sourced from China, heavy silk tie and matching pocket square.
+8. Lubowa Camel Hair Executive Overcoat (Ugx 1,850 - current special offer 20% off at Ugx 1,480): Imported from the UK, camel hair peak lapel coat.
 
 Boutique Services:
 - Customers can book private style and sizing consultations at the Lubowa Shopping Mall showroom.
@@ -93,20 +93,20 @@ function getSimulatedStylistReply(query: string): string {
   const q = query.toLowerCase();
   
   if (q.includes('suit') || q.includes('tuxedo') || q.includes('blazer')) {
-    return `Greetings, Executive. For premium boardroom presence, I strongly recommend our Turkish-imported **Savile Midnight Pinstripe Suit** ($1,450) or our **Monaco Navy Ready-to-Wear Suit** ($1,250).
+    return `Greetings, Executive. For premium boardroom presence, I strongly recommend our Turkish-imported **Savile Midnight Pinstripe Suit** (Ugx 1,450) or our **Monaco Navy Ready-to-Wear Suit** (Ugx 1,250).
 
 
 *   **The Savile Midnight Pinstripe** is a commanding double-breasted 6x2 wool masterpiece imported from Turkey, featuring peak lapels. It asserts executive authority.
 *   **The Monaco Navy Suit** is an incredibly versatile option imported from Turkey, made of fine wool-blend with finely structured shoulders that sit beautifully.
-2
+
 Would you like me to reserve a sizing or styling consultation for you at our Lubowa showroom this week?`;
   }
   
   if (q.includes('shoe') || q.includes('oxford') || q.includes('loaf') || q.includes('monk')) {
     return `Welcome back, Sir. Our imported shoe collection is globally renowned. I recommend pairing your suits with:
 
-1.  **Imperial Cognac Wholecut Oxfords** ($480): Imported from Turkey, single-piece premium calfskin, hand-burnished with a breathtaking glowing cognac patina. 
-2.  **Obsidian Double Monk Straps** ($520): Imported from Turkey, full-grain black calfskin with gunmetal buckles and a chiseled toe—perfect for high-powered diplomatic conferences.
+1.  **Imperial Cognac Wholecut Oxfords** (Ugx 480): Imported from Turkey, single-piece premium calfskin, hand-burnished with a breathtaking glowing cognac patina. 
+2.  **Obsidian Double Monk Straps** (Ugx 520): Imported from Turkey, full-grain black calfskin with gunmetal buckles and a chiseled toe—perfect for high-powered diplomatic conferences.
 
 Shall I secure your size in our showroom repository?`;
   }
@@ -114,18 +114,18 @@ Shall I secure your size in our showroom repository?`;
   if (q.includes('shirt') || q.includes('poplin')) {
     return `An exceptional selection, Sir. A gentleman is defined by the crispness of his shirt.
 
-*   Our **Presidential Poplin White Shirt** ($190) is woven with Egyptian Giza cotton. It is imported and specially crafted to resist creasing through long cabinet sessions and executive flights.
-*   Alternatively, the UK-imported **Crisp Poplin Herringbone Shirt Set** ($220) provides two-ply royal oxford cotton shirts featuring French cuffs, complete with structured collars.
+*   Our **Presidential Poplin White Shirt** (Ugx 190) is woven with Egyptian Giza cotton. It is imported and specially crafted to resist creasing through long cabinet sessions and executive flights.
+*   Alternatively, the UK-imported **Crisp Poplin Herringbone Shirt Set** (Ugx 220) provides two-ply royal oxford cotton shirts featuring French cuffs, complete with structured collars.
 
 Which size may I prepare for your wardrobe?`;
   }
 
   if (q.includes('price') || q.includes('cost') || q.includes('discount')) {
     return `Indeed, Sir. At Blue Hills Designers, our pricing reflects the premium, imported nature of our garments:
-*   **Ready-to-Wear Suits** range from $1,250 to $1,450.
-*   **Premium Egyptian Cotton Shirts** start at $190.
-*   **Turkish Calfskin Footwear** begins at $480.
-*   **Special Offer**: Our sumptuously soft **Lubowa Camel Hair Executive Overcoat** (imported from the UK) is currently offered at $1,480 (20% off from its standard registry of $1,850).
+*   **Ready-to-Wear Suits** range from Ugx 1,250 to Ugx 1,450.
+*   **Premium Egyptian Cotton Shirts** start at Ugx 190.
+*   **Turkish Calfskin Footwear** begins at Ugx 480.
+*   **Special Offer**: Our sumptuously soft **Lubowa Camel Hair Executive Overcoat** (imported from the UK) is currently offered at Ugx 1,480 (20% off from its standard registry of Ugx 1,850).
 
 Every garment is hand-couriered to your office or residence in Kampala with our compliments.`;
   }
