@@ -101,7 +101,7 @@ export default function Admin() {
             <ShieldAlert className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h3 className="font-serif text-xl text-white font-bold">Atelier Security Intercept</h3>
+            <h3 className="font-serif text-xl text-white font-bold">Boutique Security Intercept</h3>
             <p className="text-white/40 text-xs font-light max-w-xs mx-auto leading-relaxed">
               This panel is restricted to Super Admins, Managers, and Staff. Please sign in with an authorized profile to bypass.
             </p>
@@ -372,7 +372,7 @@ export default function Admin() {
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
               <span className="text-[10px] uppercase tracking-[0.3em] text-red-500 font-mono font-bold">Secure Command Core</span>
             </div>
-            <h1 className="font-serif text-3xl text-white tracking-tight font-medium">Boutique Atelier Console</h1>
+            <h1 className="font-serif text-3xl text-white tracking-tight font-medium">Boutique Operations Console</h1>
             <p className="text-white/40 text-xs font-mono">
               Role: <span className="text-[#20D9A1] font-semibold">{currentUser.name} ({currentUser.role})</span>
             </p>
@@ -393,7 +393,7 @@ export default function Admin() {
         <aside className="lg:col-span-3 space-y-4">
           <div className="bg-[#111111] border border-white/10 rounded-2xl p-4 space-y-1.5 shadow-xl">
             {[
-              { id: 'dashboard', name: 'Atelier Pulse', icon: BarChart },
+              { id: 'dashboard', name: 'Boutique Pulse', icon: BarChart },
               { id: 'products', name: 'Apparel Registry', icon: Grid },
               { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: orders.length },
               { id: 'users', name: 'Authorized Staff', icon: Users },
@@ -640,7 +640,7 @@ export default function Admin() {
                                 <button 
                                   onClick={() => handleOpenProductModal(p)}
                                   className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
-                                  title="Edit tailoring details"
+                                  title="Edit product details"
                                 >
                                   <Edit className="w-3.5 h-3.5" />
                                 </button>
@@ -672,7 +672,7 @@ export default function Admin() {
                 className="space-y-6"
               >
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <h3 className="font-serif text-xl text-white font-bold">Atelier Commission Ledger</h3>
+                  <h3 className="font-serif text-xl text-white font-bold">Boutique Orders Ledger</h3>
 
                   <div className="flex gap-2.5">
                     <button 
@@ -801,7 +801,7 @@ export default function Admin() {
               >
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
                   <div>
-                    <h3 className="font-serif text-xl text-white font-bold">User & Atelier Access Directory</h3>
+                    <h3 className="font-serif text-xl text-white font-bold">User & Boutique Access Directory</h3>
                     <p className="text-xs text-white/40">Manage staff roles, customer profiles, spending metrics, and loyalty keys.</p>
                   </div>
                   {canModifyUsers && (
@@ -1097,6 +1097,7 @@ export default function Admin() {
                       {pImages[0] && (
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded p-2">
                           <div className="relative w-12 h-12 rounded overflow-hidden bg-black flex-shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
                               src={pImages[0]} 
                               alt="Apparel Preview" 
@@ -1130,6 +1131,7 @@ export default function Admin() {
                       />
                       {pImages[0] && (
                         <div className="relative h-24 rounded-lg overflow-hidden bg-black border border-white/5 flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
                             src={pImages[0]} 
                             alt="URL Preview" 
@@ -1230,7 +1232,7 @@ export default function Admin() {
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-4">
                 <h3 className="font-serif text-lg text-white font-bold">
-                  Atelier Dispatch Detail Review
+                  Boutique Dispatch Detail Review
                 </h3>
                 <button onClick={() => setSelectedOrderDetails(null)} className="text-white/60 hover:text-white p-1">
                   ✕
@@ -1314,7 +1316,7 @@ export default function Admin() {
             >
               <div className="flex justify-between items-center border-b border-white/5 pb-4">
                 <h3 className="font-serif text-lg text-white font-bold">
-                  {editingUser ? 'Amend Client Profile Key' : 'Create Atelier Profile Key'}
+                  {editingUser ? 'Amend Client Profile Key' : 'Create Boutique Profile Key'}
                 </h3>
                 <button onClick={() => setIsUserModalOpen(false)} className="text-white/60 hover:text-white p-1">
                   <X className="w-4 h-4" />

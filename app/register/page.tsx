@@ -46,7 +46,7 @@ export default function Register() {
     setSuccess(false);
 
     if (!agreed) {
-      setErrorMsg("Security constraint: You must agree to the Private Atelier Charter.");
+      setErrorMsg("Security constraint: You must agree to the Private Boutique Charter.");
       return;
     }
 
@@ -117,9 +117,9 @@ export default function Register() {
             <div className="absolute inset-0 bg-gradient-to-t from-[#1D2B3F] via-transparent to-transparent" />
             <div className="absolute bottom-10 left-10 right-10 space-y-3 font-sans">
               <span className="text-[10px] tracking-[0.4em] uppercase text-[#C6A15B] font-bold">The Monaco Wardrobe</span>
-              <h3 className="font-serif text-2xl text-white font-bold leading-tight">Hand-Tailored Prestige.</h3>
+              <h3 className="font-serif text-2xl text-white font-bold leading-tight">Imported Elite Prestige.</h3>
               <p className="text-xs text-white/70 font-light leading-relaxed">
-                By creating a client registry, you gain full access to private showrooms, priority measurement scheduling, and bespoke styling advice.
+                By creating a client registry, you gain full access to private showrooms, style consultation bookings, and personalized wardrobe advice.
               </p>
             </div>
           </div>
@@ -129,7 +129,7 @@ export default function Register() {
             <div className="space-y-2">
               <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Join the Circle</span>
               <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] tracking-tight font-bold">Create Elite Profile</h1>
-              <p className="text-[#657892] text-xs md:text-sm font-light">Register your physical dimensions and corporate keys securely below.</p>
+              <p className="text-[#657892] text-xs md:text-sm font-light">Register your style preferences and corporate keys securely below.</p>
             </div>
 
             {/* Error / Success logs */}
@@ -223,7 +223,7 @@ export default function Register() {
                     className="accent-[#1C4D8D] mt-0.5"
                   />
                   <span className="leading-relaxed">
-                    I agree to the <span className="text-[#1C4D8D] underline">Private Atelier Charter</span>, acknowledging that all measurements and logs are securely cached under AES-256 local guidelines.
+                    I agree to the <span className="text-[#1C4D8D] underline">Private Boutique Charter</span>, acknowledging that all measurements and logs are securely cached under AES-256 local guidelines.
                   </span>
                 </label>
               </div>
@@ -283,7 +283,7 @@ export default function Register() {
               </div>
 
               <p className="text-xs text-[#657892] font-light leading-relaxed">
-                An elite gentleman&apos;s registry already exists for <strong className="font-semibold text-[#1D2B3F]">{email}</strong>. Please sign in to access your bespoke orders, bookings, and private atelier profile.
+                An elite gentleman&apos;s registry already exists for <strong className="font-semibold text-[#1D2B3F]">{email}</strong>. Please sign in to access your orders, bookings, and private boutique profile.
               </p>
 
               <div className="pt-4 space-y-2">

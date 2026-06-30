@@ -20,7 +20,7 @@ export default function ProductDetails() {
   const router = useRouter();
   const productId = params?.id as string;
 
-  const { products, addToCart, wishlist, toggleWishlist, addReview } = useStore();
+  const { products, addToCart, clearCart, wishlist, toggleWishlist, addReview } = useStore();
   
   const [mounted, setMounted] = useState(false);
   const [activeImage, setActiveImage] = useState('');
@@ -90,6 +90,12 @@ export default function ProductDetails() {
     addToCart(product, selectedSize, selectedColor, quantity);
     setAddedAlert(true);
     setTimeout(() => setAddedAlert(false), 3000);
+  };
+
+  const handleQuickCheckout = () => {
+    clearCart();
+    addToCart(product, selectedSize, selectedColor, quantity);
+    router.push('/checkout?quick=true');
   };
 
   const handleReviewSubmit = (e: React.FormEvent) => {
@@ -314,6 +320,15 @@ export default function ProductDetails() {
                 >
                   <ShoppingCart className="w-4.5 h-4.5" />
                   <span>Register to Garment Trunk</span>
+                </button>
+                <button
+                  onClick={handleQuickCheckout}
+                  disabled={product.stock <= 0}
+                  className="flex-1 bg-[#C6A15B] hover:bg-[#C6A15B]/90 text-[#1D2B3F] py-4 rounded-lg font-bold uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2.5 disabled:opacity-40 shadow-md hover:shadow-[#C6A15B]/10 cursor-pointer font-sans"
+                  id="quick-checkout-btn"
+                >
+                  <Check className="w-4.5 h-4.5" />
+                  <span>Quick Checkout</span>
                 </button>
               </div>
 

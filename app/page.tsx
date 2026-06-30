@@ -194,13 +194,13 @@ export default function Home() {
             className="max-w-3xl space-y-6"
           >
             <span className="text-xs tracking-[0.4em] uppercase font-semibold text-[#C6A15B] block font-sans">
-              Blue Hills Designers • Haute Couture
+              Blue Hills Designers • Premium Sourced Ready-to-Wear
             </span>
             <h1 className="font-serif text-5xl md:text-7xl font-bold text-white tracking-tight leading-[1.1]">
               Dress Like The Man You Intend To Become.
             </h1>
             <p className="text-white/70 text-lg md:text-xl font-light leading-relaxed max-w-xl">
-              Atelier tailoring of supreme authority. Experience the confidence of bespoke craftsmanship engineered for diplomats, executives, and modern leaders.
+              High-quality ready-made corporate clothing sourced from Turkey, Egypt, China, and the UK. Experience premium style made simple for working class professionals.
             </p>
             
             {/* CTA Actions */}
@@ -241,10 +241,10 @@ export default function Home() {
       <section className="bg-[#1D2B3F] border-y border-[#657892]/20 py-12">
         <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-2 lg:grid-cols-4 gap-8">
           {[
-            { icon: Award, title: "Premium Quality", desc: "Fine Ugandan wool blend & S130 fabrics" },
-            { icon: Truck, title: "White-Glove Delivery", desc: "Hand-couriered to Kampala & Entebbe" },
-            { icon: ShieldCheck, title: "Secure Payments", desc: "Mobile Money, Visa, & Cash on Delivery" },
-            { icon: UserCheck, title: "Personal Styling", desc: "Expert custom fitting at our Lubowa Atelier" }
+            { icon: Award, title: "Premium Sourcing", desc: "Top-notch ready-made clothes from Turkey, Egypt, China, & UK" },
+            { icon: Truck, title: "Convenient Delivery", desc: "Delivered straight to your office in Kampala" },
+            { icon: ShieldCheck, title: "Secure Payments", desc: "Mobile Money, Card, or Cash on Delivery" },
+            { icon: UserCheck, title: "Personal Styling", desc: "Expert styling tips at our Lubowa showroom" }
           ].map((feat, index) => {
             const Icon = feat.icon;
             return (
@@ -552,7 +552,7 @@ export default function Home() {
           <div className="text-center mb-16">
             <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Seasonal Drop</span>
             <h2 className="font-serif text-3xl md:text-5xl tracking-tight text-[#1D2B3F] mt-3 font-medium">New Additions</h2>
-            <p className="text-[#657892] text-sm md:text-base max-w-xl mx-auto mt-4 font-light">Introducing high-performance bespoke fabrics, tailored specifically for boardroom distinction and tropical climates.</p>
+            <p className="text-[#657892] text-sm md:text-base max-w-xl mx-auto mt-4 font-light">Explore our newest ready-made outfits, perfect for daily office work and corporate meetings, imported directly from Turkey, Egypt, China, and the UK.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -659,13 +659,13 @@ export default function Home() {
       <AIStylist />
 
       {/* NEWSLETTER */}
-      <section id="newsletter" className="py-24 bg-[#B9CDE5]/20 border-t border-[#657892]/20">
+      <section id="join-circle" className="py-24 bg-[#B9CDE5]/20 border-t border-[#657892]/20">
         <div className="max-w-4xl mx-auto px-4 md:px-8 text-center space-y-8">
           <div className="space-y-3">
             <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">The Registry</span>
             <h2 className="font-serif text-3xl md:text-5xl text-[#1D2B3F] tracking-tight">Join the Gentlemen&apos;s Circle</h2>
             <p className="text-[#657892] text-sm md:text-base max-w-xl mx-auto leading-relaxed font-light">
-              Submit your corporate credentials to receive exclusive sartorial insights, early private collection drops, and invitations to showroom fittings at Lubowa.
+              Join our mailing list to receive style tips, updates on new stock arrivals, and special discount offers at our Lubowa showroom.
             </p>
           </div>
 
@@ -685,7 +685,7 @@ export default function Home() {
                 className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-6 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all cursor-pointer font-sans"
                 id="newsletter-submit-btn"
               >
-                Join Circle
+                Men&apos;s Circle
               </button>
             </div>
             {newsSuccess && (
@@ -830,7 +830,7 @@ export default function Home() {
                     </div>
 
                     <div className="text-[10px] text-center text-[#657892]/50 font-mono">
-                      Exquisite white-glove hand delivery included. Custom fitting service on demand.
+                      Free delivery included. Sizing advice available on demand.
                     </div>
                   </div>
                 </div>
@@ -868,9 +868,9 @@ export default function Home() {
               </button>
 
               <div className="text-center space-y-2 mb-6">
-                <span className="text-[9px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-semibold">Atelier Showroom Scheduling</span>
-                <h3 className="font-serif text-2xl text-[#1D2B3F] font-bold">Reserve Fitting Lounge</h3>
-                <p className="text-[#657892] text-xs font-light">Book an exclusive personal styling and measurement fitting session with our master tailoring staff at Lubowa Shopping Mall showroom.</p>
+                <span className="text-[9px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-semibold">Boutique Showroom Scheduling</span>
+                <h3 className="font-serif text-2xl text-[#1D2B3F] font-bold">Reserve Styling Consultation</h3>
+                <p className="text-[#657892] text-xs font-light">Book a personal styling consultation session with our friendly staff at our Lubowa Shopping Mall showroom.</p>
               </div>
 
               {bookingSuccess ? (
@@ -880,7 +880,7 @@ export default function Home() {
                   </div>
                   <h4 className="font-serif text-lg text-[#1D2B3F] font-semibold">Lounge Reserved Successfully</h4>
                   <p className="text-xs text-[#657892] max-w-sm mx-auto leading-relaxed">
-                    Good day, Sir. Your consultation request has been recorded into our executive register. Our personal concierge will reach out to confirm your slot within the hour.
+                    Your appointment request has been recorded. Our showroom staff will reach out to confirm your slot soon.
                   </p>
                 </div>
               ) : (
@@ -962,7 +962,7 @@ export default function Home() {
                       Secure Appointment Slot
                     </button>
                     <p className="text-[9px] text-center text-[#657892]/60 mt-3 font-mono">
-                      Showroom visits are fully secure. Personalized bespoke tailoring advice guaranteed.
+                      Showroom visits are fully secure. Personalized ready-made style advice guaranteed.
                     </p>
                   </div>
                 </form>
@@ -992,7 +992,7 @@ const TESTIMONIALS = [
     company: "Ministry of Foreign Affairs"
   },
   {
-    quote: "I visited their Lubowa lounge for a wedding fit. The level of personal attention, whiskey refreshment service, and tailoring craft was truly Tom Ford quality.",
+    quote: "I visited their Lubowa showroom for a ready-made corporate suit. The level of personal attention, refreshment service, and premium clothing quality was truly top tier.",
     name: "Charles Mugisha",
     role: "Investment VP",
     company: "Ascent Capital Africa"

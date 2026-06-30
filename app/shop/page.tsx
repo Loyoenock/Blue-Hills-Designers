@@ -160,14 +160,14 @@ function ShopContent() {
             <div className="flex items-center gap-2 text-xs text-[#F7F5F0]/60 uppercase tracking-widest font-mono">
               <Link href="/" className="hover:text-[#C6A15B] transition-colors">Home</Link>
               <ChevronRight className="w-3 h-3 text-[#F7F5F0]/40" />
-              <span className="text-[#F7F5F0]/90">Atelier Collections</span>
+              <span className="text-[#F7F5F0]/90">Boutique Collections</span>
             </div>
             <h1 className="font-serif text-3xl md:text-4xl text-[#F7F5F0] tracking-tight mt-2 font-medium">
-              {selectedCategory === 'Wishlist' ? 'Your Executive Wishlist' : 'Atelier Collections'}
+              {selectedCategory === 'Wishlist' ? 'Your Executive Wishlist' : 'Boutique Collections'}
             </h1>
           </div>
           <p className="text-[#F7F5F0]/60 text-xs sm:text-sm font-light max-w-xs sm:text-right">
-            Hand-tailoring, high-performance fibers, and modern African poise. Crafted at Lubowa Shopping Mall.
+            Imported ready-to-wear corporate wear, premium fabrics, and elegant poise. Sourced from Turkey, Egypt, China, and the UK.
           </p>
         </div>
       </div>
@@ -179,7 +179,7 @@ function ShopContent() {
           {/* DESKTOP SIDEBAR FILTER PANEL (25% on lg screens) */}
           <aside className="hidden lg:block lg:col-span-3 space-y-8 border-r border-[#657892]/20 pr-8">
             <div className="flex items-center justify-between border-b border-[#657892]/20 pb-4">
-              <h3 className="font-serif text-[#1D2B3F] tracking-widest uppercase text-sm font-semibold">Atelier Filters</h3>
+              <h3 className="font-serif text-[#1D2B3F] tracking-widest uppercase text-sm font-semibold">Boutique Filters</h3>
               <button 
                 onClick={handleResetFilters}
                 className="text-[10px] text-[#657892]/70 hover:text-[#1D2B3F] flex items-center gap-1 font-mono uppercase transition-colors"
@@ -302,7 +302,7 @@ function ShopContent() {
 
             <div className="border-t border-[#657892]/20 pt-6 text-center">
               <p className="text-[10px] text-[#657892] font-mono italic">
-                Need bespoke styling assistance? Access our Personal Stylist assistant at any time.
+                Need corporate styling assistance? Access our Personal Stylist assistant at any time.
               </p>
             </div>
           </aside>
@@ -414,7 +414,7 @@ function ShopContent() {
 
             {/* Product count display */}
             <p className="text-xs text-[#657892] font-mono">
-              Displaying {filteredProducts.length} premium tailoring registries.
+              Displaying {filteredProducts.length} premium curated ready-to-wear styles.
             </p>
 
             {/* Shelf Grid container */}
@@ -426,13 +426,13 @@ function ShopContent() {
                   exit={{ opacity: 0 }}
                   className="py-24 border border-[#657892]/20 bg-[#F7F5F0] rounded-2xl text-center space-y-4 shadow-sm"
                 >
-                  <p className="font-serif text-lg text-[#1D2B3F]">No Sartorial Records Match Your Registry</p>
-                  <p className="text-[#657892] text-xs max-w-sm mx-auto font-light">Refine your custom filters above or contact our Lubowa boutique master tailors directly to commission a customized run.</p>
+                  <p className="font-serif text-lg text-[#1D2B3F]">No Boutique Records Match Your Selection</p>
+                  <p className="text-[#657892] text-xs max-w-sm mx-auto font-light">Refine your search filters above or contact our Lubowa showroom directly to check size availability.</p>
                   <button 
                     onClick={handleResetFilters}
                     className="border border-[#1C4D8D] text-[#1C4D8D] hover:bg-[#1C4D8D]/10 px-5 py-2.5 rounded text-xs uppercase tracking-widest font-semibold transition-all cursor-pointer font-sans"
                   >
-                    Clear Sizing Registry
+                    Clear Boutique Filters
                   </button>
                 </motion.div>
               ) : (
@@ -592,7 +592,7 @@ function ShopContent() {
               className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-[#F7F5F0] z-50 lg:hidden rounded-t-2xl border-t border-[#657892]/20 overflow-y-auto p-6 space-y-6 text-[#1D2B3F]"
             >
               <div className="flex justify-between items-center border-b border-[#657892]/20 pb-4">
-                <h3 className="font-serif text-[#1D2B3F] tracking-widest uppercase text-sm font-semibold">Atelier Sizing Filters</h3>
+                <h3 className="font-serif text-[#1D2B3F] tracking-widest uppercase text-sm font-semibold">Boutique Sizing Filters</h3>
                 <button 
                   onClick={() => setMobileFiltersOpen(false)}
                   className="text-[#657892] hover:text-[#1D2B3F] p-1"
@@ -700,7 +700,7 @@ function ShopContent() {
 
 export default function Shop() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-[#1D2B3F] font-serif">Loading Atelier Registry...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-[#1D2B3F] font-serif">Loading Boutique Registry...</div>}>
       <ShopContent />
     </Suspense>
   );

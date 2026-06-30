@@ -79,10 +79,10 @@ export default function Login() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#1D2B3F] via-transparent to-transparent" />
             <div className="absolute bottom-10 left-10 right-10 space-y-3 font-sans">
-              <span className="text-[10px] tracking-[0.4em] uppercase text-[#C6A15B] font-bold">The Savile Wardrobe</span>
+              <span className="text-[10px] tracking-[0.4em] uppercase text-[#C6A15B] font-bold">The Executive Wardrobe</span>
               <h3 className="font-serif text-2xl text-white font-bold leading-tight">Dress Like The Man You Intend To Become.</h3>
               <p className="text-xs text-white/70 font-light leading-relaxed">
-                Unlock exclusive private tailoring guides, record physical sizing configurations securely, and view active courier shipments.
+                Unlock exclusive corporate style guides, save your ready-to-wear sizing preferences securely, and view active courier shipments.
               </p>
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function Login() {
           {/* RIGHT COLUMN: SPLIT SCREEN LOGIN FORM (7 columns) */}
           <div className="col-span-12 lg:col-span-7 flex flex-col justify-center max-w-lg mx-auto w-full space-y-8 lg:pl-10">
             <div className="space-y-2">
-              <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Atelier Access</span>
+              <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Boutique Access</span>
               <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] tracking-tight font-bold">Executive Sign In</h1>
               <p className="text-[#657892] text-xs md:text-sm font-light">Submit your registered credentials or select a fast validation profile below.</p>
             </div>
@@ -105,7 +105,7 @@ export default function Login() {
             {success && (
               <div className="bg-[#C6A15B]/10 border border-[#C6A15B]/30 rounded-lg p-4 flex gap-3 text-[#1D2B3F] text-xs font-mono font-bold">
                 <Check className="w-5 h-5 shrink-0" />
-                <span>Keys confirmed. Opening private lounge portal...</span>
+                <span>Keys confirmed. Opening private showroom portal...</span>
               </div>
             )}
 

@@ -18,6 +18,7 @@ export default function Checkout() {
   const router = useRouter();
   const { cart, currentUser, placeOrder } = useStore();
   const [mounted, setMounted] = useState(false);
+  const [isQuick, setIsQuick] = useState(false);
 
   // Form Step State: 1 = Contact & Shipping, 2 = Payment Selection
   const [step, setStep] = useState(1);
@@ -47,6 +48,9 @@ export default function Checkout() {
       if (currentUser) {
         setEmail(currentUser.email);
         setPhone(currentUser.phone || '');
+      }
+      if (typeof window !== 'undefined' && window.location.search.includes('quick=true')) {
+        setIsQuick(true);
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -97,7 +101,7 @@ export default function Checkout() {
       items: orderItems,
       shippingAddress: {
         country,
-        district,
+        district: district || city,
         city,
         address
       },
@@ -133,11 +137,11 @@ export default function Checkout() {
               </div>
 
               <div className="space-y-2">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-bold">Atelier Courier Dispatch</span>
+                <span className="text-[10px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-bold">Boutique Courier Dispatch</span>
                 <h2 className="font-serif text-3xl text-[#1D2B3F] font-bold">Purchase Order Confirmed</h2>
                 <p className="text-[#657892] text-xs font-mono font-semibold">Registry Number: {createdOrderNumber}</p>
                 <p className="text-[#657892] text-xs font-light leading-relaxed max-w-sm mx-auto pt-2">
-                  Greetings, Sir. Your corporate apparel request has been authorized. Our master tailoring courier is dispatching your custom garment trunk directly from Lubowa Shopping Mall showroom.
+                  Your order has been confirmed. Our delivery courier is dispatching your premium ready-made corporate clothing directly from our Lubowa Shopping Mall showroom.
                 </p>
               </div>
 
@@ -146,9 +150,9 @@ export default function Checkout() {
                 <h4 className="text-[10px] uppercase tracking-widest text-[#C6A15B] font-mono font-bold">Delivery Protocol</h4>
                 <div className="space-y-4">
                   {[
-                    { title: "Sartorial Selection Authorized", desc: "Order details recorded and garment inventory deducted.", active: true },
-                    { title: "Bespoke Packaging", desc: "Placed in dual-layered protective garment bags to resist moisture.", active: true },
-                    { title: "Private Fleet Dispatch", desc: "Courier en route to your specified address in Kampala.", active: false }
+                    { title: "Order Confirmed", desc: "Order details recorded and garments set aside.", active: true },
+                    { title: "Premium Packaging", desc: "Placed in protective clothing bags for transit.", active: true },
+                    { title: "Courier Dispatch", desc: "Courier en-route to your specified address in Kampala.", active: false }
                   ].map((item, i) => (
                     <div key={i} className="flex gap-3">
                       <div className="flex flex-col items-center">
@@ -192,9 +196,188 @@ export default function Checkout() {
             >
               {/* Form entries panel (8 columns on lg) */}
               <div className="lg:col-span-7 space-y-8">
-                
-                {/* Dynamic progress steps indicator */}
-                <div className="flex items-center gap-4 bg-[#F7F5F0] p-4 rounded-xl border border-[#657892]/20 shadow-sm">
+                {isQuick ? (
+                  /* SIMPLIFIED QUICK CHECKOUT PANEL */
+                  <div className="space-y-6 bg-[#F7F5F0] border border-[#657892]/20 p-6 rounded-2xl shadow-md animate-fade-in" id="quick-checkout-panel">
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-bold">Express Portal</span>
+                      <h2 className="font-serif text-2xl text-[#1D2B3F] font-bold">Instant Order Checkout</h2>
+                      <p className="text-xs text-[#657892] font-light">Complete your purchase in seconds. Enter your details below.</p>
+                    </div>
+
+                    <form onSubmit={handleOrderSubmission} className="space-y-5" id="quick-checkout-details-form">
+                      {/* Contact details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] text-[#657892] uppercase tracking-widest font-mono">Email Address</label>
+                          <input 
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="executive@corporate.com"
+                            className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-3.5 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] text-[#657892] uppercase tracking-widest font-mono">Mobile Contact Line</label>
+                          <input 
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            placeholder="+256 772 123456"
+                            className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-3.5 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Shipping Address */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] text-[#657892] uppercase tracking-widest font-mono">City / Suburb</label>
+                          <input 
+                            type="text"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder="e.g. Lubowa / Kololo"
+                            className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-3.5 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] text-[#657892] uppercase tracking-widest font-mono">Physical Address / Suite</label>
+                          <input 
+                            type="text"
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                            placeholder="Plot 42, Executive Rise"
+                            className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-3.5 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Compact Payment selection */}
+                      <div className="space-y-2 pt-2 border-t border-[#657892]/10">
+                        <label className="text-[9px] text-[#657892] uppercase tracking-widest font-mono font-bold block">Payment Method</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'Mobile Money', title: 'MoMo', icon: Landmark },
+                            { id: 'Visa', title: 'Visa', icon: CreditCard },
+                            { id: 'Cash on Delivery', title: 'Cash on Del.', icon: Truck }
+                          ].map((pay) => {
+                            const Icon = pay.icon;
+                            const selected = paymentMethod === pay.id;
+                            return (
+                              <button
+                                key={pay.id}
+                                type="button"
+                                onClick={() => setPaymentMethod(pay.id as any)}
+                                className={`py-2 px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs transition-all cursor-pointer ${
+                                  selected 
+                                    ? 'bg-[#1C4D8D]/15 border-[#1C4D8D] text-[#1D2B3F] font-bold shadow-sm' 
+                                    : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1C4D8D]/40 bg-[#F7F5F0]'
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                                <span>{pay.title}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Detailed field depends on payment option */}
+                      <div className="bg-[#B9CDE5]/10 border border-[#657892]/25 rounded-xl p-4 text-xs">
+                        {paymentMethod === 'Mobile Money' && (
+                          <div className="space-y-3">
+                            <div className="flex gap-4">
+                              <label className="flex items-center gap-1.5 cursor-pointer font-mono text-[10px]">
+                                <input 
+                                  type="radio" 
+                                  checked={momoProvider === 'MTN'} 
+                                  onChange={() => setMomoProvider('MTN')}
+                                  className="accent-[#1C4D8D]"
+                                />
+                                <span>MTN MoMo</span>
+                              </label>
+                              <label className="flex items-center gap-1.5 cursor-pointer font-mono text-[10px]">
+                                <input 
+                                  type="radio" 
+                                  checked={momoProvider === 'Airtel'} 
+                                  onChange={() => setMomoProvider('Airtel')}
+                                  className="accent-[#1C4D8D]"
+                                />
+                                <span>Airtel Money</span>
+                              </label>
+                            </div>
+                            <div className="space-y-1">
+                              <input 
+                                type="tel"
+                                value={momoNumber}
+                                onChange={(e) => setMomoNumber(e.target.value)}
+                                placeholder="Mobile Money Number (+256 7xx xxxxxx)"
+                                className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded px-3 py-2 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                                required
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {paymentMethod === 'Visa' && (
+                          <div className="space-y-3">
+                            <input 
+                              type="text"
+                              value={cardNumber}
+                              onChange={(e) => setCardNumber(e.target.value)}
+                              placeholder="Card Number (xxxx xxxx xxxx xxxx)"
+                              maxLength={19}
+                              className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded px-3 py-2 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                              required
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                              <input 
+                                type="text"
+                                value={cardExpiry}
+                                onChange={(e) => setCardExpiry(e.target.value)}
+                                placeholder="MM/YY"
+                                maxLength={5}
+                                className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded px-3 py-2 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                                required
+                              />
+                              <input 
+                                type="password"
+                                value={cardCVV}
+                                onChange={(e) => setCardCVV(e.target.value)}
+                                placeholder="CVV"
+                                maxLength={3}
+                                className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded px-3 py-2 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
+                                required
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {paymentMethod === 'Cash on Delivery' && (
+                          <p className="text-[11px] text-[#657892] leading-relaxed font-light">
+                            Pay securely with cash or mobile money directly to our concierge upon physical sizing confirmation at delivery.
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full bg-[#1C4D8D] hover:bg-opacity-95 text-[#F7F5F0] py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans cursor-pointer"
+                      >
+                        Complete Quick Order (Ugx {total})
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <>
+                    {/* Dynamic progress steps indicator */}
+                    <div className="flex items-center gap-4 bg-[#F7F5F0] p-4 rounded-xl border border-[#657892]/20 shadow-sm">
                   <div className="flex items-center gap-2">
                     <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold font-mono ${
                       step >= 1 ? 'bg-[#1C4D8D] text-[#F7F5F0]' : 'border border-[#657892]/30 text-[#657892]/50'
@@ -495,6 +678,8 @@ export default function Checkout() {
                     </motion.div>
                   )}
                 </form>
+                  </>
+                )}
 
               </div>
 

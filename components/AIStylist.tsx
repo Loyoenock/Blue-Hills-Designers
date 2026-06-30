@@ -15,7 +15,7 @@ export default function AIStylist() {
     {
       id: 'welcome',
       role: 'model',
-      content: 'Good day, Executive. I am your Blue Hills Designers Personal Styling Concierge.\n\nWhether you are preparing for a high-stakes board merger, a diplomatic summit, or a presidential state dinner, I am here to orchestrate your visual presence. What sartorial agenda can I assist you with today?'
+      content: 'Hello! Welcome to Blue Hills Designers. I am your personal styling assistant.\n\nWe specialize in high-quality ready-made corporate clothing imported from Turkey, Egypt, China, and the UK. Whether you are dressing for a client meeting, a presentation, or daily office work, I can help you find the perfect ready-made outfit. How can I help you today?'
     }
   ]);
   const [input, setInput] = useState('');
@@ -23,14 +23,16 @@ export default function AIStylist() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const quickPrompts = [
-    { label: 'Boardroom Board Outfit', text: 'Coordinate an outfit for a high-profile corporate boardroom meeting.' },
-    { label: 'Presidential Poplin Shirt', text: 'Tell me about the Ugandan President Poplin White Shirt and what makes it special.' },
-    { label: 'Lubowa Fitting Lounge', text: 'What is the bespoke consultation process at your Lubowa Shopping Mall lounge?' },
+    { label: 'Office Outfits', text: 'Recommend a ready-made corporate outfit for a busy work day.' },
+    { label: 'Imported Shirts', text: 'Tell me about your premium imported shirts from Turkey and Egypt.' },
+    { label: 'Lubowa Showroom Lounge', text: 'How can I visit your Lubowa Shopping Mall showroom to try on clothes?' },
     { label: 'Camel Hair Overcoat Offer', text: 'What are the details of the Lubowa Camel Hair Executive Overcoat on special offer?' }
   ];
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 1) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isLoading]);
 
   const handleSend = async (textToSend: string) => {
@@ -74,7 +76,7 @@ export default function AIStylist() {
       setMessages(curr => [...curr, {
         id: `error-msg-${curr.length + 1}`,
         role: 'model',
-        content: 'I apologize, Sir. A brief tailoring interruption occurred on our digital desk. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.'
+        content: 'I apologize, Sir. A brief concierge connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.'
       }]);
     } finally {
       setIsLoading(false);
@@ -93,10 +95,10 @@ export default function AIStylist() {
             Personal Concierge
           </span>
           <h2 className="font-serif text-3xl md:text-5xl tracking-tight text-[#F7F5F0] mt-3">
-            Bespoke AI Personal Stylist
+            Elite AI Personal Stylist
           </h2>
           <p className="text-[#F7F5F0]/70 text-base md:text-lg max-w-2xl mx-auto mt-4 leading-relaxed font-light">
-            Speak directly with our digital tailoring desk to coordinate high-profile boardroom ensembles, explore premium Italian shoes, or reserve a private lounge fitting at Lubowa.
+            Chat with our AI Stylist to find the best ready-made corporate outfits imported from Turkey, Egypt, China, and the UK, or to plan a visit to our Lubowa showroom.
           </p>
         </div>
 
@@ -114,7 +116,7 @@ export default function AIStylist() {
                   Blue Hills Stylist Desk
                 </h3>
                 <p className="text-[10px] md:text-xs text-[#657892] font-mono">
-                  Active • Bespoke Tailoring Advisory
+                  Active • Ready-to-Wear Styling Advisory
                 </p>
               </div>
             </div>
@@ -183,7 +185,7 @@ export default function AIStylist() {
                     </div>
                     <div className="bg-[#B9CDE5]/30 border border-[#657892]/10 text-[#1D2B3F]/70 px-5 py-4 rounded-2xl rounded-tl-none text-sm flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-[#C6A15B]" />
-                      <span>Atelier Stylist drafting counsel...</span>
+                      <span>Boutique Stylist drafting counsel...</span>
                     </div>
                   </div>
                 </motion.div>
@@ -242,7 +244,7 @@ export default function AIStylist() {
               </button>
             </form>
             <p className="text-[10px] text-center text-[#657892]/60 mt-3 font-mono">
-              Leveraging advanced intelligence matching traditional bespoke styles. Tailored for Kampala corporate executives.
+              Leveraging advanced intelligence matching executive ready-to-wear styles. Imported for Kampala corporate executives.
             </p>
           </div>
         </div>

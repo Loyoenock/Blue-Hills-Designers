@@ -147,7 +147,7 @@ export default function Account() {
       <div className="bg-[#1D2B3F] border-b border-[#657892]/20 py-12">
         <div className="max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-1">
-            <span className="text-xs uppercase tracking-[0.3em] text-[#C6A15B] font-semibold">Atelier Membership Desk</span>
+            <span className="text-xs uppercase tracking-[0.3em] text-[#C6A15B] font-semibold">Boutique Loyalty Desk</span>
             <h1 className="font-serif text-3xl md:text-4xl text-[#F7F5F0] tracking-tight font-medium">Greetings, {currentUser.name}</h1>
             <p className="text-[#B9CDE5] text-xs font-mono uppercase tracking-wider">{currentUser.role} Account registry</p>
           </div>
@@ -215,7 +215,7 @@ export default function Account() {
                   exit={{ opacity: 0, y: 10 }}
                   className="space-y-8"
                 >
-                  <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">Atelier Credentials</h3>
+                  <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">Boutique Credentials</h3>
                   
                   {/* Stats Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -245,9 +245,9 @@ export default function Account() {
                         <Award className="w-4.5 h-4.5" />
                         <span>Lubowa Platinum Elite Circle</span>
                       </div>
-                      <h4 className="font-serif text-lg text-[#F7F5F0] font-semibold">Your Private Tailor Privileges</h4>
+                      <h4 className="font-serif text-lg text-[#F7F5F0] font-semibold">Your Elite Shopping Privileges</h4>
                       <p className="text-xs text-[#B9CDE5] max-w-md font-light leading-relaxed">
-                        As a valued member, you enjoy complimentary local courier, instant styling adjustments, priority booking at our showroom fitting lounge, and 10% cash value reward points on all collections.
+                        As a valued member, you enjoy complimentary local courier, personal style pairing, priority booking at our showroom lounge, and 10% cash value reward points on all collections.
                       </p>
                     </div>
                     <div className="bg-[#F7F5F0]/5 border border-[#F7F5F0]/15 rounded-xl px-5 py-4 text-center shrink-0 w-full md:w-auto font-mono">
@@ -268,7 +268,7 @@ export default function Account() {
                   exit={{ opacity: 0, y: 10 }}
                   className="space-y-6"
                 >
-                  <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">Sartorial Order Ledgers</h3>
+                  <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">Executive Order Ledgers</h3>
 
                   {clientOrders.length === 0 ? (
                     <div className="text-center py-16 border border-[#657892]/20 bg-[#B9CDE5]/10 rounded-2xl space-y-4 shadow-sm">

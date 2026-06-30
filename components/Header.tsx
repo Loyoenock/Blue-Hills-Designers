@@ -37,7 +37,7 @@ export default function Header() {
   const navItems = [
     { name: 'Collections', href: '/shop' },
     { name: 'AI Personal Stylist', href: '/#stylist', scroll: true },
-    { name: 'Bespoke Consultation', href: '/#consultation', scroll: true },
+    { name: "Men's Circle", href: '/#join-circle', scroll: true },
   ];
 
   if (!mounted) {
@@ -280,11 +280,11 @@ export default function Header() {
                     AI STYLIST
                   </Link>
                   <Link 
-                    href="/#consultation" 
+                    href="/#join-circle" 
                     onClick={() => setMobileMenuOpen(false)}
                     className="text-lg font-medium tracking-wider text-[#F7F5F0] hover:text-[#C6A15B] transition-colors"
                   >
-                    BESPOKE CONSULTATION
+                    MEN&apos;S CIRCLE
                   </Link>
                   {currentUser && currentUser.role !== 'Customer' && (
                     <Link 
@@ -316,7 +316,7 @@ export default function Header() {
                   </div>
                 ) : (
                   <div className="flex flex-col space-y-3">
-                    <p className="text-xs text-[#F7F5F0]/60">Experience the privilege of bespoke tailoring.</p>
+                    <p className="text-xs text-[#F7F5F0]/60">Experience our premium ready-made corporate collections.</p>
                     <Link 
                       href="/login"
                       onClick={() => setMobileMenuOpen(false)}

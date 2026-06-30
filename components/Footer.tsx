@@ -13,7 +13,7 @@ export default function Footer() {
             BLUE HILLS
           </span>
           <p className="text-[#F7F5F0]/70 text-sm leading-relaxed max-w-sm">
-            Uganda&apos;s preeminent bespoke and corporate tailoring brand. Crafting modern African luxury and high-performance corporate wear since 2018.
+            Uganda&apos;s premier ready-made corporate clothing boutique. Sourcing top-notch ready-to-wear business clothing from Turkey, Egypt, China, and the UK since 2018.
           </p>
           <div className="flex items-center space-x-3 text-[#C6A15B] text-xs font-semibold tracking-wider uppercase pt-2">
             <Award className="w-4 h-4" />
@@ -24,11 +24,11 @@ export default function Footer() {
         {/* Collections Links */}
         <div>
           <h4 className="font-serif text-[#F7F5F0] tracking-widest uppercase text-sm font-semibold mb-6">
-            Boutique Collections
+            Our Collections
           </h4>
           <ul className="space-y-3">
             {[
-              { name: 'Luxury Bespoke Suits', href: '/shop?category=Suits' },
+              { name: 'Luxury Corporate Suits', href: '/shop?category=Suits' },
               { name: 'Elite Business Shirts', href: '/shop?category=Shirts' },
               { name: 'Hand-Finished Oxfords', href: '/shop?category=Shoes' },
               { name: 'Exquisite Accessories', href: '/shop?category=Accessories' },
@@ -48,14 +48,14 @@ export default function Footer() {
         {/* Brand & Experience */}
         <div>
           <h4 className="font-serif text-[#F7F5F0] tracking-widest uppercase text-sm font-semibold mb-6">
-            The Atelier
+            Blue Hills
           </h4>
           <ul className="space-y-3">
             {[
-              { name: 'Book Styling Consultation', href: '/#consultation' },
+              { name: "Men's Circle", href: '/#join-circle' },
               { name: 'Speak to Personal Stylist', href: '/#stylist' },
-              { name: 'The Gentlemen\'s Circle', href: '/#newsletter' },
-              { name: 'Bespoke Measurement Guide', href: '/shop' },
+              { name: 'The Gentlemen\'s Circle', href: '/#join-circle' },
+              { name: 'Standard Sizing Guide', href: '/shop' },
             ].map((link) => (
               <li key={link.name}>
                 <Link 
@@ -72,7 +72,7 @@ export default function Footer() {
         {/* Location & Contact */}
         <div className="space-y-4">
           <h4 className="font-serif text-[#F7F5F0] tracking-widest uppercase text-sm font-semibold mb-6">
-            Atelier Location
+            Our Location
           </h4>
           <div className="flex items-start space-x-3 text-sm text-[#F7F5F0]/70">
             <MapPin className="w-5 h-5 text-[#C6A15B] shrink-0 mt-0.5" />
@@ -91,7 +91,7 @@ export default function Footer() {
           </div>
           <div className="flex items-center space-x-3 text-xs text-[#F7F5F0]/40 border-t border-[#657892]/20 pt-3">
             <Calendar className="w-4 h-4 text-[#C6A15B]" />
-            <span>Mon - Sat: 9:00 AM - 7:00 PM</span>
+            <span>Sun - Friday: 9:00 AM - 7:00 PM</span>
           </div>
         </div>
       </div>

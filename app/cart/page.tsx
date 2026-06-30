@@ -60,7 +60,7 @@ export default function Cart() {
               <div className="space-y-2">
                 <h3 className="font-serif text-lg text-[#1D2B3F] font-medium">Your Wardrobe Trunk is Empty</h3>
                 <p className="text-[#657892] text-xs font-light max-w-xs mx-auto leading-relaxed">
-                  You have not registered any tailoring options in your active session. Explore our fine Suits and Italian shoes.
+                  You have not added any garments to your active session. Explore our fine imported Suits and luxury Italian shoes.
                 </p>
               </div>
               <Link 
@@ -183,12 +183,12 @@ export default function Cart() {
               <div className="lg:col-span-4">
                 <div className="bg-[#F7F5F0] border border-[#657892]/25 rounded-2xl p-6 md:p-8 space-y-6 sticky top-28 shadow-md">
                   <h3 className="font-serif text-[#1D2B3F] text-lg font-bold tracking-wide border-b border-[#657892]/20 pb-4">
-                    Sartorial Summary
+                    Boutique Summary
                   </h3>
 
                   <div className="space-y-4 text-xs font-mono">
                     <div className="flex justify-between">
-                      <span className="text-[#657892]">Atelier Subtotal</span>
+                      <span className="text-[#657892]">Boutique Subtotal</span>
                       <span className="text-[#1D2B3F] font-semibold">Ugx {subtotal}</span>
                     </div>
                     <div className="flex justify-between">

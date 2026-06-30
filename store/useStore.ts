@@ -68,8 +68,8 @@ interface StoreState {
 const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-monaco-navy',
-    name: 'Monaco Navy Tailored Suit',
-    description: 'Exquisitely styled double-vented suit made of fine Ugandan wool blend. Featuring elegant notch lapels, standard flap pockets, and hand-tailored shoulders that offer a broad masculine posture. Perfectly suited for high-stakes corporate meetings and diplomatic gatherings.',
+    name: 'Monaco Navy Ready-to-Wear Suit',
+    description: 'An elegant, high-quality ready-made suit made of fine wool blend imported from Turkey. It features classic lapels, standard pockets, and a clean professional fit. Ideal for daily office wear and business meetings.',
     category: 'Suits',
     price: 1250,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuC6IMogg257U3uh1MtNS7HPgjGVwT2a6GeLfzTMCVYFuVskYnj6fDlCuYrlv0FdF1-KuhJO8Cw3C64A3_YnDyPvjWjzReX0_GkIXvhjxTYwDxTjonhszpsfhfENG3m8weu8uEZgfMISqEkEEKLF_JY4_-LrOBxk5gazOV-8oMMyEBLNXNlKdsbazYKsmNH-82Bugaouk2vagQ0xnRQILrQ2OOs2sztjrnLQpJCXRwPBrkdDitTrLUDXyw'],
@@ -79,14 +79,14 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 4.9,
     isFeatured: true,
     reviews: [
-      { id: 'rev-1', userName: 'Amama Mbabazi', userRole: 'Senior Diplomat', rating: 5, comment: 'Impeccable precision. The shoulders sit flawlessly, and the fabric breathes exceptionally well in our climate. The personal styling service at Lubowa was outstanding.', date: '2026-05-12' },
+      { id: 'rev-1', userName: 'Amama Mbabazi', userRole: 'Senior Diplomat', rating: 5, comment: 'Impeccable quality. The shoulders sit flawlessly, and the fabric breathes exceptionally well in our climate. The personal styling service at Lubowa was outstanding.', date: '2026-05-12' },
       { id: 'rev-2', userName: 'Patrick Kaboyo', userRole: 'Corporate VP', rating: 5, comment: 'I wore this to our annual shareholder meeting and received endless compliments. Real boardroom power.', date: '2026-06-01' }
     ]
   },
   {
     id: 'prod-savile-pinstripe',
     name: 'Savile Midnight Pinstripe Suit',
-    description: 'A powerful, commanding business silhouette crafted with impeccable pinstripe detailing. Woven with pure S130 super-fine wool. Features peak lapels, a classic double-breasted 6x2 button configuration, and fully functional surgeon cuffs. Designed exclusively for CEOs, managing directors, and gentlemen who lead with confidence.',
+    description: 'A smart business suit with clean pinstripe patterns, imported from Turkey. Made from fine wool fabric, it features a double-breasted button design and comfortable ready-to-wear sleeves. Perfect for corporate managers and business leaders.',
     category: 'Suits',
     price: 1450,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg'],
@@ -102,7 +102,7 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-herringbone-shirts',
     name: 'Crisp Poplin Herringbone Shirt Set',
-    description: 'An essential pair of luxurious shirts crafted from two-ply 120s cotton poplin. One features a traditional pristine white hue, while the other features an elegant herringbone light blue pattern. Designed with structured semi-spread collars, double French cuffs to showcase your premium cufflinks, and detailed high-stitch sewing.',
+    description: 'A pack of two high-quality business shirts imported from the UK, made of premium cotton fabric. One comes in plain white and the other in a light blue herringbone pattern. Both feature structured collars and standard French cuffs.',
     category: 'Shirts',
     price: 220,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuChMtp4jLNpzg9FCNudNK17V5dgPQ7gdqkInztWABOY1s9Wo0WquLDnHGVLaFpcTJ4l9h6f7O76xtk__qJO_Ydu6Yi8rjMn_p2JvvfRREDwwJDPBy83dd3IQCntFWraFkYmJ3LGWRlxwD6c1rBnh-lIF619KM6eoScw650fwNxZT1n7azvn0SlmFjNVIFyK5tBpwfFwh1WTbVRuvsh2okhFkLe5EGxiuvMmY0nIuf3ePWzFrNsg5MqpzA'],
@@ -115,8 +115,8 @@ const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod-presidential-poplin',
-    name: 'Ugandan President Poplin White Shirt',
-    description: 'The pinnacle of business-casual refinement. Structured with heavy, crease-resistant Egyptian Giza cotton, this shirt is bespoke-made to stay exceptionally crisp and fresh through long ministerial meetings, corporate dinners, or high-level summits. Styled with an elegant classic Kent collar and single-button rounded cuffs.',
+    name: 'Presidential Poplin White Shirt',
+    description: 'A premium business-casual cotton shirt imported from Egypt. It is made of thick, wrinkle-free cotton that stays fresh all day. Designed with a classic Kent collar and simple button cuffs.',
     category: 'Shirts',
     price: 190,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuBMd6RQeA5FpvP486t2rqeCGXNCX0DP8ADnV8Wv-Ro25LLV5QqM0CBpL__iMTSCOnjqAMx78kno7N5QimxtsNkPR7XNVB64KXrDghBuBropddAROs95oIwiwlJOYoKxBLuWUFVkm6iPpqiKg-2mMFim1J4Bpn55duxvopahw4fK27UKjzQ8mP5P9PRDwrXMcXS3gI1ilE2ECCaI6YFmYFAPrarRhk1Yhkh8Cr4EulhA5zui4_ueB8n3ZA'],
@@ -131,7 +131,7 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-cognac-oxfords',
     name: 'Imperial Cognac Wholecut Oxfords',
-    description: 'Masterfully crafted from a single piece of premium Italian full-grain calfskin leather, leaving no seams for an incredibly sleek, elite visual profile. Hand-burnished by expert artisans to produce a deep, glowing cognac brown patina on reflective marble soles. Features Blake-stitched leather soles and a memory foam cushioned leather lining.',
+    description: 'Sleek corporate shoes made of premium leather imported from Turkey. They feature a comfortable cushioned lining and strong, durable leather soles. Ideal for combining with any of our business suits.',
     category: 'Shoes',
     price: 480,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuBJyBXI8NaRR-Ck9F2JIpri68oWsCpNA7Ie-oMwo57RWPijvkzyQJtObOPa0rGqyJX9b2iSarTYZ0B-ZUf5YMtgLQLVIFHtgXW-hXS8HqXtoVijqL3nTsOuMFOmp8oazTtu0fjyeKdouINqfmtXIPlV_BiBb50VRTLlLwy-kRcaqVwlXhGkWDIIi3Z_0V7dZlsIQyDe7Swp-FIz1670sbanWFsYnbJPpp_gKYtjtWNCKOGLCw9haspdWA'],
@@ -147,7 +147,7 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-obsidian-monks',
     name: 'Obsidian Double Monk Straps',
-    description: 'An elegant statement of executive poise. Handmade with robust full-grain black calfskin, styled with clean, polished gunmetal silver side buckles. The interior is lined with natural calfskin for breathability, while the outsole features durable, slip-resistant rubber injection. Sharp, elegant, and versatile enough for corporate suits or premium traditional attire.',
+    description: 'An elegant statement of style and comfort. Imported from Turkey and crafted with robust full-grain black calfskin, styled with clean, polished gunmetal silver side buckles. Lined with natural leather for breathability, with a durable, slip-resistant sole. Sharp, elegant, and versatile enough for corporate suits or premium professional attire.',
     category: 'Shoes',
     price: 520,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuCIiTPJM1DbZp8-SLivCY52EQivclcR97HSMXMjMwh84rbAAsKFIWN-0vlt7f3HPA69D9rNiiHCsvWtsA3_YL-yWytM8km9A3VkonGzdRDctMTsnrA6DHERdam6i317MJRJaj7msB1c3NDKLH6xaKg_CNdlAqzqPVnZsy2Vwl55v-F8B4DSp8MisXE5LDmQzAT4AbcJI6cX1XEmNW3EsP32FdJp75A6KBWXdkRcwEBHBumOpTxMiqx7kw'],
@@ -160,7 +160,7 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-emerald-silk',
     name: 'Emerald Jacquard Silk Tie Set',
-    description: 'Indulge in pure corporate luxury with this exquisite emerald set. Consists of a hand-rolled heavy-weight jacquard silk tie and a matching silk-twill pocket square with delicate emerald patterns. Provides a crisp, dense knot that holds perfectly throughout high-pressure negotiations and executive functions.',
+    description: 'A touch of luxury for your corporate outfits. Imported from China, this set includes a premium jacquard silk tie and a matching pocket square. Designed to give a neat, professional knot that looks crisp all day.',
     category: 'Accessories',
     price: 150,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuD3GGmGC1lq3ebCU1W9mOX-CfsyMwa4SWAdF9TyTo1wg7-ga-zvcf_MDn5JW_wtISyBjg2HNciG8q-CCdHS96i2TIsWXLlFbJDRpyNsOVqrcftwcWSFDQKUyp1N6J5g21PI941CMbXy5XaX2bncnqHxnDRk1QnC9Doz53_m_8W99oeomA9E9yp8Sz40LQVf9o_x1ayUjuzCDH6sxZrKUsxdw4tpyjR1Z5guKYUyAkqbvsKk9IWfUaMlDw'],
@@ -174,7 +174,7 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-camel-overcoat',
     name: 'Lubowa Camel Hair Executive Overcoat',
-    description: 'The ultimate outerwear piece for the modern globe-trotting gentleman. Tailored in an exquisite double-breasted silhouette using sumptuously soft, heavy camel hair. Structured with hand-sewn wide peak lapels, deep double jet pockets, and a luxurious cupro silk inner lining. Perfect for Kampala evenings, business travels to colder climates, or high-profile public appearances.',
+    description: 'A premium ready-made double-breasted overcoat imported from the UK. Made from soft and warm camel hair, it features wide lapels, deep pockets, and a smooth inner lining. Perfect for cool evenings or international travels.',
     category: 'Suits',
     price: 1850,
     discountPercentage: 20, // Discounted to $1480
@@ -204,7 +204,7 @@ const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-charcoal-blazer',
     name: 'Charcoal Structured Wool Blazer',
-    description: 'A masterpiece of soft, deconstructed tailoring. Crafted from a mid-weight Italian wool-cashmere fabric, offering a comfortable, natural shoulder line. Styled with custom mother-of-pearl buttons, a elegant double-vented back, and dynamic patch pockets.',
+    description: 'A masterpiece of soft, deconstructed ready-to-wear styling. Imported from Turkey, crafted from a mid-weight wool-cashmere fabric, offering a comfortable, natural shoulder line. Styled with custom mother-of-pearl buttons, an elegant double-vented back, and dynamic patch pockets.',
     category: 'Suits',
     price: 850,
     images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuAM1sxMc2tnXe5GtRulON-grniBCQw0AyzhEtySEs5LoH5p-pYIxqeYmZWDVZNkWiSnDZV7KWvRDq3zKhLK5OGIHR5GGHOlg0Tpn3jUJnBRjQFUGa0ufs_p_SgYkrlfHnkBuISuW8RZxe9BjgtSongMhEYViTl1Ko54EbA7F4yHCBkm2kFdD693RXN9ILEDJG5e1u7ec8VW_FJHuz3DLMSwQK-nZxgoFjjaewWqmkKAH-lPPnuTYMtjIQ'],

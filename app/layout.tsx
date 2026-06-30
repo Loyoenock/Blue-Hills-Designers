@@ -17,7 +17,7 @@ const cormorant = Cormorant_Garamond({
 
 export const metadata: Metadata = {
   title: 'Blue Hills Designers | Luxury Corporate Menswear',
-  description: 'Lubowa Shopping Mall, Uganda. Preeminent bespoke and corporate tailoring for modern African leaders and corporate professionals.',
+  description: 'Lubowa Shopping Mall, Uganda. Premier corporate ready-to-wear boutique featuring premium clothing imported from Turkey, Egypt, China, and the UK.',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
