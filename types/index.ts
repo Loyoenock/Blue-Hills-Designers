@@ -99,3 +99,16 @@ export interface AuditLog {
   details: string;
   timestamp: string;
 }
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  amount: number;
+  paymentMethod: 'Mobile Money' | 'Visa' | 'Cash on Delivery';
+  status: 'Paid' | 'Pending' | 'Refunded' | 'Failed';
+  transactionId: string;
+  date: string;
+}
+

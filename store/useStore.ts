@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review 
+  NewsletterSubscriber, AuditLog, Review, Payment 
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 
@@ -14,6 +14,7 @@ interface StoreState {
   currentUser: User | null;
   cart: CartItem[];
   orders: Order[];
+  payments: Payment[];
   bookings: ConsultationBooking[];
   subscribers: NewsletterSubscriber[];
   auditLogs: AuditLog[];
@@ -35,6 +36,7 @@ interface StoreState {
   // Checkout / Order actions
   placeOrder: (orderData: Omit<Order, 'id' | 'date'>) => Order;
   updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => void;
+  updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => void;
 
   // Product management actions (Admin)
   addProduct: (productData: Omit<Product, 'id' | 'reviews' | 'rating'>, creatorName: string, creatorRole: string) => void;
@@ -352,6 +354,31 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
     action: 'System Bootstrapped',
     details: 'Initial inventory and premium executive profiles successfully initialized.',
     timestamp: '2026-06-25T12:00:00Z'
+  }
+];
+
+const INITIAL_PAYMENTS: Payment[] = [
+  {
+    id: 'PAY-9841',
+    orderId: 'ORD-9841',
+    customerName: 'Amama Mbabazi',
+    customerEmail: 'amama@diplomats.gov',
+    amount: 1400,
+    paymentMethod: 'Visa',
+    status: 'Paid',
+    transactionId: 'TXN-VISA-9841A',
+    date: '2026-05-12'
+  },
+  {
+    id: 'PAY-9902',
+    orderId: 'ORD-9902',
+    customerName: 'Patrick Kaboyo',
+    customerEmail: 'kaboyo@corporate.co.ug',
+    amount: 1250,
+    paymentMethod: 'Mobile Money',
+    status: 'Paid',
+    transactionId: 'TXN-MM-9902B',
+    date: '2026-06-20'
   }
 ];
 
@@ -772,6 +799,7 @@ export const useStore = create<StoreState>()(
       currentUser: null,
       cart: [],
       orders: INITIAL_ORDERS,
+      payments: INITIAL_PAYMENTS,
       bookings: [],
       subscribers: [],
       auditLogs: INITIAL_AUDIT_LOGS,
@@ -1363,8 +1391,23 @@ export const useStore = create<StoreState>()(
           date: new Date().toISOString().split('T')[0]
         };
 
+        const newPayment: Payment = {
+          id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
+          orderId: newOrder.id,
+          customerName: newOrder.customerName,
+          customerEmail: newOrder.customerEmail,
+          amount: newOrder.amount,
+          paymentMethod: newOrder.paymentMethod,
+          status: newOrder.paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid',
+          transactionId: newOrder.paymentMethod === 'Cash on Delivery' 
+            ? 'COD-PENDING' 
+            : `TXN-${newOrder.paymentMethod === 'Visa' ? 'VISA' : 'MM'}-${Math.floor(100000 + Math.random() * 900000)}`,
+          date: newOrder.date
+        };
+
         set(state => ({
-          orders: [newOrder, ...state.orders]
+          orders: [newOrder, ...state.orders],
+          payments: [newPayment, ...(state.payments || [])]
         }));
 
         // Deduct stock for each item
@@ -1455,6 +1498,26 @@ export const useStore = create<StoreState>()(
 
         // Sync status with Supabase
         safeSupabaseUpsert('orders', { id: orderId, status });
+      },
+
+      updatePaymentStatus: (paymentId, status, modifierName, modifierRole) => {
+        set(state => ({
+          payments: (state.payments || []).map(p => p.id === paymentId ? { ...p, status } : p)
+        }));
+
+        const payment = get().payments?.find(p => p.id === paymentId);
+        const refDetails = payment ? `for Order ${payment.orderId} (Client: ${payment.customerName})` : `ID ${paymentId}`;
+
+        get().addAuditLog(
+          'Payment Status Adjusted',
+          `Payment status ${refDetails} adjusted to '${status}' by staff.`,
+          'staff-modifier',
+          modifierName,
+          modifierRole as User['role']
+        );
+
+        // Sync status with Supabase
+        safeSupabaseUpsert('payments', { id: paymentId, status });
       },
 
       addProduct: (productData, creatorName, creatorRole) => {
