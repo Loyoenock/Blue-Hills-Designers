@@ -20,7 +20,7 @@ export default function AIStylist() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const quickPrompts = [
     { label: 'Office Outfits', text: 'Recommend a ready-made corporate outfit for a busy work day.' },
@@ -30,8 +30,11 @@ export default function AIStylist() {
   ];
 
   useEffect(() => {
-    if (messages.length > 1) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 1 && containerRef.current) {
+      containerRef.current.scrollTo({
+        top: containerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [messages, isLoading]);
 
@@ -140,7 +143,11 @@ export default function AIStylist() {
           </div>
 
           {/* Messages Grid */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F7F5F0]/50" style={{ contentVisibility: 'auto' }}>
+          <div 
+            ref={containerRef}
+            className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F7F5F0]/50" 
+            style={{ contentVisibility: 'auto' }}
+          >
             <AnimatePresence initial={false}>
               {messages.map((msg) => (
                 <motion.div
@@ -191,7 +198,6 @@ export default function AIStylist() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div ref={chatEndRef} />
           </div>
 
           {/* Quick reply templates */}
