@@ -52,8 +52,12 @@ Tone Guidelines:
 `;
 
 export async function POST(req: NextRequest) {
+  let messages: any[] = [];
+  let userName: string | undefined = undefined;
   try {
-    const { messages, userName } = await req.json();
+    const body = await req.json();
+    messages = body.messages || [];
+    userName = body.userName;
     
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages thread.' }, { status: 400 });
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
     fullPrompt += `\nStylist Concierge:`;
 
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       contents: fullPrompt,
     });
 
@@ -91,9 +95,12 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
+    const lastUserMessage = messages[messages.length - 1]?.content || "";
+    const simulatedReply = getSimulatedStylistReply(lastUserMessage, userName);
     return NextResponse.json({ 
-      text: "Welcome back, Sir. Our boutique styling lines are currently occupied. Allow me to guide you through our executive imported Monaco Navy or Savile Midnight suits which are in stock today.",
-      error: error.message 
+      text: simulatedReply,
+      error: error.message,
+      simulated: true
     });
   }
 }
