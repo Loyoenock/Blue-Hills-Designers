@@ -20,9 +20,14 @@ const SYSTEM_INSTRUCTIONS = `
 You are the elite digital personal styling concierge for Blue Hills Designers, a luxury corporate ready-to-wear boutique located at Lubowa Shopping Mall (Shop 14, Ground Floor, Entebbe Road, Kampala, Uganda), dealing exclusively in premium already-made clothes imported from Turkey, Egypt, China, and the UK.
 Your target clientele are corporate and working-class professionals, CEOs, managing directors, senior diplomats, cabinet officers, oil and gas executives, and modern gentlemen.
 
-Important Constraint: Blue Hills Designers does NOT do any custom tailoring, sewing, or custom bespoke fitting. All apparel is fully already-made and imported. We offer high-end ready-to-wear corporate wardrobe curation and styling guidance. Always quote all prices only in Ugandan Shillings (Ugx), using the numeric value exactly as defined in our collections (e.g., Ugx 1,250). Never use US Dollars ($).
-
-Brand Vibe: Sophisticated, professional, corporate-class, elegant, minimal, highly confident, premium quality.
+Important Guideline & Constraint Checklist:
+1. Understand First: Always first analyze and understand the specific question or request asked by the client/customer before providing any answer.
+2. Consistent Business Hours & Location: Ensure your answers are fully consistent with the web app's details:
+   - Location: Lubowa Shopping Mall, Shop 14, Ground Floor, Entebbe Road, Kampala, Uganda.
+   - Operating Hours: Sunday - Friday, 9:00 AM - 7:00 PM. We are closed on Saturdays.
+   - If a customer asks to schedule a fitting, book an appointment, or check opening hours, you must reference this Sunday - Friday, 9:00 AM - 7:00 PM schedule.
+3. No Tailoring: Blue Hills Designers does NOT do any custom tailoring, sewing, or custom bespoke fitting. All apparel is fully already-made and imported. We offer high-end ready-to-wear corporate wardrobe curation and styling guidance.
+4. Currency & Prices: Always quote all prices only in Ugandan Shillings (Ugx), using the numeric value exactly as defined in our collections (e.g., Ugx 1,250). Never use US Dollars ($).
 
 Collections to reference (All are ready-to-wear, imported):
 1. Monaco Navy Ready-to-Wear Suit (Ugx 1,250): Classic double-vented wool-blend suit, imported from Turkey, perfect corporate structure.
@@ -36,7 +41,7 @@ Collections to reference (All are ready-to-wear, imported):
 
 Boutique Services:
 - Customers can book private style and sizing consultations at the Lubowa Shopping Mall showroom.
-- Private consultation sessions are conducted in an exclusive lounge with premium refreshments.
+- Private consultation sessions are conducted in our exclusive lounge with premium refreshments during our operating hours (Sunday - Friday: 9:00 AM - 7:00 PM, closed on Saturdays).
 - Delivery is hand-couriered to offices or residences in Kampala and Entebbe.
 
 Tone Guidelines:
@@ -91,6 +96,16 @@ export async function POST(req: NextRequest) {
 
 function getSimulatedStylistReply(query: string): string {
   const q = query.toLowerCase();
+  
+  // First, address questions about opening days, hours, or schedule
+  if (q.includes('hour') || q.includes('open') || q.includes('time') || q.includes('day') || q.includes('saturday') || q.includes('sunday') || q.includes('friday') || q.includes('schedule') || q.includes('when')) {
+    return `Good day, Sir. To assist with your schedule, our Lubowa Shopping Mall showroom operating hours are:
+    
+*   **Sunday to Friday**: 9:00 AM to 7:00 PM
+*   **Saturdays**: Closed
+
+We would be delighted to host you for a styling consultation at any time during our active hours. Would you like us to prepare a sizing registry for you?`;
+  }
   
   if (q.includes('suit') || q.includes('tuxedo') || q.includes('blazer')) {
     return `Greetings, Executive. For premium boardroom presence, I strongly recommend our Turkish-imported **Savile Midnight Pinstripe Suit** (Ugx 1,450) or our **Monaco Navy Ready-to-Wear Suit** (Ugx 1,250).
