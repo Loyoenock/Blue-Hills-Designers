@@ -20,7 +20,9 @@ export default function ProductDetails() {
   const router = useRouter();
   const productId = params?.id as string;
 
-  const { products, addToCart, clearCart, wishlist, toggleWishlist, addReview } = useStore();
+  const { products, addToCart, clearCart, wishlist, toggleWishlist, addReview, settings } = useStore();
+  const currency = settings?.currencySymbol || 'Ugx';
+  const threshold = settings?.freeShippingThreshold ?? 2000;
   
   const [mounted, setMounted] = useState(false);
   const [activeImage, setActiveImage] = useState('');
@@ -217,7 +219,7 @@ export default function ProductDetails() {
               <div className="border-y border-[#657892]/20 py-4 flex justify-between items-center font-mono">
                 <div>
                   <span className="text-[10px] text-[#657892] uppercase tracking-widest block">Investment Value</span>
-                  <span className="text-2xl font-bold text-[#1C4D8D]">Ugx {product.price}</span>
+                  <span className="text-2xl font-bold text-[#1C4D8D]">{currency} {product.price}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-[#657892] uppercase tracking-widest block">Showroom Status</span>
@@ -340,7 +342,7 @@ export default function ProductDetails() {
                 <Truck className="w-5 h-5 text-[#1C4D8D] shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
                   <p className="font-semibold text-[#1D2B3F] uppercase tracking-wider text-[9px] font-sans">White-glove Courier</p>
-                  <p className="text-[9px] text-[#657892] leading-relaxed font-light font-sans">Hand delivery across Kampala in 3-5 hours. Complimentary on trunks over Ugx 1,000.</p>
+                  <p className="text-[9px] text-[#657892] leading-relaxed font-light font-sans">Hand delivery across Kampala in 3-5 hours. Complimentary on trunks over {currency} {threshold.toLocaleString()}.</p>
                 </div>
               </div>
               <div className="flex gap-2.5 items-start text-xs">
@@ -467,7 +469,7 @@ export default function ProductDetails() {
                   <div className="p-4 space-y-2">
                     <h4 className="font-serif font-bold text-[#1D2B3F] truncate text-sm">{p.name}</h4>
                     <div className="flex justify-between items-center font-mono text-xs">
-                      <span className="text-[#1C4D8D] font-semibold">Ugx {p.price}</span>
+                      <span className="text-[#1C4D8D] font-semibold">{currency} {p.price}</span>
                       <Link href={`/product/${p.id}`} className="text-[#657892] hover:text-[#1C4D8D] flex items-center gap-0.5">
                         Inspect →
                       </Link>

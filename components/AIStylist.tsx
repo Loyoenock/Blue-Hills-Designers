@@ -12,12 +12,12 @@ interface ChatMessage {
 }
 
 export default function AIStylist() {
-  const { currentUser } = useStore();
+  const { currentUser, settings } = useStore();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'model',
-      content: 'Hello! Welcome to Blue Hills Designers. I am your personal styling assistant.\n\nWe specialize in high-quality ready-made corporate clothing imported from Turkey, Egypt, China, and the UK. Whether you are dressing for a client meeting, a presentation, or daily office work, I can help you find the perfect ready-made outfit. How can I help you today?'
+      content: 'WELCOME_PLACEHOLDER'
     }
   ]);
   const [input, setInput] = useState('');
@@ -32,12 +32,19 @@ export default function AIStylist() {
   ];
 
   const getFormattedContent = (msg: ChatMessage) => {
-    if (msg.id === 'welcome' && currentUser) {
-      if (msg.content.startsWith('Hello!')) {
-        return msg.content.replace('Hello!', `Hello, ${currentUser.name}!`);
-      } else if (msg.content.startsWith('Good day, Executive.')) {
-        return msg.content.replace('Good day, Executive.', `Good day, Mr. ${currentUser.name}.`);
+    if (msg.id === 'welcome') {
+      const greeting = settings?.aiGreetingPrefix || 'Hello! Welcome to Blue Hills Designers.';
+      let displayGreeting = greeting;
+      if (currentUser) {
+        if (greeting.startsWith('Hello!')) {
+          displayGreeting = greeting.replace('Hello!', `Hello, ${currentUser.name}!`);
+        } else if (greeting.startsWith('Good day, Executive.')) {
+          displayGreeting = greeting.replace('Good day, Executive.', `Good day, Mr. ${currentUser.name}.`);
+        } else {
+          displayGreeting = `${greeting}, ${currentUser.name}.`;
+        }
       }
+      return `${displayGreeting} I am your personal styling assistant.\n\nWe specialize in high-quality ready-made corporate clothing imported from Turkey, Egypt, China, and the UK. Whether you are dressing for a client meeting, a presentation, or daily office work, I can help you find the perfect ready-made outfit. How can I help you today?`;
     }
     return msg.content;
   };
@@ -91,10 +98,11 @@ export default function AIStylist() {
       }]);
     } catch {
       const greeting = currentUser ? `Mr. ${currentUser.name}` : 'Sir';
+      const conciergeNo = settings?.conciergePhone || '+256 (772) 123-456';
       setMessages(curr => [...curr, {
         id: `error-msg-${curr.length + 1}`,
         role: 'model',
-        content: `I apologize, ${greeting}. A brief concierge connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at +256 (772) 123-456.`
+        content: `I apologize, ${greeting}. A brief concierge connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at ${conciergeNo}.`
       }]);
     } finally {
       setIsLoading(false);

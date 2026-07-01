@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { Mail, Phone, MapPin, Shield, Calendar, Award } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
 export default function Footer() {
+  const { settings } = useStore();
   return (
     <footer className="bg-[#1D2B3F] border-t border-[#657892]/20 pt-20 pb-10 text-[#F7F5F0]">
       <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
@@ -81,7 +83,7 @@ export default function Footer() {
           </div>
           <div className="flex items-center space-x-3 text-sm text-[#F7F5F0]/70">
             <Phone className="w-5 h-5 text-[#C6A15B] shrink-0" />
-            <span>+256 (772) 123-456</span>
+            <span>{settings?.conciergePhone || '+256 (772) 123-456'}</span>
           </div>
           <div className="flex items-center space-x-3 text-sm text-[#F7F5F0]/70">
             <Mail className="w-5 h-5 text-[#C6A15B] shrink-0" />
@@ -89,7 +91,7 @@ export default function Footer() {
           </div>
           <div className="flex items-center space-x-3 text-xs text-[#F7F5F0]/40 border-t border-[#657892]/20 pt-3">
             <Calendar className="w-4 h-4 text-[#C6A15B]" />
-            <span>Sun - Friday: 9:00 AM - 7:00 PM</span>
+            <span>{settings?.showroomHours || 'Sun - Friday: 9:00 AM - 7:00 PM'}</span>
           </div>
         </div>
       </div>

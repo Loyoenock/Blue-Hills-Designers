@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { cart, currentUser, users, login, logout, wishlist, syncFromSupabase } = useStore();
+  const { cart, currentUser, users, login, logout, wishlist, syncFromSupabase, settings } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -54,7 +54,19 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-[#1D2B3F] border-b border-[#657892]/20 py-4 transition-all duration-300">
+    <div className="sticky top-0 z-50 flex flex-col w-full">
+      {settings?.enableNewsBanner !== false && (
+        <div className="bg-[#C6A15B] text-[#1D2B3F] py-2 px-4 text-center text-[10px] md:text-xs font-semibold tracking-wider uppercase flex items-center justify-center gap-1.5 select-none w-full">
+          <Sparkles className="w-3.5 h-3.5 text-[#1D2B3F] shrink-0" />
+          <span>Complimentary Delivery over {settings?.currencySymbol || 'Ugx'} {settings?.freeShippingThreshold?.toLocaleString() || '2,000'} Across Kampala</span>
+        </div>
+      )}
+      {settings?.maintenanceMode && (
+        <div className="bg-red-600 text-white py-1.5 px-4 text-center text-[9px] md:text-[10px] font-mono font-bold tracking-widest uppercase flex items-center justify-center gap-2 select-none w-full">
+          <span>● Storefront Maintenance Mode Active: Ordering Restricted ●</span>
+        </div>
+      )}
+      <header className="bg-[#1D2B3F] border-b border-[#657892]/20 py-4 transition-all duration-300 w-full">
       <div className="max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center">
         {/* Mobile menu trigger */}
         <button 
@@ -331,6 +343,7 @@ export default function Header() {
           </>
         )}
       </AnimatePresence>
-    </header>
+      </header>
+    </div>
   );
 }

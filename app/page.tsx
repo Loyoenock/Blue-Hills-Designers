@@ -19,8 +19,9 @@ import { Product } from '../types';
 export default function Home() {
   const router = useRouter();
   const { 
-    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter 
+    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings 
   } = useStore();
+  const currency = settings?.currencySymbol || 'Ugx';
   
   const [mounted, setMounted] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
@@ -408,7 +409,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="font-mono font-bold text-[#1D2B3F] text-lg">
-                        Ugx {p.price}
+                        {currency} {p.price}
                       </div>
                     </div>
 
@@ -506,12 +507,12 @@ export default function Home() {
               <div className="flex items-center gap-6 border-y border-[#657892]/20 py-6">
                 <div>
                   <div className="text-[10px] text-[#F7F5F0]/40 uppercase tracking-widest font-mono">Standard Registry</div>
-                  <div className="text-[#F7F5F0]/40 text-lg line-through font-mono mt-0.5">Ugx {dealProduct.price}</div>
+                  <div className="text-[#F7F5F0]/40 text-lg line-through font-mono mt-0.5">{currency} {dealProduct.price}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-[#C6A15B] uppercase tracking-widest font-mono">Privilege Price</div>
                   <div className="text-[#F7F5F0] text-3xl font-bold font-mono mt-0.5">
-                    Ugx {Math.floor(dealProduct.price * (1 - (dealProduct.discountPercentage || 0) / 100))}
+                    {currency} {Math.floor(dealProduct.price * (1 - (dealProduct.discountPercentage || 0) / 100))}
                   </div>
                 </div>
                 <div className="border-l border-[#657892]/25 pl-6 space-y-1">
@@ -590,7 +591,7 @@ export default function Home() {
                     <h3 className="font-serif text-base text-[#1D2B3F] font-medium group-hover:text-[#1C4D8D] transition-colors line-clamp-1">{p.name}</h3>
                     
                     <div className="flex justify-between items-center pt-2">
-                      <span className="font-mono text-sm font-semibold text-[#1D2B3F]/90">Ugx {p.price}</span>
+                      <span className="font-mono text-sm font-semibold text-[#1D2B3F]/90">{currency} {p.price}</span>
                       <button 
                         onClick={() => handleQuickAdd(p)}
                         className="text-[10px] tracking-widest uppercase font-mono text-[#1C4D8D] font-semibold hover:text-[#C6A15B] transition-colors cursor-pointer"
@@ -751,7 +752,7 @@ export default function Home() {
                   <div className="space-y-3">
                     <span className="text-[10px] tracking-widest text-[#C6A15B] font-mono uppercase">{quickViewProduct.category}</span>
                     <h3 className="font-serif text-2xl text-[#1D2B3F] font-bold">{quickViewProduct.name}</h3>
-                    <div className="font-mono text-xl text-[#1D2B3F] font-bold">Ugx {quickViewProduct.price}</div>
+                    <div className="font-mono text-xl text-[#1D2B3F] font-bold">{currency} {quickViewProduct.price}</div>
                     <p className="text-[#657892] text-xs font-light leading-relaxed">
                       {quickViewProduct.description}
                     </p>

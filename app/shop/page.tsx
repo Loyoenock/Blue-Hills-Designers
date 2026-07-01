@@ -18,7 +18,8 @@ import { Product } from '../../types';
 function ShopContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { products, addToCart, wishlist, toggleWishlist } = useStore();
+  const { products, addToCart, wishlist, toggleWishlist, settings } = useStore();
+  const currency = settings?.currencySymbol || 'Ugx';
 
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
@@ -223,7 +224,7 @@ function ShopContent() {
             <div className="space-y-3 pt-4 border-t border-[#657892]/20">
               <div className="flex justify-between items-center">
                 <h4 className="text-[10px] uppercase tracking-widest text-[#C6A15B] font-mono font-bold">Price Range</h4>
-                <span className="text-xs text-[#1D2B3F]/80 font-mono font-semibold">Up to Ugx {priceRange}</span>
+                <span className="text-xs text-[#1D2B3F]/80 font-mono font-semibold">Up to {currency} {priceRange}</span>
               </div>
               <input 
                 type="range" 
@@ -239,8 +240,8 @@ function ShopContent() {
                 id="desktop-price-slider"
               />
               <div className="flex justify-between text-[10px] text-[#657892]/60 font-mono">
-                <span>Ugx 100</span>
-                <span>Ugx 2,000</span>
+                <span>{currency} 100</span>
+                <span>{currency} 2,000</span>
               </div>
             </div>
 
@@ -399,7 +400,7 @@ function ShopContent() {
                 )}
                 {priceRange < 2000 && (
                   <span className="bg-[#1D2B3F] border border-[#657892]/20 text-xs text-[#F7F5F0] px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                    Max: Ugx {priceRange}
+                    Max: {currency} {priceRange}
                     <X className="w-3 h-3 text-[#C6A15B] hover:text-[#F7F5F0] cursor-pointer" onClick={() => setPriceRange(2000)} />
                   </span>
                 )}
@@ -497,7 +498,7 @@ function ShopContent() {
                               <h3 className="font-serif text-lg font-bold text-[#1D2B3F] group-hover:text-[#1C4D8D] transition-colors leading-snug">
                                 {p.name}
                               </h3>
-                              <span className="font-mono text-base font-bold text-[#1D2B3F]">Ugx {p.price}</span>
+                              <span className="font-mono text-base font-bold text-[#1D2B3F]">{currency} {p.price}</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <Star className="w-3.5 h-3.5 text-[#C6A15B] fill-[#C6A15B]" />
@@ -629,7 +630,7 @@ function ShopContent() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <h4 className="text-[10px] uppercase tracking-widest text-[#C6A15B] font-mono font-bold">Price Range</h4>
-                  <span className="text-xs text-[#1D2B3F]/80 font-mono font-semibold">Up to Ugx {priceRange}</span>
+                  <span className="text-xs text-[#1D2B3F]/80 font-mono font-semibold">Up to {currency} {priceRange}</span>
                 </div>
                 <input 
                   type="range" 

@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function Checkout() {
   const router = useRouter();
-  const { cart, currentUser, placeOrder } = useStore();
+  const { cart, currentUser, placeOrder, settings } = useStore();
   const [mounted, setMounted] = useState(false);
   const [isQuick, setIsQuick] = useState(false);
 
@@ -76,7 +76,9 @@ export default function Checkout() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const deliveryFee = subtotal > 1000 ? 0 : 50;
+  const threshold = settings?.freeShippingThreshold ?? 2000;
+  const currency = settings?.currencySymbol || 'Ugx';
+  const deliveryFee = subtotal > threshold ? 0 : 50;
   const total = subtotal + deliveryFee;
 
   const handleOrderSubmission = (e: React.FormEvent) => {
@@ -196,6 +198,12 @@ export default function Checkout() {
             >
               {/* Form entries panel (8 columns on lg) */}
               <div className="lg:col-span-7 space-y-8">
+                {settings?.maintenanceMode && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-xl text-xs flex flex-col gap-1 shadow-sm select-none">
+                    <p className="font-bold uppercase tracking-wider text-[10px]">Storefront Under Maintenance</p>
+                    <p className="font-light">We are currently conducting scheduled adjustments. Direct ordering is temporarily restricted. Please visit our showroom at Lubowa Shopping Mall or contact us directly at {settings?.conciergePhone || '+256 772 123456'}.</p>
+                  </div>
+                )}
                 {isQuick ? (
                   /* SIMPLIFIED QUICK CHECKOUT PANEL */
                   <div className="space-y-6 bg-[#F7F5F0] border border-[#657892]/20 p-6 rounded-2xl shadow-md animate-fade-in" id="quick-checkout-panel">
@@ -368,9 +376,14 @@ export default function Checkout() {
 
                       <button
                         type="submit"
-                        className="w-full bg-[#1C4D8D] hover:bg-opacity-95 text-[#F7F5F0] py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans cursor-pointer"
+                        disabled={!!settings?.maintenanceMode}
+                        className={`w-full text-[#F7F5F0] py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans ${
+                          settings?.maintenanceMode 
+                            ? 'bg-gray-400 border-gray-400 cursor-not-allowed' 
+                            : 'bg-[#1C4D8D] hover:bg-opacity-95 cursor-pointer'
+                        }`}
                       >
-                        Complete Quick Order (Ugx {total})
+                        {settings?.maintenanceMode ? 'Ordering Suspended' : `Complete Quick Order (${currency} ${total})`}
                       </button>
                     </form>
                   </div>
@@ -666,10 +679,15 @@ export default function Checkout() {
                       <div className="pt-4">
                         <button
                           type="submit"
-                          className="w-full bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 py-4 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans cursor-pointer"
+                          disabled={!!settings?.maintenanceMode}
+                          className={`w-full text-[#F7F5F0] py-4 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans ${
+                            settings?.maintenanceMode 
+                              ? 'bg-gray-400 border-gray-400 cursor-not-allowed' 
+                              : 'bg-[#1C4D8D] hover:bg-opacity-95 cursor-pointer'
+                          }`}
                           id="submit-order-final-btn"
                         >
-                          Confirm Tailoring Order Settlement (Ugx {total})
+                          {settings?.maintenanceMode ? 'Ordering Suspended' : `Confirm Tailoring Order Settlement (${currency} ${total})`}
                         </button>
                         <p className="text-[9px] text-center text-[#657892]/60 mt-3 font-mono">
                           Confirming your order activates a secure SSL token. Garment reservations hold for 2 hours.
@@ -710,7 +728,7 @@ export default function Checkout() {
                           <p className="text-[10px] text-[#657892] font-mono mt-0.5">Size: {item.selectedSize} • Qty: {item.quantity}</p>
                         </div>
                         <div className="font-mono text-xs font-semibold text-[#1D2B3F]/85">
-                          Ugx {item.product.price * item.quantity}
+                          {currency} {item.product.price * item.quantity}
                         </div>
                       </div>
                     ))}
@@ -720,20 +738,20 @@ export default function Checkout() {
                   <div className="space-y-3 pt-4 border-t border-[#657892]/15 text-xs font-mono">
                     <div className="flex justify-between text-[#657892]">
                       <span>Items total</span>
-                      <span className="text-[#1D2B3F] font-semibold">Ugx {subtotal}</span>
+                      <span className="text-[#1D2B3F] font-semibold">{currency} {subtotal}</span>
                     </div>
                     <div className="flex justify-between text-[#657892]">
                       <span>White-Glove Courier</span>
-                      <span className="text-[#C6A15B] font-semibold uppercase">{deliveryFee === 0 ? 'Complimentary' : `Ugx ${deliveryFee}`}</span>
+                      <span className="text-[#C6A15B] font-semibold uppercase">{deliveryFee === 0 ? 'Complimentary' : `${currency} ${deliveryFee}`}</span>
                     </div>
                     <div className="flex justify-between text-[#657892]">
                       <span>Escrow Holds / Tax</span>
-                      <span className="text-[#657892]">Included</span>
+                      <span className="text-[#657892]">{settings?.taxRate ? `${settings.taxRate}% VAT Included` : 'Included'}</span>
                     </div>
                     
                     <div className="flex justify-between text-sm border-t border-[#657892]/25 pt-4 font-sans font-bold text-[#1D2B3F]">
                       <span>Total Balance</span>
-                      <span className="font-mono text-base text-[#1D2B3F]">Ugx {total}</span>
+                      <span className="font-mono text-base text-[#1D2B3F]">{currency} {total}</span>
                     </div>
                   </div>
 

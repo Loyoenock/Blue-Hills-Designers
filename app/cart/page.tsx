@@ -13,7 +13,7 @@ import MobileNav from '../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Cart() {
-  const { cart, updateCartQty, removeFromCart, clearCart } = useStore();
+  const { cart, updateCartQty, removeFromCart, clearCart, settings } = useStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -25,8 +25,10 @@ export default function Cart() {
 
   if (!mounted) return null;
 
+  const currency = settings?.currencySymbol || 'Ugx';
+  const threshold = settings?.freeShippingThreshold ?? 2000;
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const deliveryFee = subtotal > 1000 ? 0 : 50; // Free delivery for executive runs > Ugx 1,000
+  const deliveryFee = subtotal > threshold ? 0 : 50; // Free delivery for executive runs > threshold
   const loyaltyPointsEarned = Math.floor(subtotal * 0.1); // 10% cash value points
   const total = subtotal + deliveryFee;
 
@@ -120,7 +122,7 @@ export default function Cart() {
                       {/* Price cell */}
                       <div className="col-span-2 text-left md:text-center font-mono text-sm font-semibold text-[#1D2B3F]/85">
                         <span className="md:hidden text-[#657892]/60 font-sans text-xs uppercase block tracking-wider mb-1">Unit Price</span>
-                        Ugx {item.product.price}
+                        {currency} {item.product.price}
                       </div>
 
                       {/* Quantity control cell */}
@@ -147,7 +149,7 @@ export default function Cart() {
                       <div className="col-span-2 flex justify-between md:justify-end items-center gap-4">
                         <div className="text-right">
                           <span className="md:hidden text-[#657892]/60 font-sans text-xs uppercase block tracking-wider mb-1">Total Price</span>
-                          <span className="font-mono text-base font-bold text-[#1D2B3F]">Ugx {item.product.price * item.quantity}</span>
+                          <span className="font-mono text-base font-bold text-[#1D2B3F]">{currency} {item.product.price * item.quantity}</span>
                         </div>
                         <button 
                           onClick={() => removeFromCart(item.id)}
@@ -189,17 +191,17 @@ export default function Cart() {
                   <div className="space-y-4 text-xs font-mono">
                     <div className="flex justify-between">
                       <span className="text-[#657892]">Boutique Subtotal</span>
-                      <span className="text-[#1D2B3F] font-semibold">Ugx {subtotal}</span>
+                      <span className="text-[#1D2B3F] font-semibold">{currency} {subtotal}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#657892]">White-Glove Delivery</span>
                       <span className="text-[#C6A15B] font-semibold uppercase">
-                        {deliveryFee === 0 ? 'Complimentary' : `Ugx ${deliveryFee}`}
+                        {deliveryFee === 0 ? 'Complimentary' : `${currency} ${deliveryFee}`}
                       </span>
                     </div>
                     {deliveryFee > 0 && (
                       <p className="text-[10px] text-[#657892] font-sans leading-normal">
-                        Tip: Add Ugx {(1000 - subtotal)} more to qualify for complimentary white-glove hand courier.
+                        Tip: Add {currency} {(threshold - subtotal)} more to qualify for complimentary white-glove hand courier.
                       </p>
                     )}
                     
@@ -210,7 +212,7 @@ export default function Cart() {
 
                     <div className="flex justify-between text-base border-t border-[#657892]/25 pt-4 font-sans font-bold text-[#1D2B3F]">
                       <span>Total Amount</span>
-                      <span className="font-mono text-lg text-[#1D2B3F]">Ugx {total}</span>
+                      <span className="font-mono text-lg text-[#1D2B3F]">{currency} {total}</span>
                     </div>
                   </div>
 
