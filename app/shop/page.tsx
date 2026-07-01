@@ -21,15 +21,34 @@ function ShopContent() {
   const { products, addToCart, wishlist, toggleWishlist, settings } = useStore();
   const currency = settings?.currencySymbol || 'Ugx';
 
+  const maxPriceLimit = useMemo(() => {
+    if (!products || products.length === 0) return 2000;
+    const maxVal = Math.max(...products.map(p => Number(p.price) || 0));
+    return maxVal > 2000 ? maxVal : 2000;
+  }, [products]);
+
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSize, setSelectedSize] = useState<string>('All');
   const [selectedColor, setSelectedColor] = useState<string>('All');
-  const [priceRange, setPriceRange] = useState<number>(2000); // Max Ugx 2000
+  const [priceRange, setPriceRange] = useState<number>(10000000); // High initial fallback
   const [sortBy, setSortBy] = useState<string>('featured');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Sync price range once products are fetched or updated
+  useEffect(() => {
+    if (products && products.length > 0) {
+      const maxVal = Math.max(...products.map(p => Number(p.price) || 0));
+      if (maxVal > 0) {
+        const timer = setTimeout(() => {
+          setPriceRange(maxVal);
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [products]);
 
   // Added Cart toast feedback
   const [addedAlert, setAddedAlert] = useState(false);
@@ -119,7 +138,7 @@ function ShopContent() {
     setSelectedCategory('All');
     setSelectedSize('All');
     setSelectedColor('All');
-    setPriceRange(2000);
+    setPriceRange(maxPriceLimit);
     setSortBy('featured');
     setCurrentPage(1);
     router.push('/shop');
@@ -229,9 +248,9 @@ function ShopContent() {
               <input 
                 type="range" 
                 min="100" 
-                max="2000" 
-                step="50"
-                value={priceRange} 
+                max={maxPriceLimit} 
+                step={maxPriceLimit > 100000 ? 1000 : 50}
+                value={priceRange > maxPriceLimit ? maxPriceLimit : priceRange} 
                 onChange={(e) => {
                   setPriceRange(Number(e.target.value));
                   setCurrentPage(1);
@@ -241,7 +260,7 @@ function ShopContent() {
               />
               <div className="flex justify-between text-[10px] text-[#657892]/60 font-mono">
                 <span>{currency} 100</span>
-                <span>{currency} 2,000</span>
+                <span>{currency} {maxPriceLimit.toLocaleString()}</span>
               </div>
             </div>
 
@@ -377,7 +396,7 @@ function ShopContent() {
             </div>
 
             {/* Active filters feedback list */}
-            {(selectedCategory !== 'All' || selectedSize !== 'All' || selectedColor !== 'All' || priceRange < 2000 || search) && (
+            {(selectedCategory !== 'All' || selectedSize !== 'All' || selectedColor !== 'All' || priceRange < maxPriceLimit || search) && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-widest text-[#657892] font-mono">Active registries:</span>
                 {selectedCategory !== 'All' && (
@@ -398,10 +417,10 @@ function ShopContent() {
                     <X className="w-3 h-3 text-[#C6A15B] hover:text-[#F7F5F0] cursor-pointer" onClick={() => setSelectedColor('All')} />
                   </span>
                 )}
-                {priceRange < 2000 && (
+                {priceRange < maxPriceLimit && (
                   <span className="bg-[#1D2B3F] border border-[#657892]/20 text-xs text-[#F7F5F0] px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                    Max: {currency} {priceRange}
-                    <X className="w-3 h-3 text-[#C6A15B] hover:text-[#F7F5F0] cursor-pointer" onClick={() => setPriceRange(2000)} />
+                    Max: {currency} {priceRange.toLocaleString()}
+                    <X className="w-3 h-3 text-[#C6A15B] hover:text-[#F7F5F0] cursor-pointer" onClick={() => setPriceRange(maxPriceLimit)} />
                   </span>
                 )}
                 {search && (
@@ -635,9 +654,9 @@ function ShopContent() {
                 <input 
                   type="range" 
                   min="100" 
-                  max="2000" 
-                  step="50"
-                  value={priceRange} 
+                  max={maxPriceLimit} 
+                  step={maxPriceLimit > 100000 ? 1000 : 50}
+                  value={priceRange > maxPriceLimit ? maxPriceLimit : priceRange} 
                   onChange={(e) => {
                     setPriceRange(Number(e.target.value));
                     setCurrentPage(1);

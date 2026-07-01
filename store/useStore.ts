@@ -478,7 +478,11 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         name: payload.name,
         slug: payload.slug || payload.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
         description: payload.description || '',
-        short_description: payload.shortDescription || payload.description?.slice(0, 150) || '',
+        short_description: JSON.stringify({
+          sizes: payload.sizes || [],
+          colors: payload.colors || [],
+          original_short: payload.shortDescription || payload.description?.slice(0, 150) || ''
+        }),
         price: Number(payload.price) || 0,
         discount_percentage: Number(payload.discountPercentage) || 0,
         is_featured: !!payload.isFeatured,
@@ -956,21 +960,40 @@ export const useStore = create<StoreState>()(
                 : [];
               const finalImages = productImages.length > 0 ? productImages : (localProd?.images || [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
 
+              let parsedSizes = localProd?.sizes || ['M', 'L', 'XL'];
+              let parsedColors = localProd?.colors || ['Classic Black'];
+
+              if (p.short_description) {
+                try {
+                  const parsed = JSON.parse(p.short_description);
+                  if (parsed && typeof parsed === 'object') {
+                    if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) {
+                      parsedSizes = parsed.sizes;
+                    }
+                    if (Array.isArray(parsed.colors) && parsed.colors.length > 0) {
+                      parsedColors = parsed.colors;
+                    }
+                  }
+                } catch {
+                  // Not JSON, just standard short description
+                }
+              }
+
               return {
                 id: p.id,
                 name: p.name,
                 description: p.description,
                 category: catName,
-                price: p.price,
+                price: Number(p.price) || 0,
                 images: finalImages,
-                sizes: localProd?.sizes || ['M', 'L', 'XL'],
-                colors: localProd?.colors || ['Classic Black'],
-                stock: p.stock,
-                rating: p.rating,
+                sizes: parsedSizes,
+                colors: parsedColors,
+                stock: Number(p.stock) || 0,
+                rating: Number(p.rating) || 0,
                 isNew: p.is_new,
                 isFeatured: p.is_featured,
                 isDealOfTheDay: p.is_deal,
-                discountPercentage: p.discount_percentage,
+                discountPercentage: Number(p.discount_percentage) || 0,
                 reviews: prodReviews
               };
             });
