@@ -88,7 +88,7 @@ export default function Login() {
           </div>
 
           {/* RIGHT COLUMN: SPLIT SCREEN LOGIN FORM (7 columns) */}
-          <div className="col-span-12 lg:col-span-7 flex flex-col justify-center max-w-lg mx-auto w-full space-y-8 lg:pl-10">
+          <div className="col-span-1 lg:col-span-7 flex flex-col justify-center max-w-lg mx-auto w-full space-y-8 lg:pl-10">
             <div className="space-y-2">
               <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Boutique Access</span>
               <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] tracking-tight font-bold">Executive Sign In</h1>
