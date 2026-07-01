@@ -271,12 +271,63 @@ export default function Admin() {
     setIsProductModalOpen(true);
   };
 
+  const resizeAndStandardizeImage = (dataUrl: string, targetWidth = 750, targetHeight = 1000): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        // Fill background with exact brand off-white `#F7F5F0`
+        ctx.fillStyle = '#F7F5F0';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const targetRatio = targetWidth / targetHeight;
+        const imgRatio = imgWidth / imgHeight;
+
+        let drawWidth = targetWidth;
+        let drawHeight = targetHeight;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (imgRatio > targetRatio) {
+          // Image is wider than 3:4, fit to width and center vertically
+          drawWidth = targetWidth;
+          drawHeight = targetWidth / imgRatio;
+          offsetY = (targetHeight - drawHeight) / 2;
+        } else {
+          // Image is taller than 3:4, fit to height and center horizontally
+          drawHeight = targetHeight;
+          drawWidth = targetHeight * imgRatio;
+          offsetX = (targetWidth - drawWidth) / 2;
+        }
+
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => {
+        resolve(dataUrl);
+      };
+      img.src = dataUrl;
+    });
+  };
+
   const handleImageFile = (file: File) => {
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         if (typeof reader.result === 'string') {
-          setPImages([reader.result]);
+          const standardizedResult = await resizeAndStandardizeImage(reader.result);
+          setPImages([standardizedResult]);
         }
       };
       reader.readAsDataURL(file);
