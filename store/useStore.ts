@@ -642,6 +642,48 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
   }
 }
 
+function isPrivateStoragePath(url: string): boolean {
+  if (!url) return false;
+  return !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:');
+}
+
+async function uploadProductImage(userId: string, productId: string, imageBase64: string, index: number): Promise<string> {
+  let ext = 'png';
+  if (imageBase64.startsWith('data:')) {
+    const match = imageBase64.match(/data:image\/([a-zA-Z0-9+]+);/);
+    if (match && match[1]) {
+      ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    }
+  }
+
+  try {
+    const response = await fetch('/api/storage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'upload',
+        userId,
+        featureName: 'products',
+        itemId: toValidUUID(productId),
+        fileBase64: imageBase64,
+        extension: ext
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.path) {
+        return data.path;
+      }
+    } else {
+      console.error('Failed to upload image to Supabase Storage:', await response.text());
+    }
+  } catch (err) {
+    console.error('Error uploading product image:', err);
+  }
+  return imageBase64;
+}
+
 function isSupabaseConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
@@ -932,7 +974,53 @@ export const useStore = create<StoreState>()(
                 reviews: prodReviews
               };
             });
-            set({ products: mappedProducts as Product[] });
+
+            // Resolve signed URLs for private storage paths
+            const privatePaths: string[] = [];
+            mappedProducts.forEach((p: any) => {
+              if (p.images) {
+                p.images.forEach((img: string) => {
+                  if (isPrivateStoragePath(img)) {
+                    privatePaths.push(img);
+                  }
+                });
+              }
+            });
+
+            let signedUrlsMap: Record<string, string> = {};
+            if (privatePaths.length > 0) {
+              try {
+                const response = await fetch('/api/storage', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
+                });
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data.signedUrls) {
+                    data.signedUrls.forEach((item: any) => {
+                      if (item.signedUrl) {
+                        signedUrlsMap[item.path] = item.signedUrl;
+                      }
+                    });
+                  }
+                }
+              } catch (e) {
+                console.warn('Failed to resolve signed URLs for private product images:', e);
+              }
+            }
+
+            const resolvedProducts = mappedProducts.map((p: any) => {
+              const resolvedImages = p.images.map((img: string) => {
+                if (isPrivateStoragePath(img)) {
+                  return signedUrlsMap[img] || img;
+                }
+                return img;
+              });
+              return { ...p, images: resolvedImages };
+            });
+
+            set({ products: resolvedProducts as Product[] });
           } else if (!prodErr) {
             // Seed products
             for (const prod of INITIAL_PRODUCTS) {
@@ -1578,10 +1666,28 @@ export const useStore = create<StoreState>()(
         safeSupabaseUpsert('categories', settingsPayload);
       },
 
-      addProduct: (productData, creatorName, creatorRole) => {
+      addProduct: async (productData, creatorName, creatorRole) => {
+        const productId = `prod-${Date.now()}`;
+        const userId = get().currentUser?.id || 'admin';
+
+        // Upload any base64 images to Supabase Storage
+        const finalImages: string[] = [];
+        if (productData.images) {
+          for (let i = 0; i < productData.images.length; i++) {
+            const img = productData.images[i];
+            if (img.startsWith('data:')) {
+              const uploadedPath = await uploadProductImage(userId, productId, img, i);
+              finalImages.push(uploadedPath);
+            } else {
+              finalImages.push(img);
+            }
+          }
+        }
+
         const newProduct: Product = {
           ...productData,
-          id: `prod-${Date.now()}`,
+          images: finalImages,
+          id: productId,
           rating: 5.0,
           reviews: []
         };
@@ -1600,12 +1706,65 @@ export const useStore = create<StoreState>()(
 
         // Sync product payload (excluding client-side only array nested reviews)
         const { reviews, ...prodPayload } = newProduct;
-        safeSupabaseInsert('products', prodPayload);
+        await safeSupabaseInsert('products', prodPayload);
+
+        // Sync images in product_images table
+        if (finalImages && finalImages.length > 0) {
+          for (let i = 0; i < finalImages.length; i++) {
+            await safeSupabaseInsert('product_images', {
+              productId,
+              imageUrl: finalImages[i],
+              displayOrder: i + 1
+            });
+          }
+        }
+
+        // Re-sync from Supabase to resolve signed URLs
+        get().syncFromSupabase();
       },
 
-      updateProduct: (id, updatedFields, updaterName, updaterRole) => {
+      updateProduct: async (id, updatedFields, updaterName, updaterRole) => {
+        const userId = get().currentUser?.id || 'admin';
+
+        // Upload any new base64 images to Supabase Storage
+        const finalImages: string[] = [];
+        if (updatedFields.images) {
+          for (let i = 0; i < updatedFields.images.length; i++) {
+            const img = updatedFields.images[i];
+            if (img.startsWith('data:')) {
+              const uploadedPath = await uploadProductImage(userId, id, img, i);
+              finalImages.push(uploadedPath);
+            } else {
+              finalImages.push(img);
+            }
+          }
+        }
+
+        const finalFields = updatedFields.images 
+          ? { ...updatedFields, images: finalImages }
+          : updatedFields;
+
+        // Check for deleted images to remove from Supabase Storage
+        const originalProduct = get().products.find(p => p.id === id);
+        if (originalProduct && originalProduct.images && updatedFields.images) {
+          const removedImages = originalProduct.images.filter(
+            (img: string) => isPrivateStoragePath(img) && !finalImages.includes(img)
+          );
+          for (const imgToDelete of removedImages) {
+            try {
+              await fetch('/api/storage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', path: imgToDelete })
+              });
+            } catch (err) {
+              console.warn('Failed to delete removed image from storage:', imgToDelete, err);
+            }
+          }
+        }
+
         set(state => ({
-          products: state.products.map(p => p.id === id ? { ...p, ...updatedFields } : p)
+          products: state.products.map(p => p.id === id ? { ...p, ...finalFields } : p)
         }));
 
         get().addAuditLog(
@@ -1617,11 +1776,47 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync updated fields with Supabase
-        safeSupabaseUpsert('products', { id, ...updatedFields });
+        await safeSupabaseUpsert('products', { id, ...finalFields });
+
+        // Update product_images table
+        if (updatedFields.images) {
+          // Delete old image references in DB
+          await safeSupabaseDelete('product_images', { product_id: toValidUUID(id) });
+
+          // Insert new image references
+          for (let i = 0; i < finalImages.length; i++) {
+            await safeSupabaseInsert('product_images', {
+              productId: id,
+              imageUrl: finalImages[i],
+              displayOrder: i + 1
+            });
+          }
+        }
+
+        // Re-sync from Supabase to resolve signed URLs
+        get().syncFromSupabase();
       },
 
-      deleteProduct: (id, deleterName, deleterRole) => {
+      deleteProduct: async (id, deleterName, deleterRole) => {
         const productToDelete = get().products.find(p => p.id === id);
+
+        // Delete all images associated with this product from Supabase Storage
+        if (productToDelete && productToDelete.images) {
+          for (const img of productToDelete.images) {
+            if (isPrivateStoragePath(img)) {
+              try {
+                await fetch('/api/storage', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'delete', path: img })
+                });
+              } catch (err) {
+                console.warn('Failed to delete image from storage during product deletion:', img, err);
+              }
+            }
+          }
+        }
+
         set(state => ({
           products: state.products.filter(p => p.id !== id)
         }));
@@ -1635,7 +1830,7 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync product delete with Supabase
-        safeSupabaseDelete('products', { id });
+        await safeSupabaseDelete('products', { id });
       },
 
       adminAddUser: (userData, adminName, adminRole) => {
