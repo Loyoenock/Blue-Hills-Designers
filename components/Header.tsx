@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
+import { getSupabaseClient } from '../lib/supabase';
 
 export default function Header() {
   const pathname = usePathname();
@@ -22,8 +23,38 @@ export default function Header() {
     const t = setTimeout(() => {
       setMounted(true);
     }, 0);
+    
+    // Initial sync from the database
     syncFromSupabase();
-    return () => clearTimeout(t);
+
+    // Set up Supabase Realtime subscription to receive instant database updates
+    const supabase = getSupabaseClient();
+    let subscription: any = null;
+
+    if (supabase) {
+      subscription = supabase
+        .channel('public-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+          console.log('Realtime DB change received:', payload);
+          syncFromSupabase();
+        })
+        .subscribe((status) => {
+          console.log('Supabase Realtime subscription status:', status);
+        });
+    }
+
+    // High-frequency polling (every 5 seconds) as a fallback for absolute cross-device/cross-browser sync
+    const interval = setInterval(() => {
+      syncFromSupabase();
+    }, 5000);
+
+    return () => {
+      clearTimeout(t);
+      clearInterval(interval);
+      if (subscription && supabase) {
+        supabase.removeChannel(subscription);
+      }
+    };
   }, [syncFromSupabase]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);

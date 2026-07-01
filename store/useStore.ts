@@ -833,6 +833,28 @@ export const useStore = create<StoreState>()(
           await seedCategories();
           const { data: dbCats } = await supabase.from('categories').select('*');
 
+          // Sync settings from dbCats if present
+          if (dbCats) {
+            const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
+            if (settingsCat && settingsCat.description) {
+              try {
+                const parsedSettings = JSON.parse(settingsCat.description);
+                set({ settings: parsedSettings });
+              } catch (e) {
+                console.warn('Failed to parse app-settings from categories:', e);
+              }
+            } else if (!settingsCat) {
+              // Seed settings in dbCats so all instances fetch it
+              const settingsPayload = {
+                id: toValidUUID('app-settings'),
+                name: 'App Settings',
+                slug: 'app-settings',
+                description: JSON.stringify(get().settings || INITIAL_SETTINGS)
+              };
+              await safeSupabaseUpsert('categories', settingsPayload);
+            }
+          }
+
           // 1. Fetch & Seed Profiles FIRST (so that products/reviews can reference user profiles)
           const { data: dbProfiles, error: profErr } = await supabase.from('profiles').select('*');
           if (!profErr && dbProfiles && dbProfiles.length > 0) {
@@ -1535,9 +1557,8 @@ export const useStore = create<StoreState>()(
       },
 
       updateSettings: (newSettings, modifierName, modifierRole) => {
-        set(state => ({
-          settings: { ...state.settings, ...newSettings }
-        }));
+        const updated = { ...get().settings, ...newSettings };
+        set({ settings: updated });
 
         get().addAuditLog(
           'Settings Updated',
@@ -1546,6 +1567,15 @@ export const useStore = create<StoreState>()(
           modifierName,
           modifierRole as User['role']
         );
+
+        // Sync settings to Supabase categories table with slug 'app-settings'
+        const settingsPayload = {
+          id: toValidUUID('app-settings'),
+          name: 'App Settings',
+          slug: 'app-settings',
+          description: JSON.stringify(updated)
+        };
+        safeSupabaseUpsert('categories', settingsPayload);
       },
 
       addProduct: (productData, creatorName, creatorRole) => {
