@@ -112,3 +112,14 @@ export interface Payment {
   date: string;
 }
 
+export interface AppSettings {
+  showroomHours: string;
+  conciergePhone: string;
+  freeShippingThreshold: number;
+  taxRate: number;
+  aiGreetingPrefix: string;
+  enableNewsBanner: boolean;
+  maintenanceMode: boolean;
+  currencySymbol: string;
+}
+

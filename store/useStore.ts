@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review, Payment 
+  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings 
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 
@@ -15,6 +15,7 @@ interface StoreState {
   cart: CartItem[];
   orders: Order[];
   payments: Payment[];
+  settings: AppSettings;
   bookings: ConsultationBooking[];
   subscribers: NewsletterSubscriber[];
   auditLogs: AuditLog[];
@@ -37,6 +38,7 @@ interface StoreState {
   placeOrder: (orderData: Omit<Order, 'id' | 'date'>) => Order;
   updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => void;
   updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => void;
+  updateSettings: (newSettings: Partial<AppSettings>, updaterName: string, updaterRole: string) => void;
 
   // Product management actions (Admin)
   addProduct: (productData: Omit<Product, 'id' | 'reviews' | 'rating'>, creatorName: string, creatorRole: string) => void;
@@ -381,6 +383,17 @@ const INITIAL_PAYMENTS: Payment[] = [
     date: '2026-06-20'
   }
 ];
+
+const INITIAL_SETTINGS: AppSettings = {
+  showroomHours: 'Sunday to Friday: 9:00 AM to 7:00 PM (Saturdays Closed)',
+  conciergePhone: '+256 772 123456',
+  freeShippingThreshold: 2000,
+  taxRate: 18,
+  aiGreetingPrefix: 'Good day, Executive.',
+  enableNewsBanner: true,
+  maintenanceMode: false,
+  currencySymbol: 'Ugx'
+};
 
 // Helper functions to map between camelCase (Zustand state) and snake_case (standard relational databases / Supabase)
 function keysToCamel(obj: any): any {
@@ -800,6 +813,7 @@ export const useStore = create<StoreState>()(
       cart: [],
       orders: INITIAL_ORDERS,
       payments: INITIAL_PAYMENTS,
+      settings: INITIAL_SETTINGS,
       bookings: [],
       subscribers: [],
       auditLogs: INITIAL_AUDIT_LOGS,
@@ -1518,6 +1532,20 @@ export const useStore = create<StoreState>()(
 
         // Sync status with Supabase
         safeSupabaseUpsert('payments', { id: paymentId, status });
+      },
+
+      updateSettings: (newSettings, modifierName, modifierRole) => {
+        set(state => ({
+          settings: { ...state.settings, ...newSettings }
+        }));
+
+        get().addAuditLog(
+          'Settings Updated',
+          `Boutique configuration settings updated by ${modifierName}.`,
+          'staff-modifier',
+          modifierName,
+          modifierRole as User['role']
+        );
       },
 
       addProduct: (productData, creatorName, creatorRole) => {
