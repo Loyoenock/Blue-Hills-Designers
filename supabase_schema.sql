@@ -345,3 +345,61 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- ==========================================
+-- 5. STORAGE BUCKET & RLS POLICIES FOR "app-file"
+-- ==========================================
+
+-- Ensure storage schema and tables exist (standard on Supabase)
+-- 5.1 Enable the bucket creation and metadata
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'app-file', 
+    'app-file', 
+    true, 
+    52428800, -- 50MB limit
+    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'application/pdf']
+)
+ON CONFLICT (id) DO UPDATE
+SET public = true,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- 5.2 Ensure RLS is enabled on storage.objects
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- 5.3 Clear existing policies for 'app-file' if any, to avoid conflicts
+DROP POLICY IF EXISTS "Public Read Access" ON storage.objects;
+DROP POLICY IF EXISTS "Public Upload Access" ON storage.objects;
+DROP POLICY IF EXISTS "Public Update Access" ON storage.objects;
+DROP POLICY IF EXISTS "Public Delete Access" ON storage.objects;
+
+-- 5.4 Public Read/Select Policy
+-- Allows anyone to view images and files within the 'app-file' bucket
+CREATE POLICY "Public Read Access"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'app-file');
+
+-- 5.5 Upload/Insert Policy
+-- Allows public (including anonymous guests and admins) to upload files into 'app-file' bucket
+CREATE POLICY "Public Upload Access"
+ON storage.objects FOR INSERT
+TO public
+WITH CHECK (bucket_id = 'app-file');
+
+-- 5.6 Update/Upsert Policy
+-- Allows users/system to update files within 'app-file' bucket
+CREATE POLICY "Public Update Access"
+ON storage.objects FOR UPDATE
+TO public
+USING (bucket_id = 'app-file');
+
+-- 5.7 Delete Policy
+-- Allows users/system to remove/delete files from 'app-file' bucket
+CREATE POLICY "Public Delete Access"
+ON storage.objects FOR DELETE
+TO public
+USING (bucket_id = 'app-file');
+

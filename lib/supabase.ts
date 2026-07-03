@@ -82,11 +82,16 @@ export function getSupabaseAdmin(): SupabaseClient {
 
   if (!supabaseAdminInstance) {
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    let supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseServiceKey) {
+      console.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Falling back to anon key.');
+      supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    }
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error(
-        'Supabase Admin configuration is incomplete. Please ensure both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.'
+        'Supabase Admin configuration is incomplete. Please ensure both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) are configured.'
       );
     }
 
