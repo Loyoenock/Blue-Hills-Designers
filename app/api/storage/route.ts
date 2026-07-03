@@ -2,6 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import crypto from 'crypto';
 
+async function getBucketName(supabase: any): Promise<string> {
+  try {
+    const { data: buckets, error } = await supabase.storage.listBuckets();
+    if (error) {
+      console.error('Error listing buckets in getBucketName:', error);
+      return 'app-file'; // Fallback
+    }
+    
+    // Find a bucket named 'app-file' case-insensitively
+    const match = buckets?.find(
+      (b: any) => b.id?.toLowerCase() === 'app-file' || b.name?.toLowerCase() === 'app-file'
+    );
+    
+    if (match) {
+      console.log(`Matched existing storage bucket: "${match.id}"`);
+      return match.id;
+    }
+    
+    // If not found, attempt to create 'app-file'
+    console.warn('Bucket "app-file" (case-insensitive) not found. Attempting to create "app-file"...');
+    const { error: createError } = await supabase.storage.createBucket('app-file', {
+      public: true
+    });
+    
+    if (createError) {
+      console.error('Failed to auto-create "app-file" bucket:', createError);
+    } else {
+      console.log('Successfully created "app-file" bucket.');
+    }
+    return 'app-file';
+  } catch (err) {
+    console.error('Exception in getBucketName helper:', err);
+    return 'app-file';
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -14,6 +50,8 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    const bucketName = await getBucketName(supabase);
 
     if (action === 'upload') {
       if (!userId || !featureName || !itemId || !fileBase64 || !extension) {
@@ -41,7 +79,7 @@ export async function POST(req: NextRequest) {
       const filePath = `${userId}/${featureName}/${itemId}/${fileUuid}.${extension.replace(/^\./, '')}`;
 
       let uploadResult = await supabase.storage
-        .from('app-file')
+        .from(bucketName)
         .upload(filePath, buffer, {
           contentType: detectedMimeType,
           upsert: true
@@ -53,17 +91,17 @@ export async function POST(req: NextRequest) {
         (uploadResult.error as any).statusCode === '404' ||
         (uploadResult.error as any).statusCode === 404
       )) {
-        console.warn('Bucket "app-file" not found. Attempting to create it...');
+        console.warn(`Bucket "${bucketName}" not found. Attempting to create it...`);
         try {
-          const { error: createError } = await supabase.storage.createBucket('app-file', {
+          const { error: createError } = await supabase.storage.createBucket(bucketName, {
             public: true
           });
           if (createError) {
-            console.error('Failed to auto-create "app-file" bucket:', createError);
+            console.error(`Failed to auto-create "${bucketName}" bucket:`, createError);
           } else {
-            console.log('Successfully created "app-file" bucket. Retrying upload...');
+            console.log(`Successfully created "${bucketName}" bucket. Retrying upload...`);
             uploadResult = await supabase.storage
-              .from('app-file')
+              .from(bucketName)
               .upload(filePath, buffer, {
                 contentType: detectedMimeType,
                 upsert: true
@@ -86,7 +124,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { data, error } = await supabase.storage
-        .from('app-file')
+        .from(bucketName)
         .createSignedUrl(path, 60 * 60 * 24); // 24 hours expiry
 
       if (error) {
@@ -101,7 +139,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { data, error } = await supabase.storage
-        .from('app-file')
+        .from(bucketName)
         .createSignedUrls(paths, 60 * 60 * 24); // 24 hours expiry
 
       if (error) {
@@ -116,7 +154,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { data, error } = await supabase.storage
-        .from('app-file')
+        .from(bucketName)
         .remove([path]);
 
       if (error) {
