@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -8,7 +8,8 @@ import {
   BarChart, Calendar, ChevronRight, Compass, CreditCard, DollarSign, 
   Download, Edit, Eye, Filter, Grid, HelpCircle, Layers, LogOut, 
   Plus, Printer, RefreshCw, Search, ShieldAlert, ShoppingBag, 
-  Trash2, TrendingUp, Users, X, FileText, CheckCircle, Upload, Settings
+  Trash2, TrendingUp, Users, X, FileText, CheckCircle, Upload, Settings,
+  Star, MessageSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
@@ -22,7 +23,8 @@ export default function Admin() {
   const { 
     currentUser, login, products, orders, users, auditLogs, payments, settings,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
-    adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings
+    adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
+    deleteReview, updateProductStockQuick
   } = useStore();
 
   const [mounted, setMounted] = useState(false);
@@ -62,6 +64,8 @@ export default function Admin() {
   const [pStock, setPStock] = useState(10);
   const [pSizes, setPSizes] = useState<string[]>(['48R', '50R', '52R']);
   const [pColors, setPColors] = useState<string[]>(['Midnight Navy', 'Charcoal']);
+  const [pSizesInput, setPSizesInput] = useState('48R, 50R, 52R');
+  const [pColorsInput, setPColorsInput] = useState('Midnight Navy, Charcoal');
   const [pImages, setPImages] = useState<string[]>(['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg']);
   const [pIsNew, setPIsNew] = useState(false);
   const [pIsFeatured, setPIsFeatured] = useState(false);
@@ -75,6 +79,12 @@ export default function Admin() {
   // Filter products state
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('All');
+  const [stockStatusFilter, setStockStatusFilter] = useState('All');
+  const [productLabelFilter, setProductLabelFilter] = useState('All');
+  const [productSort, setProductSort] = useState('Default');
+
+  // Track expanded reviews for products
+  const [expandedReviewsProductId, setExpandedReviewsProductId] = useState<string | null>(null);
 
   // Filter orders state
   const [orderSearch, setOrderSearch] = useState('');
@@ -184,11 +194,39 @@ export default function Admin() {
   const activeCustomers = users.filter(u => u.role === 'Customer').length;
 
   // Filter products list
-  const filteredProducts = products.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.description.toLowerCase().includes(productSearch.toLowerCase());
-    const matchCat = productCategoryFilter === 'All' || p.category === productCategoryFilter;
-    return matchSearch && matchCat;
-  });
+  const filteredProducts = useMemo(() => {
+    let list = products.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+                          p.description.toLowerCase().includes(productSearch.toLowerCase());
+      const matchCat = productCategoryFilter === 'All' || p.category === productCategoryFilter;
+      
+      const matchStock = stockStatusFilter === 'All' || 
+                         (stockStatusFilter === 'In Stock' && p.stock > 0) ||
+                         (stockStatusFilter === 'Low Stock' && p.stock > 0 && p.stock <= 3) ||
+                         (stockStatusFilter === 'Out of Stock' && p.stock === 0);
+                         
+      const matchLabel = productLabelFilter === 'All' ||
+                         (productLabelFilter === 'New' && p.isNew) ||
+                         (productLabelFilter === 'Featured' && p.isFeatured) ||
+                         (productLabelFilter === 'Secret Offer' && p.isDealOfTheDay);
+                         
+      return matchSearch && matchCat && matchStock && matchLabel;
+    });
+    
+    if (productSort === 'PriceAsc') {
+      list = [...list].sort((a, b) => a.price - b.price);
+    } else if (productSort === 'PriceDesc') {
+      list = [...list].sort((a, b) => b.price - a.price);
+    } else if (productSort === 'StockAsc') {
+      list = [...list].sort((a, b) => a.stock - b.stock);
+    } else if (productSort === 'StockDesc') {
+      list = [...list].sort((a, b) => b.stock - a.stock);
+    } else if (productSort === 'NameAsc') {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    return list;
+  }, [products, productSearch, productCategoryFilter, stockStatusFilter, productLabelFilter, productSort]);
 
   // Filter orders list
   const filteredOrders = orders.filter(o => {
@@ -252,6 +290,8 @@ export default function Admin() {
       setPStock(prod.stock);
       setPSizes(prod.sizes);
       setPColors(prod.colors);
+      setPSizesInput(prod.sizes ? prod.sizes.join(', ') : '');
+      setPColorsInput(prod.colors ? prod.colors.join(', ') : '');
       setPImages(prod.images);
       setPIsNew(!!prod.isNew);
       setPIsFeatured(!!prod.isFeatured);
@@ -273,6 +313,8 @@ export default function Admin() {
       setPStock(10);
       setPSizes(['48R', '50R', '52R']);
       setPColors(['Midnight Navy', 'Charcoal']);
+      setPSizesInput('48R, 50R, 52R');
+      setPColorsInput('Midnight Navy, Charcoal');
       setPImages(['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg']);
       setPIsNew(true);
       setPIsFeatured(false);
@@ -368,6 +410,9 @@ export default function Admin() {
     const operatorName = currentUser?.name || 'Master Admin';
     const operatorRole = currentUser?.role || 'Super Admin';
     
+    const finalSizes = pSizesInput.split(',').map(s => s.trim()).filter(s => s !== '');
+    const finalColors = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
+
     if (editingProduct) {
       updateProduct(editingProduct.id, {
         name: pName,
@@ -375,8 +420,8 @@ export default function Admin() {
         category: pCategory as any,
         price: Number(pPrice),
         stock: Number(pStock),
-        sizes: pSizes,
-        colors: pColors,
+        sizes: finalSizes,
+        colors: finalColors,
         images: pImages,
         isNew: pIsNew,
         isFeatured: pIsFeatured,
@@ -390,8 +435,8 @@ export default function Admin() {
         category: pCategory as any,
         price: Number(pPrice),
         stock: Number(pStock),
-        sizes: pSizes,
-        colors: pColors,
+        sizes: finalSizes,
+        colors: finalColors,
         images: pImages,
         isNew: pIsNew,
         isFeatured: pIsFeatured,
@@ -722,9 +767,9 @@ export default function Admin() {
                 </div>
 
                 {/* Search & filtering */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-2">
-                    <Search className="w-4 h-4 text-white/40" />
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[#111111] p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 md:col-span-2">
+                    <Search className="w-3.5 h-3.5 text-white/40" />
                     <input 
                       type="text" 
                       value={productSearch}
@@ -737,13 +782,39 @@ export default function Admin() {
                     <select 
                       value={productCategoryFilter}
                       onChange={(e) => setProductCategoryFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer"
                     >
                       <option value="All">All Categories</option>
                       <option value="Suits">Suits</option>
                       <option value="Shirts">Shirts</option>
                       <option value="Shoes">Shoes</option>
                       <option value="Accessories">Accessories</option>
+                    </select>
+                  </div>
+                  <div>
+                    <select 
+                      value={stockStatusFilter}
+                      onChange={(e) => setStockStatusFilter(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="All">All Stock Levels</option>
+                      <option value="In Stock">In Stock Only</option>
+                      <option value="Low Stock">Low Stock (≤ 3)</option>
+                      <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                  </div>
+                  <div>
+                    <select 
+                      value={productSort}
+                      onChange={(e) => setProductSort(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="Default">Default Order</option>
+                      <option value="PriceAsc">Price: Low to High</option>
+                      <option value="PriceDesc">Price: High to Low</option>
+                      <option value="StockAsc">Stock: Low to High</option>
+                      <option value="StockDesc">Stock: High to Low</option>
+                      <option value="NameAsc">Alphabetical (A-Z)</option>
                     </select>
                   </div>
                 </div>
@@ -764,59 +835,158 @@ export default function Admin() {
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {filteredProducts.map((p) => (
-                          <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                            <td className="py-3 px-2">
-                              <div className="relative w-8 h-10 rounded overflow-hidden bg-black shrink-0">
-                                <Image src={p.images[0]} alt={p.name} fill className="object-cover" sizes="32px" referrerPolicy="no-referrer" />
-                              </div>
-                            </td>
-                            <td className="py-3 px-2 space-y-0.5">
-                              <span className="font-serif font-bold text-white text-xs block">{p.name}</span>
-                              <span className="text-[10px] text-white/40 block max-w-xs truncate">{p.description}</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {p.isNew && (
-                                  <span className="bg-[#20D9A1]/10 border border-[#20D9A1]/20 text-[#20D9A1] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
-                                    New
+                          <Fragment key={p.id}>
+                            <tr className="hover:bg-white/5 transition-colors">
+                              <td className="py-3 px-2">
+                                <div className="relative w-8 h-10 rounded overflow-hidden bg-black shrink-0">
+                                  <Image src={p.images[0]} alt={p.name} fill className="object-cover" sizes="32px" referrerPolicy="no-referrer" />
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 space-y-0.5">
+                                <span className="font-serif font-bold text-white text-xs block">{p.name}</span>
+                                <span className="text-[10px] text-white/40 block max-w-xs truncate">{p.description}</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {p.isNew && (
+                                    <span className="bg-[#20D9A1]/10 border border-[#20D9A1]/20 text-[#20D9A1] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      New
+                                    </span>
+                                  )}
+                                  {p.isFeatured && (
+                                    <span className="bg-[#5F39FF]/10 border border-[#5F39FF]/20 text-[#a08eff] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      Featured
+                                    </span>
+                                  )}
+                                  {p.isDealOfTheDay && (
+                                    <span className="bg-[#C6A15B]/10 border border-[#C6A15B]/20 text-[#C6A15B] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      Secret Offer ({p.discountPercentage || 0}%)
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 font-mono uppercase text-[10px] text-white/50">{p.category}</td>
+                              <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">Ugx {p.price}</td>
+                              <td className="py-3 px-2 font-mono">
+                                <div className="flex items-center gap-1 font-mono">
+                                  <button 
+                                    onClick={() => updateProductStockQuick(p.id, Math.max(0, p.stock - 1), currentUser?.name || 'Admin', currentUser?.role || 'Staff')}
+                                    className="w-5 h-5 rounded border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 active:scale-95 transition-all text-[11px]"
+                                    title="Decrease Stock"
+                                  >
+                                    -
+                                  </button>
+                                  <span className={`w-6 text-center text-[10px] font-bold ${p.stock <= 2 ? 'text-red-400 font-bold' : 'text-white'}`}>
+                                    {p.stock}
                                   </span>
-                                )}
-                                {p.isFeatured && (
-                                  <span className="bg-[#5F39FF]/10 border border-[#5F39FF]/20 text-[#a08eff] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
-                                    Featured
-                                  </span>
-                                )}
-                                {p.isDealOfTheDay && (
-                                  <span className="bg-[#C6A15B]/10 border border-[#C6A15B]/20 text-[#C6A15B] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
-                                    Secret Offer ({p.discountPercentage || 0}%)
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-2 font-mono uppercase text-[10px] text-white/50">{p.category}</td>
-                            <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">Ugx {p.price}</td>
-                            <td className="py-3 px-2 font-mono">
-                              <span className={p.stock <= 2 ? 'text-red-400 font-bold' : 'text-white'}>
-                                {p.stock} units
-                              </span>
-                            </td>
-                            <td className="py-3 px-2 text-right">
-                              <div className="flex justify-end gap-1.5">
-                                <button 
-                                  onClick={() => handleOpenProductModal(p)}
-                                  className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
-                                  title="Edit product details"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  onClick={() => handleOpenDeleteModal(p)}
-                                  className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
-                                  title="Soft delete from showroom"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                                  <button 
+                                    onClick={() => updateProductStockQuick(p.id, p.stock + 1, currentUser?.name || 'Admin', currentUser?.role || 'Staff')}
+                                    className="w-5 h-5 rounded border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 active:scale-95 transition-all text-[11px]"
+                                    title="Increase Stock"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 text-right">
+                                <div className="flex justify-end gap-1.5">
+                                  <button 
+                                    onClick={() => setExpandedReviewsProductId(expandedReviewsProductId === p.id ? null : p.id)}
+                                    className={`p-1.5 rounded border transition-all cursor-pointer relative ${
+                                      expandedReviewsProductId === p.id 
+                                        ? 'border-[#C6A15B]/40 bg-[#C6A15B]/10 text-[#C6A15B]' 
+                                        : 'border-white/5 bg-white/5 hover:border-[#C6A15B]/30 hover:bg-[#C6A15B]/5 text-white/70 hover:text-[#C6A15B]'
+                                    }`}
+                                    title="Moderate product reviews"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    {p.reviews && p.reviews.length > 0 && (
+                                      <span className="absolute -top-1 -right-1 bg-[#C6A15B] text-black font-sans font-extrabold text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center scale-90 font-bold">
+                                        {p.reviews.length}
+                                      </span>
+                                    )}
+                                  </button>
+
+                                  <button 
+                                    onClick={() => handleOpenProductModal(p)}
+                                    className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
+                                    title="Edit product details"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleOpenDeleteModal(p)}
+                                    className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
+                                    title="Soft delete from showroom"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+
+                            {expandedReviewsProductId === p.id && (
+                              <tr className="bg-black/35 border-b border-white/5">
+                                <td colSpan={6} className="py-4 px-6 space-y-3">
+                                  <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                                    <h4 className="font-serif font-bold text-white text-xs flex items-center gap-1.5">
+                                      <MessageSquare className="w-3.5 h-3.5 text-[#C6A15B]" />
+                                      Apparel Reviews & Feedbacks Moderation Panel
+                                    </h4>
+                                    <button 
+                                      onClick={() => setExpandedReviewsProductId(null)}
+                                      className="text-white/40 hover:text-white text-[10px] font-mono"
+                                    >
+                                      Close Panel [✕]
+                                    </button>
+                                  </div>
+                                  
+                                  {!p.reviews || p.reviews.length === 0 ? (
+                                    <p className="text-[10px] text-white/40 font-serif italic py-2">
+                                      No feedback or reviews recorded for this apparel from customers yet.
+                                    </p>
+                                  ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
+                                      {p.reviews.map((rev) => (
+                                        <div key={rev.id} className="bg-white/5 border border-white/5 rounded-xl p-3 flex justify-between items-start gap-4">
+                                          <div className="space-y-1 w-full">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-semibold text-white text-[11px]">{rev.userName}</span>
+                                              <span className="bg-white/10 text-white/60 text-[8px] font-mono px-1 rounded uppercase">
+                                                {rev.userRole || 'Customer'}
+                                              </span>
+                                              <span className="text-[9px] text-white/30 font-mono ml-auto">{rev.date}</span>
+                                            </div>
+                                            <div className="flex items-center gap-0.5 py-0.5">
+                                              {Array.from({ length: 5 }).map((_, i) => (
+                                                <Star 
+                                                  key={i} 
+                                                  className={`w-3 h-3 ${i < rev.rating ? 'text-[#C6A15B] fill-[#C6A15B]' : 'text-white/10'}`} 
+                                                />
+                                              ))}
+                                            </div>
+                                            <p className="text-[10px] text-white/75 leading-relaxed italic">
+                                              "{rev.comment}"
+                                            </p>
+                                          </div>
+                                          
+                                          <button 
+                                            onClick={async () => {
+                                              if (confirm('Are you sure you want to moderate and remove this review permanently?')) {
+                                                await deleteReview(p.id, rev.id, currentUser?.name || 'Moderator', currentUser?.role || 'Admin');
+                                              }
+                                            }}
+                                            className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                                            title="Moderate review"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         ))}
                       </tbody>
                     </table>
@@ -1570,6 +1740,31 @@ export default function Admin() {
                       value={pStock} 
                       onChange={(e) => setPStock(Number(e.target.value))} 
                       className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none font-mono"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Available Sizes (Comma Separated)</label>
+                    <input 
+                      type="text" 
+                      value={pSizesInput} 
+                      onChange={(e) => setPSizesInput(e.target.value)} 
+                      placeholder="e.g. 48R, 50R, 52R"
+                      className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Available Colors (Comma Separated)</label>
+                    <input 
+                      type="text" 
+                      value={pColorsInput} 
+                      onChange={(e) => setPColorsInput(e.target.value)} 
+                      placeholder="e.g. Midnight Navy, Charcoal"
+                      className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none"
                       required
                     />
                   </div>

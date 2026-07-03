@@ -46,6 +46,8 @@ interface StoreState {
   updateProduct: (id: string, updatedFields: Partial<Product>, updaterName: string, updaterRole: string) => void;
   deleteProduct: (id: string, deleterName: string, deleterRole: string) => void; // Soft delete or remove
   addReview: (productId: string, rating: number, comment: string, userName: string, userRole?: string) => void;
+  deleteReview: (productId: string, reviewId: string, modifierName: string, modifierRole: string) => void;
+  updateProductStockQuick: (productId: string, newStock: number, modifierName: string, modifierRole: string) => void;
 
   // User management actions (Admin)
   adminAddUser: (userData: Omit<User, 'id'>, adminName: string, adminRole: string) => void;
@@ -2016,6 +2018,63 @@ export const useStore = create<StoreState>()(
           );
           safeSupabaseUpsert('products', { id: productId, rating: avgRating });
         }
+      },
+
+      deleteReview: async (productId, reviewId, modifierName, modifierRole) => {
+        set(state => ({
+          products: state.products.map(p => {
+            if (p.id === productId) {
+              const updatedReviews = p.reviews.filter(r => r.id !== reviewId);
+              const avgRating = updatedReviews.length > 0 
+                ? Number((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1))
+                : 5.0;
+              return {
+                ...p,
+                reviews: updatedReviews,
+                rating: avgRating
+              };
+            }
+            return p;
+          })
+        }));
+
+        get().addAuditLog(
+          'Product Review Removed',
+          `Removed review '${reviewId}' from product ID '${productId}' by staff moderation.`,
+          'admin-modifier',
+          modifierName,
+          modifierRole as User['role']
+        );
+
+        // Sync review deletion in Supabase
+        await safeSupabaseDelete('reviews', { id: reviewId });
+
+        // Update overall product rating in products table
+        const matched = get().products.find(p => p.id === productId);
+        if (matched) {
+          const updatedReviews = matched.reviews.filter(r => r.id !== reviewId);
+          const avgRating = updatedReviews.length > 0
+            ? Number((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1))
+            : 5.0;
+          await safeSupabaseUpsert('products', { id: productId, rating: avgRating });
+        }
+      },
+
+      updateProductStockQuick: async (productId, newStock, modifierName, modifierRole) => {
+        set(state => ({
+          products: state.products.map(p => p.id === productId ? { ...p, stock: newStock } : p)
+        }));
+
+        get().addAuditLog(
+          'Product Stock Adjusted',
+          `Quick adjusted stock level of product ID '${productId}' to ${newStock} units.`,
+          'admin-modifier',
+          modifierName,
+          modifierRole as User['role']
+        );
+
+        // Sync to Supabase
+        await safeSupabaseUpsert('products', { id: productId, stock: newStock });
       },
 
       bookConsultation: (bookingData) => {
