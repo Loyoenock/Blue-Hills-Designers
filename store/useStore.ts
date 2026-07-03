@@ -12,6 +12,7 @@ interface StoreState {
   products: Product[];
   users: User[];
   currentUser: User | null;
+  currentUserId?: string | null;
   cart: CartItem[];
   orders: Order[];
   payments: Payment[];
@@ -1206,6 +1207,40 @@ export const useStore = create<StoreState>()(
             set({ auditLogs: INITIAL_AUDIT_LOGS });
           }
 
+          // Restore currentUser dynamically from active Supabase Auth session or persisted currentUserId
+          try {
+            const { data: authData } = await supabase.auth.getUser();
+            const authUser = authData?.user;
+            const targetUserId = authUser?.id || get().currentUserId;
+
+            if (targetUserId) {
+              const matchedProfile = get().users.find(u => u.id === targetUserId);
+              if (matchedProfile) {
+                set({ currentUser: matchedProfile });
+              } else {
+                const { data: p } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', targetUserId)
+                  .maybeSingle();
+                if (p) {
+                  const userObj: User = {
+                    id: p.id,
+                    name: p.full_name || p.name || (authUser ? (authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase()) : 'Gentleman Customer'),
+                    email: p.email || (authUser ? authUser.email : '') || '',
+                    phone: p.phone || (authUser ? authUser.user_metadata?.phone : '') || '',
+                    role: capitalizeRole(p.role),
+                    spending: p.lifetime_spending || p.spending || 0,
+                    rewardsPoints: p.reward_points || p.rewardsPoints || 0
+                  };
+                  set({ currentUser: userObj });
+                }
+              }
+            }
+          } catch (authError) {
+            console.warn('Could not restore auth user session:', authError);
+          }
+
         } catch (err) {
           console.error('Error in syncFromSupabase:', err);
         } finally {
@@ -2101,6 +2136,12 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'blue-hills-boutique-storage',
+      partialize: (state) => ({
+        cart: state.cart,
+        wishlist: state.wishlist,
+        settings: state.settings,
+        currentUserId: state.currentUser?.id || null,
+      }),
       storage: createJSONStorage(() => (typeof window !== 'undefined' ? window.localStorage : {
         getItem: () => null,
         setItem: () => {},
