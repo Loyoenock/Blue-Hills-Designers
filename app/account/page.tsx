@@ -447,7 +447,7 @@ export default function Account() {
                         Lubowa Hill, Wakiso, Kampala, Uganda
                       </p>
                       <button 
-                        onClick={() => alert("Address edit keys temporarily locked. Contact concierge support at Lubowa showroom.")} 
+                        onClick={() => alert("Address edit keys temporarily locked. Contact support at Lubowa showroom.")} 
                         className="text-[10px] font-mono font-bold uppercase text-[#1C4D8D] hover:text-[#1C4D8D]/80 flex items-center gap-1.5 transition-colors"
                       >
                         <Edit3 className="w-3.5 h-3.5" /> Edit Registry

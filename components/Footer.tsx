@@ -83,11 +83,11 @@ export default function Footer() {
           </div>
           <div className="flex items-center space-x-3 text-sm text-[#F7F5F0]/70">
             <Phone className="w-5 h-5 text-[#C6A15B] shrink-0" />
-            <span>{settings?.conciergePhone || '+256 (772) 123-456'}</span>
+            <span>{settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456'}</span>
           </div>
           <div className="flex items-center space-x-3 text-sm text-[#F7F5F0]/70">
             <Mail className="w-5 h-5 text-[#C6A15B] shrink-0" />
-            <span>concierge@bluehillsdesigners.com</span>
+            <span>support@bluehillsdesigners.com</span>
           </div>
           <div className="flex items-center space-x-3 text-xs text-[#F7F5F0]/40 border-t border-[#657892]/20 pt-3">
             <Calendar className="w-4 h-4 text-[#C6A15B]" />

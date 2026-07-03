@@ -98,11 +98,11 @@ export default function AIStylist() {
       }]);
     } catch {
       const greeting = currentUser ? `Mr. ${currentUser.name}` : 'Sir';
-      const conciergeNo = settings?.conciergePhone || '+256 (772) 123-456';
+      const supportNo = settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456';
       setMessages(curr => [...curr, {
         id: `error-msg-${curr.length + 1}`,
         role: 'model',
-        content: `I apologize, ${greeting}. A brief concierge connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our concierge directly at ${conciergeNo}.`
+        content: `I apologize, ${greeting}. A brief connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our support directly at ${supportNo}.`
       }]);
     } finally {
       setIsLoading(false);
@@ -153,7 +153,7 @@ export default function AIStylist() {
                   {
                     id: 'welcome',
                     role: 'model',
-                    content: 'Good day, Executive. I am your Blue Hills Designers Personal Styling Concierge. How can I help orchestrate your visual presence today?'
+                    content: 'Good day, Executive. I am your Blue Hills Designers Personal Styling Support. How can I help orchestrate your visual presence today?'
                   }
                 ]);
               }}

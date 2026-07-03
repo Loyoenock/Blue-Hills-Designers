@@ -7,7 +7,7 @@ let aiClient: GoogleGenAI | null = null;
 function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn("GEMINI_API_KEY is not defined in environment variables. Falling back to local concierge simulation.");
+    console.warn("GEMINI_API_KEY is not defined in environment variables. Falling back to local support simulation.");
     return null;
   }
   if (!aiClient) {
@@ -17,7 +17,7 @@ function getAIClient() {
 }
 
 const SYSTEM_INSTRUCTIONS = `
-You are the elite digital personal styling concierge for Blue Hills Designers, a luxury corporate ready-to-wear boutique located at Lubowa Shopping Mall (Shop 14, Ground Floor, Entebbe Road, Kampala, Uganda), dealing exclusively in premium already-made clothes imported from Turkey, Egypt, China, and the UK.
+You are the elite digital personal styling support for Blue Hills Designers, a luxury corporate ready-to-wear boutique located at Lubowa Shopping Mall (Shop 14, Ground Floor, Entebbe Road, Kampala, Uganda), dealing exclusively in premium already-made clothes imported from Turkey, Egypt, China, and the UK.
 Your target clientele are corporate and working-class professionals, CEOs, managing directors, senior diplomats, cabinet officers, oil and gas executives, and modern gentlemen.
 
 Important Guideline & Constraint Checklist:
@@ -80,10 +80,10 @@ export async function POST(req: NextRequest) {
     }
     fullPrompt += `Client Conversation History:\n`;
     for (const msg of messages) {
-      const speaker = msg.role === 'user' ? 'Client' : 'Stylist Concierge';
+      const speaker = msg.role === 'user' ? 'Client' : 'Stylist Support';
       fullPrompt += `${speaker}: ${msg.content}\n`;
     }
-    fullPrompt += `\nStylist Concierge:`;
+    fullPrompt += `\nStylist Support:`;
 
     const response = await client.models.generateContent({
       model: 'gemini-3.5-flash',
@@ -159,7 +159,7 @@ Which size may I prepare for your wardrobe, ${directName}?`;
 Every garment is hand-couriered to your office or residence in Kampala with our compliments.`;
   }
 
-  return `Good day, ${greetingName}. I am your Blue Hills Personal Styling Concierge. 
+  return `Good day, ${greetingName}. I am your Blue Hills Personal Styling Support. 
 
 Whether you are preparing for an upcoming diplomatic summit, a boardroom merger presentation, or an executive networking session, I am here to coordinate your visual presence.
 

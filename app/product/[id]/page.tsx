@@ -14,6 +14,8 @@ import Footer from '../../../components/Footer';
 import MobileNav from '../../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Review } from '../../../types';
+import { getSafeImageSrc } from '../../../lib/utils';
+
 
 export default function ProductDetails() {
   const params = useParams();
@@ -52,7 +54,7 @@ export default function ProductDetails() {
     const timer = setTimeout(() => {
       setMounted(true);
       if (product) {
-        setActiveImage(product.images[0]);
+        setActiveImage(getSafeImageSrc(product.images?.[0]));
         setSelectedSize(product.sizes[0] || '');
         setSelectedColor(product.colors[0] || '');
       }
@@ -148,14 +150,14 @@ export default function ProductDetails() {
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex-1 w-full" id="product-details-container">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           
-          {/* LEFT: IMAGE GALLERY & ZOOM (5 columns on lg) */}
+           {/* LEFT: IMAGE GALLERY & ZOOM (5 columns on lg) */}
           <div className="lg:col-span-6 space-y-4">
             <div 
               className="relative aspect-[3/4] bg-[#F7F5F0] rounded-2xl overflow-hidden border border-[#657892]/20 group cursor-zoom-in shadow-sm"
               onClick={() => setZoomScale(!zoomScale)}
             >
               <Image 
-                src={activeImage}
+                src={getSafeImageSrc(activeImage)}
                 alt={product.name}
                 fill
                 className={`object-cover object-top transition-transform duration-500 ${zoomScale ? 'scale-150' : 'scale-100 group-hover:scale-102'}`}
@@ -180,7 +182,7 @@ export default function ProductDetails() {
                     activeImage === img ? 'border-[#C6A15B] ring-1 ring-[#C6A15B]' : 'border-[#657892]/20 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <Image src={img} alt={`${product.name} alt ${i}`} fill className="object-cover object-top" sizes="64px" referrerPolicy="no-referrer" />
+                  <Image src={getSafeImageSrc(img)} alt={`${product.name} alt ${i}`} fill className="object-cover object-top" sizes="64px" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -464,7 +466,7 @@ export default function ProductDetails() {
               {similarProducts.map((p) => (
                 <div key={p.id} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden group hover:border-[#1C4D8D]/30 transition-all flex flex-col justify-between shadow-sm">
                   <div className="relative aspect-[3/4] overflow-hidden bg-[#F7F5F0]">
-                    <Image src={p.images[0]} alt={p.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width: 768px) 100vw, 30vw" referrerPolicy="no-referrer" />
+                    <Image src={getSafeImageSrc(p.images?.[0])} alt={p.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width: 768px) 100vw, 30vw" referrerPolicy="no-referrer" />
                   </div>
                   <div className="p-4 space-y-2">
                     <h4 className="font-serif font-bold text-[#1D2B3F] truncate text-sm">{p.name}</h4>

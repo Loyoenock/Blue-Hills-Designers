@@ -515,7 +515,7 @@ export default function Admin() {
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
               <span className="text-[10px] uppercase tracking-[0.3em] text-red-500 font-mono font-bold">Secure Command Core</span>
             </div>
-            <h1 className="font-serif text-3xl text-white tracking-tight font-medium">Boutique Operations Console</h1>
+            <h1 className="font-serif text-3xl text-white tracking-tight font-medium">BHD Operations Console</h1>
             <p className="text-white/40 text-xs font-mono">
               Role: <span className="text-[#20D9A1] font-semibold">{currentUser.name} ({currentUser.role})</span>
             </p>

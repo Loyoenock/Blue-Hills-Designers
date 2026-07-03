@@ -114,7 +114,8 @@ export interface Payment {
 
 export interface AppSettings {
   showroomHours: string;
-  conciergePhone: string;
+  supportPhone: string;
+  conciergePhone?: string;
   freeShippingThreshold: number;
   taxRate: number;
   aiGreetingPrefix: string;

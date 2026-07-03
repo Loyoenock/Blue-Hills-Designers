@@ -201,7 +201,7 @@ export default function Checkout() {
                 {settings?.maintenanceMode && (
                   <div className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-xl text-xs flex flex-col gap-1 shadow-sm select-none">
                     <p className="font-bold uppercase tracking-wider text-[10px]">Storefront Under Maintenance</p>
-                    <p className="font-light">We are currently conducting scheduled adjustments. Direct ordering is temporarily restricted. Please visit our showroom at Lubowa Shopping Mall or contact us directly at {settings?.conciergePhone || '+256 772 123456'}.</p>
+                    <p className="font-light">We are currently conducting scheduled adjustments. Direct ordering is temporarily restricted. Please visit our showroom at Lubowa Shopping Mall or contact us directly at {settings?.supportPhone || settings?.conciergePhone || '+256 772 123456'}.</p>
                   </div>
                 )}
                 {isQuick ? (
@@ -369,7 +369,7 @@ export default function Checkout() {
 
                         {paymentMethod === 'Cash on Delivery' && (
                           <p className="text-[11px] text-[#657892] leading-relaxed font-light">
-                            Pay securely with cash or mobile money directly to our concierge upon physical sizing confirmation at delivery.
+                            Pay securely with cash or mobile money directly to our support representative upon physical sizing confirmation at delivery.
                           </p>
                         )}
                       </div>

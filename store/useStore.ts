@@ -386,7 +386,7 @@ const INITIAL_PAYMENTS: Payment[] = [
 
 const INITIAL_SETTINGS: AppSettings = {
   showroomHours: 'Sunday to Friday: 9:00 AM to 7:00 PM (Saturdays Closed)',
-  conciergePhone: '+256 772 123456',
+  supportPhone: '+256 772 123456',
   freeShippingThreshold: 2000,
   taxRate: 18,
   aiGreetingPrefix: 'Good day, Executive.',
@@ -885,6 +885,14 @@ export const useStore = create<StoreState>()(
             if (settingsCat && settingsCat.description) {
               try {
                 const parsedSettings = JSON.parse(settingsCat.description);
+                if (parsedSettings) {
+                  if (parsedSettings.conciergePhone && !parsedSettings.supportPhone) {
+                    parsedSettings.supportPhone = parsedSettings.conciergePhone;
+                  }
+                  if (!parsedSettings.supportPhone) {
+                    parsedSettings.supportPhone = INITIAL_SETTINGS.supportPhone;
+                  }
+                }
                 set({ settings: parsedSettings });
               } catch (e) {
                 console.warn('Failed to parse app-settings from categories:', e);

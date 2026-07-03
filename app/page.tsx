@@ -15,6 +15,8 @@ import MobileNav from '../components/MobileNav';
 import AIStylist from '../components/AIStylist';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../types';
+import { getSafeImageSrc } from '../lib/utils';
+
 
 export default function Home() {
   const router = useRouter();
@@ -354,7 +356,7 @@ export default function Home() {
                   {/* Image container */}
                   <div className="relative h-[360px] overflow-hidden bg-[#F7F5F0]">
                     <Image 
-                      src={p.images[0]}
+                      src={getSafeImageSrc(p.images?.[0])}
                       alt={p.name}
                       fill
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -452,7 +454,7 @@ export default function Home() {
             {/* Visual Column */}
             <div className="lg:col-span-5 relative h-[500px] md:h-[600px] rounded-2xl overflow-hidden border border-[#657892]/20 group">
               <Image 
-                src={dealProduct.images[0]}
+                src={getSafeImageSrc(dealProduct.images?.[0])}
                 alt={dealProduct.name}
                 fill
                 className="object-cover object-top transition-transform duration-700 group-hover:scale-105"
@@ -563,7 +565,7 @@ export default function Home() {
                 <div key={p.id} className="group bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden hover:border-[#1C4D8D]/20 transition-all flex flex-col justify-between shadow-md">
                   <div className="relative h-[280px] overflow-hidden bg-[#F7F5F0]">
                     <Image 
-                      src={p.images[0]}
+                      src={getSafeImageSrc(p.images?.[0])}
                       alt={p.name}
                       fill
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -738,7 +740,7 @@ export default function Home() {
                 {/* Image preview */}
                 <div className="relative h-[300px] md:h-[400px] rounded-xl overflow-hidden border border-[#657892]/10">
                   <Image 
-                    src={quickViewProduct.images[0]}
+                    src={getSafeImageSrc(quickViewProduct.images?.[0])}
                     alt={quickViewProduct.name}
                     fill
                     className="object-cover"

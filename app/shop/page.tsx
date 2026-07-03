@@ -14,6 +14,8 @@ import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../../types';
+import { getSafeImageSrc } from '../../lib/utils';
+
 
 function ShopContent() {
   const searchParams = useSearchParams();
@@ -481,7 +483,7 @@ function ShopContent() {
                           viewMode === 'list' ? 'h-[240px] sm:w-[240px] shrink-0' : 'h-[320px]'
                         }`}>
                           <Image 
-                            src={p.images[0]}
+                            src={getSafeImageSrc(p.images?.[0])}
                             alt={p.name}
                             fill
                             className="object-cover transition-transform duration-500 group-hover:scale-105"
