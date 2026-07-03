@@ -40,16 +40,43 @@ export async function POST(req: NextRequest) {
       const fileUuid = crypto.randomUUID();
       const filePath = `${userId}/${featureName}/${itemId}/${fileUuid}.${extension.replace(/^\./, '')}`;
 
-      const { data, error } = await supabase.storage
+      let uploadResult = await supabase.storage
         .from('app-file')
         .upload(filePath, buffer, {
           contentType: detectedMimeType,
           upsert: true
         });
 
-      if (error) {
-        console.error('Storage upload error:', error);
-        return NextResponse.json({ error: error.message }, { status: 400 });
+      if (uploadResult.error && (
+        uploadResult.error.message?.toLowerCase().includes('bucket not found') ||
+        (uploadResult.error as any).status === 404 ||
+        (uploadResult.error as any).statusCode === '404' ||
+        (uploadResult.error as any).statusCode === 404
+      )) {
+        console.warn('Bucket "app-file" not found. Attempting to create it...');
+        try {
+          const { error: createError } = await supabase.storage.createBucket('app-file', {
+            public: true
+          });
+          if (createError) {
+            console.error('Failed to auto-create "app-file" bucket:', createError);
+          } else {
+            console.log('Successfully created "app-file" bucket. Retrying upload...');
+            uploadResult = await supabase.storage
+              .from('app-file')
+              .upload(filePath, buffer, {
+                contentType: detectedMimeType,
+                upsert: true
+              });
+          }
+        } catch (bucketCreateErr) {
+          console.error('Exception during bucket auto-creation:', bucketCreateErr);
+        }
+      }
+
+      if (uploadResult.error) {
+        console.error('Storage upload error:', uploadResult.error);
+        return NextResponse.json({ error: uploadResult.error.message }, { status: 400 });
       }
 
       return NextResponse.json({ path: filePath });

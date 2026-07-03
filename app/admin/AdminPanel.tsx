@@ -285,7 +285,7 @@ export default function Admin() {
 
   const resizeAndStandardizeImage = (dataUrl: string, targetWidth = 750, targetHeight = 1000): Promise<string> => {
     return new Promise((resolve) => {
-      const img = new Image();
+      const img = new window.Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         const canvas = document.createElement('canvas');
