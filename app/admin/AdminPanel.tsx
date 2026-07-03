@@ -63,6 +63,10 @@ export default function Admin() {
   const [pSizes, setPSizes] = useState<string[]>(['48R', '50R', '52R']);
   const [pColors, setPColors] = useState<string[]>(['Midnight Navy', 'Charcoal']);
   const [pImages, setPImages] = useState<string[]>(['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg']);
+  const [pIsNew, setPIsNew] = useState(false);
+  const [pIsFeatured, setPIsFeatured] = useState(false);
+  const [pIsDeal, setPIsDeal] = useState(false);
+  const [pDiscountPercentage, setPDiscountPercentage] = useState(0);
 
   // Delete product safety confirmation modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -249,6 +253,10 @@ export default function Admin() {
       setPSizes(prod.sizes);
       setPColors(prod.colors);
       setPImages(prod.images);
+      setPIsNew(!!prod.isNew);
+      setPIsFeatured(!!prod.isFeatured);
+      setPIsDeal(!!prod.isDealOfTheDay);
+      setPDiscountPercentage(prod.discountPercentage || 0);
       
       // Auto-detect mode based on image type
       if (prod.images && prod.images[0] && prod.images[0].startsWith('data:')) {
@@ -266,6 +274,10 @@ export default function Admin() {
       setPSizes(['48R', '50R', '52R']);
       setPColors(['Midnight Navy', 'Charcoal']);
       setPImages(['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg']);
+      setPIsNew(true);
+      setPIsFeatured(false);
+      setPIsDeal(false);
+      setPDiscountPercentage(0);
       setImageSourceMode('url');
     }
     setIsProductModalOpen(true);
@@ -365,7 +377,11 @@ export default function Admin() {
         stock: Number(pStock),
         sizes: pSizes,
         colors: pColors,
-        images: pImages
+        images: pImages,
+        isNew: pIsNew,
+        isFeatured: pIsFeatured,
+        isDealOfTheDay: pIsDeal,
+        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0
       }, operatorName, operatorRole);
     } else {
       addProduct({
@@ -377,7 +393,10 @@ export default function Admin() {
         sizes: pSizes,
         colors: pColors,
         images: pImages,
-        isNew: true
+        isNew: pIsNew,
+        isFeatured: pIsFeatured,
+        isDealOfTheDay: pIsDeal,
+        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0
       }, operatorName, operatorRole);
     }
     setIsProductModalOpen(false);
@@ -754,6 +773,23 @@ export default function Admin() {
                             <td className="py-3 px-2 space-y-0.5">
                               <span className="font-serif font-bold text-white text-xs block">{p.name}</span>
                               <span className="text-[10px] text-white/40 block max-w-xs truncate">{p.description}</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {p.isNew && (
+                                  <span className="bg-[#20D9A1]/10 border border-[#20D9A1]/20 text-[#20D9A1] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
+                                    New
+                                  </span>
+                                )}
+                                {p.isFeatured && (
+                                  <span className="bg-[#5F39FF]/10 border border-[#5F39FF]/20 text-[#a08eff] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
+                                    Featured
+                                  </span>
+                                )}
+                                {p.isDealOfTheDay && (
+                                  <span className="bg-[#C6A15B]/10 border border-[#C6A15B]/20 text-[#C6A15B] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
+                                    Secret Offer ({p.discountPercentage || 0}%)
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3 px-2 font-mono uppercase text-[10px] text-white/50">{p.category}</td>
                             <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">Ugx {p.price}</td>
@@ -1537,6 +1573,56 @@ export default function Admin() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="p-3 bg-black/40 border border-white/5 rounded-xl space-y-3">
+                  <span className="text-[9px] uppercase tracking-widest text-[#20D9A1] font-mono block font-bold">Showroom Collection Registries / Labels</span>
+                  <div className="grid grid-cols-3 gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-white/80 hover:text-white">
+                      <input 
+                        type="checkbox" 
+                        checked={pIsNew} 
+                        onChange={(e) => setPIsNew(e.target.checked)}
+                        className="rounded border-white/10 bg-black text-[#20D9A1] focus:ring-0 outline-none w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-[11px] font-medium">New</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-white/80 hover:text-white">
+                      <input 
+                        type="checkbox" 
+                        checked={pIsFeatured} 
+                        onChange={(e) => setPIsFeatured(e.target.checked)}
+                        className="rounded border-white/10 bg-black text-[#20D9A1] focus:ring-0 outline-none w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-[11px] font-medium font-sans">Featured</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-white/80 hover:text-white">
+                      <input 
+                        type="checkbox" 
+                        checked={pIsDeal} 
+                        onChange={(e) => setPIsDeal(e.target.checked)}
+                        className="rounded border-white/10 bg-black text-[#20D9A1] focus:ring-0 outline-none w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-[11px] font-medium font-sans">Secret Offer</span>
+                    </label>
+                  </div>
+
+                  {pIsDeal && (
+                    <div className="space-y-1 pt-2 border-t border-white/5">
+                      <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Secret Offer Discount Percentage (%)</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        max="100"
+                        value={pDiscountPercentage} 
+                        onChange={(e) => setPDiscountPercentage(Number(e.target.value))} 
+                        className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-[#20D9A1] font-bold outline-none font-mono"
+                        required={pIsDeal}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
