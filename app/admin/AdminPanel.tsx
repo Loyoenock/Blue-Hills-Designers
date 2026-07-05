@@ -1771,16 +1771,110 @@ export default function Admin() {
                       required
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Available Colors (Comma Separated)</label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Available Colors</label>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[8px] text-white/30 uppercase tracking-wider font-mono">Custom Picker:</span>
+                        <div className="relative w-4 h-4 rounded-full overflow-hidden border border-white/20 hover:border-[#20D9A1] transition-colors cursor-pointer bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-sm" title="Click to choose custom hex color">
+                          <input 
+                            type="color" 
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              const current = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
+                              if (!current.includes(newColor)) {
+                                setPColorsInput([...current, newColor].join(', '));
+                              }
+                            }}
+                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer scale-150"
+                          />
+                        </div>
+                      </div>
+                    </div>
                     <input 
                       type="text" 
                       value={pColorsInput} 
                       onChange={(e) => setPColorsInput(e.target.value)} 
                       placeholder="e.g. Midnight Navy, Charcoal"
-                      className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none"
+                      className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none font-mono text-xs"
                       required
                     />
+                    
+                    {/* Visual Color Swatches */}
+                    <div className="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto custom-scrollbar">
+                      {pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '').map((col, idx) => {
+                        const lowerCol = col.toLowerCase();
+                        const swatchBg = lowerCol === 'midnight navy' ? '#1D2B3F' : 
+                                         lowerCol === 'charcoal' ? '#475569' : 
+                                         lowerCol === 'cognac brown' ? '#7c2d12' : 
+                                         lowerCol === 'obsidian black' || lowerCol === 'black' ? '#09090b' : 
+                                         lowerCol === 'pristine white' || lowerCol === 'white' ? '#ffffff' : 
+                                         lowerCol === 'lubowa camel' || lowerCol === 'camel' ? '#c6a15b' : col;
+                        return (
+                          <div 
+                            key={idx}
+                            className="flex items-center gap-1 bg-white/5 border border-white/10 hover:border-white/20 px-1.5 py-0.5 rounded text-[9px] text-white/80 transition-all font-mono"
+                          >
+                            <span 
+                              className="w-1.5 h-1.5 rounded-full border border-white/10 shadow-sm" 
+                              style={{ backgroundColor: swatchBg }}
+                            />
+                            <span className="truncate max-w-[80px]">{col}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
+                                const updated = current.filter(c => c !== col);
+                                setPColorsInput(updated.join(', '));
+                              }}
+                              className="text-white/40 hover:text-red-400 font-bold ml-0.5 transition-colors focus:outline-none"
+                              title="Remove color"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Quick Selection Presets */}
+                    <div className="space-y-1 pt-1 border-t border-white/5">
+                      <span className="text-[8px] text-white/30 uppercase tracking-wider font-mono block">Bespoke Presets</span>
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          { name: 'Midnight Navy', hex: '#1D2B3F' },
+                          { name: 'Charcoal', hex: '#475569' },
+                          { name: 'Cognac Brown', hex: '#7c2d12' },
+                          { name: 'Obsidian Black', hex: '#09090b' },
+                          { name: 'Pristine White', hex: '#ffffff' },
+                          { name: 'Lubowa Camel', hex: '#c6a15b' }
+                        ].map((preset) => {
+                          const current = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
+                          const isSelected = current.some(c => c.toLowerCase() === preset.name.toLowerCase());
+                          return (
+                            <button
+                              type="button"
+                              key={preset.name}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setPColorsInput(current.filter(c => c.toLowerCase() !== preset.name.toLowerCase()).join(', '));
+                                } else {
+                                  setPColorsInput([...current, preset.name].join(', '));
+                                }
+                              }}
+                              className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded border text-[9px] font-mono transition-all cursor-pointer ${
+                                isSelected 
+                                  ? 'bg-[#20D9A1]/10 border-[#20D9A1]/30 text-[#20D9A1]' 
+                                  : 'bg-black/40 border-white/5 text-white/50 hover:border-white/10 hover:text-white/80'
+                              }`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full border border-white/10" style={{ backgroundColor: preset.hex }} />
+                              <span>{preset.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
