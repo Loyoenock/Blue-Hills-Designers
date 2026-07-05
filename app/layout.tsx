@@ -1,7 +1,6 @@
 import type {Metadata} from 'next';
 import { Manrope, Cormorant_Garamond } from 'next/font/google';
 import './globals.css'; // Global styles
-import ChunkErrorListener from '../components/ChunkErrorListener';
 
 const manrope = Manrope({
   subsets: ['latin'],
@@ -25,7 +24,6 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en" className={`${manrope.variable} ${cormorant.variable}`} data-scroll-behavior="smooth">
       <body className="font-sans antialiased bg-[#F7F5F0] text-[#1D2B3F] selection:bg-[#1C4D8D]/30 selection:text-[#1D2B3F]" suppressHydrationWarning>
-        <ChunkErrorListener />
         {children}
       </body>
     </html>
