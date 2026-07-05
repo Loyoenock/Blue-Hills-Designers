@@ -134,6 +134,41 @@ export default function Admin() {
     return { settledSum, pendingSum, refundedSum, failedSum };
   }, [payments]);
 
+  // Filter products list
+  const filteredProducts = useMemo(() => {
+    let list = products.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+                          p.description.toLowerCase().includes(productSearch.toLowerCase());
+      const matchCat = productCategoryFilter === 'All' || p.category === productCategoryFilter;
+      
+      const matchStock = stockStatusFilter === 'All' || 
+                         (stockStatusFilter === 'In Stock' && p.stock > 0) ||
+                         (stockStatusFilter === 'Low Stock' && p.stock > 0 && p.stock <= 3) ||
+                         (stockStatusFilter === 'Out of Stock' && p.stock === 0);
+                         
+      const matchLabel = productLabelFilter === 'All' ||
+                         (productLabelFilter === 'New' && p.isNew) ||
+                         (productLabelFilter === 'Featured' && p.isFeatured) ||
+                         (productLabelFilter === 'Secret Offer' && p.isDealOfTheDay);
+                         
+      return matchSearch && matchCat && matchStock && matchLabel;
+    });
+    
+    if (productSort === 'PriceAsc') {
+      list = [...list].sort((a, b) => a.price - b.price);
+    } else if (productSort === 'PriceDesc') {
+      list = [...list].sort((a, b) => b.price - a.price);
+    } else if (productSort === 'StockAsc') {
+      list = [...list].sort((a, b) => a.stock - b.stock);
+    } else if (productSort === 'StockDesc') {
+      list = [...list].sort((a, b) => b.stock - a.stock);
+    } else if (productSort === 'NameAsc') {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    return list;
+  }, [products, productSearch, productCategoryFilter, stockStatusFilter, productLabelFilter, productSort]);
+
   if (!mounted) return null;
 
   // Authorization Shield
@@ -192,41 +227,6 @@ export default function Admin() {
     .reduce((sum, o) => sum + o.amount, 0);
 
   const activeCustomers = users.filter(u => u.role === 'Customer').length;
-
-  // Filter products list
-  const filteredProducts = useMemo(() => {
-    let list = products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-                          p.description.toLowerCase().includes(productSearch.toLowerCase());
-      const matchCat = productCategoryFilter === 'All' || p.category === productCategoryFilter;
-      
-      const matchStock = stockStatusFilter === 'All' || 
-                         (stockStatusFilter === 'In Stock' && p.stock > 0) ||
-                         (stockStatusFilter === 'Low Stock' && p.stock > 0 && p.stock <= 3) ||
-                         (stockStatusFilter === 'Out of Stock' && p.stock === 0);
-                         
-      const matchLabel = productLabelFilter === 'All' ||
-                         (productLabelFilter === 'New' && p.isNew) ||
-                         (productLabelFilter === 'Featured' && p.isFeatured) ||
-                         (productLabelFilter === 'Secret Offer' && p.isDealOfTheDay);
-                         
-      return matchSearch && matchCat && matchStock && matchLabel;
-    });
-    
-    if (productSort === 'PriceAsc') {
-      list = [...list].sort((a, b) => a.price - b.price);
-    } else if (productSort === 'PriceDesc') {
-      list = [...list].sort((a, b) => b.price - a.price);
-    } else if (productSort === 'StockAsc') {
-      list = [...list].sort((a, b) => a.stock - b.stock);
-    } else if (productSort === 'StockDesc') {
-      list = [...list].sort((a, b) => b.stock - a.stock);
-    } else if (productSort === 'NameAsc') {
-      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
-    }
-    
-    return list;
-  }, [products, productSearch, productCategoryFilter, stockStatusFilter, productLabelFilter, productSort]);
 
   // Filter orders list
   const filteredOrders = orders.filter(o => {
