@@ -862,6 +862,20 @@ export default function Admin() {
                                     </span>
                                   )}
                                 </div>
+                                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 pt-1.5 border-t border-white/5 text-[9px] font-mono">
+                                  {p.sizes && p.sizes.length > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[#C6A15B] font-bold uppercase tracking-wider text-[8px]">Size Registry:</span>
+                                      <span className="text-white/60">{p.sizes.join(', ')}</span>
+                                    </div>
+                                  )}
+                                  {p.colors && p.colors.length > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[#C6A15B] font-bold uppercase tracking-wider text-[8px]">Color Palette:</span>
+                                      <span className="text-white/60">{p.colors.join(', ')}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3 px-2 font-mono uppercase text-[10px] text-white/50">{p.category}</td>
                               <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">Ugx {p.price}</td>
