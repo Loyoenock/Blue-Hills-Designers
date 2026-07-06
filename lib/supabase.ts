@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { isNetworkOrConnectionError } from './utils';
 
 let supabaseClientInstance: SupabaseClient | null = null;
 let supabaseAdminInstance: SupabaseClient | null = null;
@@ -23,13 +24,9 @@ async function retryableFetch(url: string, options?: RequestInit, maxRetries = 3
       return response;
     } catch (err: any) {
       const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-      const isConnectionError = 
-        errMsg.toLowerCase().includes('fetch') ||
-        errMsg.toLowerCase().includes('network') ||
-        errMsg.toLowerCase().includes('connect') ||
-        err?.name === 'TypeError';
+      const isConnError = isNetworkOrConnectionError(err);
 
-      if (isConnectionError && attempt < maxRetries) {
+      if (isConnError && attempt < maxRetries) {
         attempt++;
         const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
         console.warn(`Supabase connection error for ${url}: ${errMsg}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);

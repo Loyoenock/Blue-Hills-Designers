@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { checkRateLimit } from '@/lib/rateLimit';
 import crypto from 'crypto';
+
+// Whitelist of allowed extensions for media storage uploads to prevent malicious scripts
+const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'pdf', 'mp4', 'mov'];
 
 async function getBucketName(supabase: any): Promise<string> {
   try {
@@ -40,8 +44,35 @@ async function getBucketName(supabase: any): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // 1. Rate Limiting Check (Max 40 storage requests per minute per IP to prevent exhaustion attacks)
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+    const rateLimitRes = checkRateLimit(ip, 40, 60000);
+    if (!rateLimitRes.success) {
+      return NextResponse.json(
+        { error: `Too many storage operations. Please try again in ${rateLimitRes.reset} seconds.` },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(rateLimitRes.limit),
+            'X-RateLimit-Remaining': String(rateLimitRes.remaining),
+            'X-RateLimit-Reset': String(rateLimitRes.reset)
+          }
+        }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
     const { action, userId, featureName, itemId, fileBase64, extension, mimeType, path, paths } = body;
+
+    // 2. Base Input Validation
+    if (!action || typeof action !== 'string') {
+      return NextResponse.json({ error: 'Action parameter is required and must be a string.' }, { status: 400 });
+    }
+
+    const actionLower = action.toLowerCase();
+    if (!['upload', 'getsignedurl', 'getsignedurls', 'delete'].includes(actionLower)) {
+      return NextResponse.json({ error: `Invalid action specified: "${action}". Only upload, getSignedUrl, getSignedUrls, and delete are allowed.` }, { status: 400 });
+    }
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
@@ -53,17 +84,26 @@ export async function POST(req: NextRequest) {
 
     const bucketName = await getBucketName(supabase);
 
-    if (action === 'upload') {
+    if (actionLower === 'upload') {
       if (!userId || !featureName || !itemId || !fileBase64 || !extension) {
         return NextResponse.json({ error: 'Missing required upload parameters' }, { status: 400 });
       }
 
-      // Convert base64 data URL to buffer
-      // The fileBase64 can be a raw base64 string or a data URL (e.g. "data:image/png;base64,iVBOR...")
+      // Path Sanitization & Directory Traversal Protection
+      const safeUserId = String(userId).replace(/[^a-zA-Z0-9_\-]/g, '');
+      const safeFeatureName = String(featureName).replace(/[^a-zA-Z0-9_\-]/g, '');
+      const safeItemId = String(itemId).replace(/[^a-zA-Z0-9_\-]/g, '');
+      const safeExtension = String(extension).replace(/^\./, '').replace(/[^a-zA-Z0-9]/g, '');
+
+      if (!ALLOWED_EXTENSIONS.includes(safeExtension.toLowerCase())) {
+        return NextResponse.json({ error: `File type extension ".${safeExtension}" is not permitted for upload.` }, { status: 400 });
+      }
+
+      // Convert base64 data URL to buffer safely
       let base64Clean = fileBase64;
       let detectedMimeType = mimeType || 'image/png';
 
-      if (fileBase64.startsWith('data:')) {
+      if (typeof fileBase64 === 'string' && fileBase64.startsWith('data:')) {
         const parts = fileBase64.split(';base64,');
         if (parts.length === 2) {
           const match = fileBase64.match(/data:([^;]+);/);
@@ -74,9 +114,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Safety check: ensure clean base64 string
+      if (typeof base64Clean !== 'string' || base64Clean.length === 0) {
+        return NextResponse.json({ error: 'Invalid base64 payload provided.' }, { status: 400 });
+      }
+
       const buffer = Buffer.from(base64Clean, 'base64');
       const fileUuid = crypto.randomUUID();
-      const filePath = `${userId}/${featureName}/${itemId}/${fileUuid}.${extension.replace(/^\./, '')}`;
+      const filePath = `${safeUserId}/${safeFeatureName}/${safeItemId}/${fileUuid}.${safeExtension}`;
 
       let uploadResult = await supabase.storage
         .from(bucketName)
@@ -118,9 +163,15 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ path: filePath });
-    } else if (action === 'getSignedUrl') {
-      if (!path) {
-        return NextResponse.json({ error: 'Missing required parameter: path' }, { status: 400 });
+
+    } else if (actionLower === 'getsignedurl') {
+      if (!path || typeof path !== 'string') {
+        return NextResponse.json({ error: 'Missing required parameter: path string' }, { status: 400 });
+      }
+
+      // Prevent Directory Traversal
+      if (path.includes('..') || path.startsWith('/')) {
+        return NextResponse.json({ error: 'Malicious path traversal block activated.' }, { status: 400 });
       }
 
       const { data, error } = await supabase.storage
@@ -133,9 +184,17 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ signedUrl: data.signedUrl });
-    } else if (action === 'getSignedUrls') {
+
+    } else if (actionLower === 'getsignedurls') {
       if (!paths || !Array.isArray(paths)) {
         return NextResponse.json({ error: 'Missing required parameter: paths array' }, { status: 400 });
+      }
+
+      // Check all path variables for traversal signatures
+      for (const p of paths) {
+        if (typeof p !== 'string' || p.includes('..') || p.startsWith('/')) {
+          return NextResponse.json({ error: 'Malicious path traversal block activated on file subset.' }, { status: 400 });
+        }
       }
 
       const { data, error } = await supabase.storage
@@ -148,9 +207,15 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ signedUrls: data });
-    } else if (action === 'delete') {
-      if (!path) {
-        return NextResponse.json({ error: 'Missing required parameter: path' }, { status: 400 });
+
+    } else if (actionLower === 'delete') {
+      if (!path || typeof path !== 'string') {
+        return NextResponse.json({ error: 'Missing required parameter: path string' }, { status: 400 });
+      }
+
+      // Block Directory Traversal
+      if (path.includes('..') || path.startsWith('/')) {
+        return NextResponse.json({ error: 'Malicious path traversal block activated.' }, { status: 400 });
       }
 
       const { data, error } = await supabase.storage
@@ -163,11 +228,11 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: 'Invalid action specified' }, { status: 400 });
     }
+
+    return NextResponse.json({ error: 'Invalid action specified' }, { status: 400 });
   } catch (err: any) {
     console.error('Storage API route error:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal server error occurred on storage desk.' }, { status: 500 });
   }
 }

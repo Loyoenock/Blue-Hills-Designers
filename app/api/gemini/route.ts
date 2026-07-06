@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 // Lazy initialize so it doesn't crash on build if key is missing
 let aiClient: GoogleGenAI | null = null;
@@ -55,33 +56,69 @@ export async function POST(req: NextRequest) {
   let messages: any[] = [];
   let userName: string | undefined = undefined;
   try {
-    const body = await req.json();
+    // 1. Rate Limiting Check (Max 20 AI style chats per minute per IP to defend API key usage)
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+    const rateLimitRes = checkRateLimit(ip, 20, 60000);
+    if (!rateLimitRes.success) {
+      return NextResponse.json(
+        { error: `Too many support messages. Please try again in ${rateLimitRes.reset} seconds.` },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(rateLimitRes.limit),
+            'X-RateLimit-Remaining': String(rateLimitRes.remaining),
+            'X-RateLimit-Reset': String(rateLimitRes.reset)
+          }
+        }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
     messages = body.messages || [];
     userName = body.userName;
     
+    // 2. Thread & Array Validation
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages thread.' }, { status: 400 });
     }
+
+    if (messages.length > 50) {
+      return NextResponse.json({ error: 'Conversation thread limit exceeded. Please restart the styling consult.' }, { status: 400 });
+    }
+
+    // 3. Row-by-row Message Integrity check
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object' || typeof msg.role !== 'string' || typeof msg.content !== 'string') {
+        return NextResponse.json({ error: 'Malformed messages detected inside styling conversation thread.' }, { status: 400 });
+      }
+    }
+
+    // 4. Sanitize Input
+    const safeUserName = typeof userName === 'string' 
+      ? userName.replace(/[^a-zA-Z0-9\s.\-_]/g, '').slice(0, 50).trim()
+      : undefined;
  
     const client = getAIClient();
     
     if (!client) {
       // Return a highly-curated luxury simulated response if Gemini API key is missing
       const lastUserMessage = messages[messages.length - 1]?.content || "";
-      const simulatedReply = getSimulatedStylistReply(lastUserMessage, userName);
+      const simulatedReply = getSimulatedStylistReply(lastUserMessage, safeUserName);
       return NextResponse.json({ text: simulatedReply, simulated: true });
     }
 
     // Convert messages to Gemini's format: we can use models.generateContent with a constructed prompt
     // combining the system instructions and the chat history.
     let fullPrompt = `${SYSTEM_INSTRUCTIONS}\n\n`;
-    if (userName) {
-      fullPrompt += `CRITICAL GUIDELINE: The customer you are speaking to is logged in. Their name is "${userName}". You MUST address them by their name (e.g. "Mr. ${userName}", "Sir ${userName}", or "Gentleman ${userName}") in your responses to show elite high-class personal recognition. Avoid generic greetings if you know their name.\n\n`;
+    if (safeUserName) {
+      fullPrompt += `CRITICAL GUIDELINE: The customer you are speaking to is logged in. Their name is "${safeUserName}". You MUST address them by their name (e.g. "Mr. ${safeUserName}", "Sir ${safeUserName}", or "Gentleman ${safeUserName}") in your responses to show elite high-class personal recognition. Avoid generic greetings if you know their name.\n\n`;
     }
     fullPrompt += `Client Conversation History:\n`;
     for (const msg of messages) {
       const speaker = msg.role === 'user' ? 'Client' : 'Stylist Support';
-      fullPrompt += `${speaker}: ${msg.content}\n`;
+      // Restrict message slice to prevent excessively large payload transfers to GenAI
+      const cleanContent = msg.content.slice(0, 1000);
+      fullPrompt += `${speaker}: ${cleanContent}\n`;
     }
     fullPrompt += `\nStylist Support:`;
 
@@ -90,13 +127,16 @@ export async function POST(req: NextRequest) {
       contents: fullPrompt,
     });
 
-    const replyText = response.text || (userName ? `I apologize, Mr. ${userName}. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?` : "I apologize, Executive. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?");
+    const replyText = response.text || (safeUserName ? `I apologize, Mr. ${safeUserName}. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?` : "I apologize, Executive. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?");
     return NextResponse.json({ text: replyText });
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     const lastUserMessage = messages[messages.length - 1]?.content || "";
-    const simulatedReply = getSimulatedStylistReply(lastUserMessage, userName);
+    const safeUserName = typeof userName === 'string' 
+      ? userName.replace(/[^a-zA-Z0-9\s.\-_]/g, '').slice(0, 50).trim()
+      : undefined;
+    const simulatedReply = getSimulatedStylistReply(lastUserMessage, safeUserName);
     return NextResponse.json({ 
       text: simulatedReply,
       error: error.message,

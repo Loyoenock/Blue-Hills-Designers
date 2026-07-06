@@ -134,7 +134,7 @@ export default function Header() {
               {pathname === item.href && (
                 <motion.span 
                   layoutId="activeNavLine"
-                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#1C4D8D]"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#C6A15B]"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
@@ -264,7 +264,7 @@ export default function Header() {
           <Link 
             href={currentUser ? "/account" : "/login"} 
             className={`p-1 transition-colors ${
-              pathname === '/account' || pathname === '/login' ? 'text-[#1C4D8D]' : 'text-[#F7F5F0]/80 hover:text-[#C6A15B]'
+              pathname === '/account' || pathname === '/login' ? 'text-[#C6A15B]' : 'text-[#F7F5F0]/80 hover:text-[#C6A15B]'
             }`}
             title="Account"
           >

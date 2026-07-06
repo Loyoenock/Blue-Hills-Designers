@@ -7,6 +7,7 @@ import {
   NewsletterSubscriber, AuditLog, Review, Payment, AppSettings 
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
+import { isNetworkOrConnectionError } from '../lib/utils';
 
 interface StoreState {
   products: Product[];
@@ -664,7 +665,7 @@ async function uploadProductImage(userId: string, productId: string, imageBase64
   }
 
   try {
-    const response = await fetch('/api/storage', {
+    const response = await fetchWithRetry('/api/storage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -700,6 +701,22 @@ function isSupabaseConfigured(): boolean {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, initialDelayMs = 500): Promise<Response> {
+  // Inject Authorization Bearer token if active session is available
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        options.headers = {
+          ...options.headers,
+          'Authorization': `Bearer ${session.access_token}`
+        };
+      }
+    }
+  } catch (authErr) {
+    console.warn('Could not inject Authorization header to api fetch:', authErr);
+  }
+
   let attempt = 0;
   while (true) {
     try {
@@ -717,13 +734,9 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3,
       return response;
     } catch (err: any) {
       const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-      const isConnectionError = 
-        errMsg.toLowerCase().includes('fetch') ||
-        errMsg.toLowerCase().includes('network') ||
-        errMsg.toLowerCase().includes('connect') ||
-        err?.name === 'TypeError';
+      const isConnError = isNetworkOrConnectionError(err);
 
-      if (isConnectionError && attempt < maxRetries) {
+      if (isConnError && attempt < maxRetries) {
         attempt++;
         const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
         console.warn(`Connection/Network error during fetch to ${url}: ${errMsg}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
@@ -756,13 +769,7 @@ async function safeSupabaseInsert(tableName: string, payload: any) {
     }
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-    const isConnectionError = 
-      errMsg.toLowerCase().includes('fetch') ||
-      errMsg.toLowerCase().includes('network') ||
-      errMsg.toLowerCase().includes('connect') ||
-      err?.name === 'TypeError';
-
-    if (isConnectionError) {
+    if (isNetworkOrConnectionError(err)) {
       console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
     } else {
       console.error(`Error in safeSupabaseInsert for ${tableName}:`, err);
@@ -790,13 +797,7 @@ async function safeSupabaseUpsert(tableName: string, payload: any) {
     }
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-    const isConnectionError = 
-      errMsg.toLowerCase().includes('fetch') ||
-      errMsg.toLowerCase().includes('network') ||
-      errMsg.toLowerCase().includes('connect') ||
-      err?.name === 'TypeError';
-
-    if (isConnectionError) {
+    if (isNetworkOrConnectionError(err)) {
       console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
     } else {
       console.error(`Error in safeSupabaseUpsert for ${tableName}:`, err);
@@ -823,13 +824,7 @@ async function safeSupabaseDelete(tableName: string, filters: Record<string, any
     }
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-    const isConnectionError = 
-      errMsg.toLowerCase().includes('fetch') ||
-      errMsg.toLowerCase().includes('network') ||
-      errMsg.toLowerCase().includes('connect') ||
-      err?.name === 'TypeError';
-
-    if (isConnectionError) {
+    if (isNetworkOrConnectionError(err)) {
       console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
     } else {
       console.error(`Error in safeSupabaseDelete for ${tableName}:`, err);
@@ -1024,7 +1019,7 @@ export const useStore = create<StoreState>()(
             let signedUrlsMap: Record<string, string> = {};
             if (privatePaths.length > 0) {
               try {
-                const response = await fetch('/api/storage', {
+                const response = await fetchWithRetry('/api/storage', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
@@ -1301,19 +1296,9 @@ export const useStore = create<StoreState>()(
 
           if (error) {
             // Check if this error looks like a network or connection/offline issue (like AuthRetryableFetchError or network fetch failure)
-            const isConnectionError =
-              error.message?.includes('fetch') ||
-              error.message?.includes('Network') ||
-              error.message?.includes('Failed to fetch') ||
-              error.message?.includes('connect') ||
-              error.message?.includes('Database error') ||
-              error.message?.includes('unexpected_failure') ||
-              error.status === 0 ||
-              error.status === 500 ||
-              error.status === 503 ||
-              !error.status;
+            const isConnError = isNetworkOrConnectionError(error);
 
-            if (isConnectionError) {
+            if (isConnError) {
               const localUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
               if (localUser) {
                 set({ currentUser: localUser });
@@ -1820,7 +1805,7 @@ export const useStore = create<StoreState>()(
           );
           for (const imgToDelete of removedImages) {
             try {
-              await fetch('/api/storage', {
+              await fetchWithRetry('/api/storage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'delete', path: imgToDelete })
@@ -1873,7 +1858,7 @@ export const useStore = create<StoreState>()(
           for (const img of productToDelete.images) {
             if (isPrivateStoragePath(img)) {
               try {
-                await fetch('/api/storage', {
+                await fetchWithRetry('/api/storage', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ action: 'delete', path: img })

@@ -44,10 +44,10 @@ export default function MobileNav() {
             >
               <div className="relative p-1">
                 <Icon className={`w-5 h-5 transition-transform duration-200 ${
-                  isActive ? 'text-[#1C4D8D] scale-110' : 'text-[#F7F5F0]/60 hover:text-[#C6A15B]'
+                  isActive ? 'text-[#C6A15B] scale-110' : 'text-[#F7F5F0]/60 hover:text-[#C6A15B]'
                 }`} />
                 {item.badge !== undefined && item.badge !== null && item.badge > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#1C4D8D] text-[8px] font-bold text-[#F7F5F0] w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-[#C6A15B] text-[8px] font-bold text-[#1D2B3F] w-3.5 h-3.5 rounded-full flex items-center justify-center">
                     {item.badge}
                   </span>
                 )}
@@ -58,7 +58,7 @@ export default function MobileNav() {
                 )}
               </div>
               <span className={`text-[9px] tracking-wider mt-0.5 uppercase transition-colors duration-200 ${
-                isActive ? 'text-[#1C4D8D] font-medium' : 'text-[#F7F5F0]/40'
+                isActive ? 'text-[#C6A15B] font-medium' : 'text-[#F7F5F0]/40'
               }`}>
                 {item.name}
               </span>

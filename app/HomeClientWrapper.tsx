@@ -1,20 +1,25 @@
 'use client';
 
-import React from 'react';
-import dynamic from 'next/dynamic';
-
-const HomeClient = dynamic(() => import('./HomeClient'), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-screen bg-[#F7F5F0] flex flex-col items-center justify-center space-y-4 font-sans" id="home-loading-screen">
-      <div className="w-8 h-8 border-2 border-[#1C4D8D] border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-[10px] uppercase tracking-[0.3em] text-[#657892] font-mono animate-pulse">
-        Securing Atelier Connection...
-      </p>
-    </div>
-  ),
-});
+import React, { useState, useEffect } from 'react';
+import HomeClient from './HomeClient';
 
 export default function HomeClientWrapper() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex flex-col items-center justify-center space-y-4 font-sans" id="home-loading-screen">
+        <div className="w-8 h-8 border-2 border-[#1C4D8D] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[#657892] font-mono animate-pulse">
+          Securing Atelier Connection...
+        </p>
+      </div>
+    );
+  }
+
   return <HomeClient />;
 }
