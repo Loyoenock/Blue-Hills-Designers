@@ -12,7 +12,8 @@ interface ChatMessage {
 }
 
 export default function AIStylist() {
-  const { currentUser, settings } = useStore();
+  const currentUser = useStore((state) => state.currentUser);
+  const settings = useStore((state) => state.settings);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',

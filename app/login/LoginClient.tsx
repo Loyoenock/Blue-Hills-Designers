@@ -15,7 +15,9 @@ import { motion } from 'motion/react';
 
 export default function LoginClient() {
   const router = useRouter();
-  const { login, currentUser, users } = useStore();
+  const login = useStore((state) => state.login);
+  const currentUser = useStore((state) => state.currentUser);
+  const users = useStore((state) => state.users);
   const [mounted, setMounted] = useState(false);
 
   const [email, setEmail] = useState('');

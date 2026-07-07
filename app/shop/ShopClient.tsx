@@ -20,7 +20,11 @@ import { getSafeImageSrc } from '../../lib/utils';
 function ShopContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { products, addToCart, wishlist, toggleWishlist, settings } = useStore();
+  const products = useStore((state) => state.products);
+  const addToCart = useStore((state) => state.addToCart);
+  const wishlist = useStore((state) => state.wishlist);
+  const toggleWishlist = useStore((state) => state.toggleWishlist);
+  const settings = useStore((state) => state.settings);
   const currency = settings?.currencySymbol || 'Ugx';
 
   const maxPriceLimit = useMemo(() => {

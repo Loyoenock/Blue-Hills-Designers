@@ -5,7 +5,7 @@ import { Mail, Phone, MapPin, Shield, Calendar, Award } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export default function Footer() {
-  const { settings } = useStore();
+  const settings = useStore((state) => state.settings);
   return (
     <footer className="bg-[#1D2B3F] border-t border-[#657892]/20 pt-20 pb-10 text-[#F7F5F0]">
       <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">

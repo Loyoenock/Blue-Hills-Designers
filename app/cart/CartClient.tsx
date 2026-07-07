@@ -13,7 +13,11 @@ import MobileNav from '../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CartClient() {
-  const { cart, updateCartQty, removeFromCart, clearCart, settings } = useStore();
+  const cart = useStore((state) => state.cart);
+  const updateCartQty = useStore((state) => state.updateCartQty);
+  const removeFromCart = useStore((state) => state.removeFromCart);
+  const clearCart = useStore((state) => state.clearCart);
+  const settings = useStore((state) => state.settings);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

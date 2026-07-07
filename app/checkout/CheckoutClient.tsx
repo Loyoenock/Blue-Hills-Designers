@@ -16,7 +16,10 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function CheckoutClient() {
   const router = useRouter();
-  const { cart, currentUser, placeOrder, settings } = useStore();
+  const cart = useStore((state) => state.cart);
+  const currentUser = useStore((state) => state.currentUser);
+  const placeOrder = useStore((state) => state.placeOrder);
+  const settings = useStore((state) => state.settings);
   const [mounted, setMounted] = useState(false);
   const [isQuick, setIsQuick] = useState(false);
 

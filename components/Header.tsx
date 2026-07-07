@@ -14,7 +14,14 @@ import { getSupabaseClient } from '../lib/supabase';
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { cart, currentUser, users, login, logout, wishlist, syncFromSupabase, settings } = useStore();
+  const cart = useStore((state) => state.cart);
+  const currentUser = useStore((state) => state.currentUser);
+  const users = useStore((state) => state.users);
+  const login = useStore((state) => state.login);
+  const logout = useStore((state) => state.logout);
+  const wishlist = useStore((state) => state.wishlist);
+  const syncFromSupabase = useStore((state) => state.syncFromSupabase);
+  const settings = useStore((state) => state.settings);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [mounted, setMounted] = useState(false);

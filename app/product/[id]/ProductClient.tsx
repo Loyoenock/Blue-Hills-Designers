@@ -22,7 +22,13 @@ export default function ProductClient() {
   const router = useRouter();
   const productId = params?.id as string;
 
-  const { products, addToCart, clearCart, wishlist, toggleWishlist, addReview, settings } = useStore();
+  const products = useStore((state) => state.products);
+  const addToCart = useStore((state) => state.addToCart);
+  const clearCart = useStore((state) => state.clearCart);
+  const wishlist = useStore((state) => state.wishlist);
+  const toggleWishlist = useStore((state) => state.toggleWishlist);
+  const addReview = useStore((state) => state.addReview);
+  const settings = useStore((state) => state.settings);
   const currency = settings?.currencySymbol || 'Ugx';
   const threshold = settings?.freeShippingThreshold ?? 2000;
   

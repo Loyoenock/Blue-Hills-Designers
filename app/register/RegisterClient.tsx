@@ -15,7 +15,8 @@ import { motion } from 'motion/react';
 
 export default function RegisterClient() {
   const router = useRouter();
-  const { register, currentUser } = useStore();
+  const register = useStore((state) => state.register);
+  const currentUser = useStore((state) => state.currentUser);
   const [mounted, setMounted] = useState(false);
 
   const [name, setName] = useState('');

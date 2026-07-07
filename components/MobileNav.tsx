@@ -8,7 +8,9 @@ import { useEffect, useState } from 'react';
 
 export default function MobileNav() {
   const pathname = usePathname();
-  const { cart, wishlist, currentUser } = useStore();
+  const cart = useStore((state) => state.cart);
+  const wishlist = useStore((state) => state.wishlist);
+  const currentUser = useStore((state) => state.currentUser);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
