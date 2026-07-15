@@ -15,6 +15,7 @@ import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
+import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, User } from '../../types';
 
@@ -71,6 +72,9 @@ export default function Admin() {
   const [pIsFeatured, setPIsFeatured] = useState(false);
   const [pIsDeal, setPIsDeal] = useState(false);
   const [pDiscountPercentage, setPDiscountPercentage] = useState(0);
+  const [pSecretHours, setPSecretHours] = useState(14);
+  const [pSecretMins, setPSecretMins] = useState(42);
+  const [pSecretSecs, setPSecretSecs] = useState(19);
 
   // Delete product safety confirmation modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -297,6 +301,9 @@ export default function Admin() {
       setPIsFeatured(!!prod.isFeatured);
       setPIsDeal(!!prod.isDealOfTheDay);
       setPDiscountPercentage(prod.discountPercentage || 0);
+      setPSecretHours(prod.dealHours !== undefined ? prod.dealHours : 14);
+      setPSecretMins(prod.dealMins !== undefined ? prod.dealMins : 42);
+      setPSecretSecs(prod.dealSecs !== undefined ? prod.dealSecs : 19);
       
       // Auto-detect mode based on image type
       if (prod.images && prod.images[0] && prod.images[0].startsWith('data:')) {
@@ -320,6 +327,9 @@ export default function Admin() {
       setPIsFeatured(false);
       setPIsDeal(false);
       setPDiscountPercentage(0);
+      setPSecretHours(14);
+      setPSecretMins(42);
+      setPSecretSecs(19);
       setImageSourceMode('url');
     }
     setIsProductModalOpen(true);
@@ -426,7 +436,10 @@ export default function Admin() {
         isNew: pIsNew,
         isFeatured: pIsFeatured,
         isDealOfTheDay: pIsDeal,
-        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0
+        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0,
+        dealHours: pIsDeal ? Number(pSecretHours) : undefined,
+        dealMins: pIsDeal ? Number(pSecretMins) : undefined,
+        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined
       }, operatorName, operatorRole);
     } else {
       addProduct({
@@ -441,7 +454,10 @@ export default function Admin() {
         isNew: pIsNew,
         isFeatured: pIsFeatured,
         isDealOfTheDay: pIsDeal,
-        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0
+        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0,
+        dealHours: pIsDeal ? Number(pSecretHours) : undefined,
+        dealMins: pIsDeal ? Number(pSecretMins) : undefined,
+        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined
       }, operatorName, operatorRole);
     }
     setIsProductModalOpen(false);
@@ -839,7 +855,7 @@ export default function Admin() {
                             <tr className="hover:bg-white/5 transition-colors">
                               <td className="py-3 px-2">
                                 <div className="relative w-8 h-10 rounded overflow-hidden bg-black shrink-0">
-                                  <Image src={p.images[0]} alt={p.name} fill className="object-cover" sizes="32px" referrerPolicy="no-referrer" />
+                                  <Image src={getSafeImageSrc(p.images?.[0])} alt={p.name} fill className="object-cover" sizes="32px" referrerPolicy="no-referrer" />
                                 </div>
                               </td>
                               <td className="py-3 px-2 space-y-0.5">
@@ -1913,17 +1929,69 @@ export default function Admin() {
                   </div>
 
                   {pIsDeal && (
-                    <div className="space-y-1 pt-2 border-t border-white/5">
-                      <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Secret Offer Discount Percentage (%)</label>
-                      <input 
-                        type="number" 
-                        min="0"
-                        max="100"
-                        value={pDiscountPercentage} 
-                        onChange={(e) => setPDiscountPercentage(Number(e.target.value))} 
-                        className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-[#20D9A1] font-bold outline-none font-mono"
-                        required={pIsDeal}
-                      />
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono">Secret Offer Discount Percentage (%)</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          max="100"
+                          value={pDiscountPercentage} 
+                          onChange={(e) => setPDiscountPercentage(Number(e.target.value))} 
+                          className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-[#20D9A1] font-bold outline-none font-mono"
+                          required={pIsDeal}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono block">
+                          Atelier reservation lines close in
+                        </label>
+                        
+                        <div className="flex gap-4">
+                          {/* HOURS CARD */}
+                          <div className="flex flex-col items-center justify-center bg-[#132844] border border-[#2C4A70] rounded-2xl p-4 w-24 h-24 shadow-lg shadow-black/30 transition-all focus-within:border-[#C6A15B]/50">
+                            <input 
+                              type="number" 
+                              min="0"
+                              max="99"
+                              value={pSecretHours} 
+                              onChange={(e) => setPSecretHours(Math.max(0, parseInt(e.target.value) || 0))} 
+                              className="w-full bg-transparent text-center font-mono text-3xl font-bold text-[#C6A15B] outline-none border-none p-0 focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              required={pIsDeal}
+                            />
+                            <span className="text-[9px] text-[#657892] uppercase tracking-widest mt-1.5 font-sans font-medium">HOURS</span>
+                          </div>
+
+                          {/* MINS CARD */}
+                          <div className="flex flex-col items-center justify-center bg-[#132844] border border-[#2C4A70] rounded-2xl p-4 w-24 h-24 shadow-lg shadow-black/30 transition-all focus-within:border-[#C6A15B]/50">
+                            <input 
+                              type="number" 
+                              min="0"
+                              max="59"
+                              value={pSecretMins} 
+                              onChange={(e) => setPSecretMins(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))} 
+                              className="w-full bg-transparent text-center font-mono text-3xl font-bold text-[#C6A15B] outline-none border-none p-0 focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              required={pIsDeal}
+                            />
+                            <span className="text-[9px] text-[#657892] uppercase tracking-widest mt-1.5 font-sans font-medium">MINS</span>
+                          </div>
+
+                          {/* SECS CARD */}
+                          <div className="flex flex-col items-center justify-center bg-[#132844] border border-[#2C4A70] rounded-2xl p-4 w-24 h-24 shadow-lg shadow-black/30 transition-all focus-within:border-[#C6A15B]/50">
+                            <input 
+                              type="number" 
+                              min="0"
+                              max="59"
+                              value={pSecretSecs} 
+                              onChange={(e) => setPSecretSecs(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))} 
+                              className="w-full bg-transparent text-center font-mono text-3xl font-bold text-[#C6A15B] outline-none border-none p-0 focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              required={pIsDeal}
+                            />
+                            <span className="text-[9px] text-[#657892] uppercase tracking-widest mt-1.5 font-sans font-medium">SECS</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1983,7 +2051,7 @@ export default function Admin() {
                           <div className="relative w-12 h-12 rounded overflow-hidden bg-black flex-shrink-0">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
-                              src={pImages[0]} 
+                              src={getSafeImageSrc(pImages[0])} 
                               alt="Apparel Preview" 
                               className="w-full h-full object-cover"
                             />
@@ -2017,7 +2085,7 @@ export default function Admin() {
                         <div className="relative h-24 rounded-lg overflow-hidden bg-black border border-white/5 flex items-center justify-center">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
-                            src={pImages[0]} 
+                            src={getSafeImageSrc(pImages[0])} 
                             alt="URL Preview" 
                             className="max-h-full max-w-full object-contain"
                             onError={(e) => {

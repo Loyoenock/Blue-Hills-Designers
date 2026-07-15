@@ -10,6 +10,7 @@ import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
+import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CartClient() {
@@ -106,7 +107,7 @@ export default function CartClient() {
                       <div className="col-span-6 flex items-center gap-4">
                         <div className="relative w-20 h-24 rounded overflow-hidden border border-[#657892]/10 bg-[#F7F5F0] shrink-0">
                           <Image 
-                            src={item.product.images[0]}
+                            src={getSafeImageSrc(item.product.images?.[0])}
                             alt={item.product.name}
                             fill
                             className="object-cover"

@@ -24,6 +24,9 @@ export interface Product {
   isFeatured?: boolean;
   isDealOfTheDay?: boolean;
   discountPercentage?: number;
+  dealHours?: number;
+  dealMins?: number;
+  dealSecs?: number;
 }
 
 export interface User {

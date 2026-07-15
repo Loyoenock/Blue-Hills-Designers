@@ -48,10 +48,31 @@ export default function HomeClient() {
   const [newsError, setNewsError] = useState('');
 
   // Countdown timer for Deal of the Day
-  const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 42, seconds: 19 });
+  const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 40, seconds: 17 });
 
   // Testimonial index slider
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
+
+  // Filter products for featured, new, and deal of the day
+  const featuredProducts = products.filter(p => p.isFeatured && !p.isDealOfTheDay).slice(0, 3);
+  const newArrivals = products.filter(p => p.isNew && !p.isDealOfTheDay).slice(0, 4);
+  const dealProduct = products.find(p => p.isDealOfTheDay);
+
+  // Synchronize timeLeft state with dealProduct timer properties when they load or change
+  useEffect(() => {
+    if (dealProduct) {
+      setTimeLeft({
+        hours: typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14,
+        minutes: typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40,
+        seconds: typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17
+      });
+    }
+  }, [
+    dealProduct?.id,
+    dealProduct?.dealHours,
+    dealProduct?.dealMins,
+    dealProduct?.dealSecs
+  ]);
 
   useEffect(() => {
     const mountTimer = setTimeout(() => {
@@ -86,11 +107,6 @@ export default function HomeClient() {
   }, []);
 
   if (!mounted) return null;
-
-  // Filter products for featured, new, and deal of the day
-  const featuredProducts = products.filter(p => p.isFeatured && !p.isDealOfTheDay).slice(0, 3);
-  const newArrivals = products.filter(p => p.isNew && !p.isDealOfTheDay).slice(0, 4);
-  const dealProduct = products.find(p => p.isDealOfTheDay);
 
   const handleOpenQuickView = (p: Product) => {
     setQuickViewProduct(p);

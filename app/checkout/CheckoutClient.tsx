@@ -12,6 +12,7 @@ import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
+import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CheckoutClient() {
@@ -718,7 +719,7 @@ export default function CheckoutClient() {
                       <div key={item.id} className="flex gap-4 items-center">
                         <div className="relative w-12 h-16 rounded overflow-hidden border border-[#657892]/10 shrink-0 bg-[#F7F5F0]">
                           <Image 
-                            src={item.product.images[0]}
+                            src={getSafeImageSrc(item.product.images?.[0])}
                             alt={item.product.name}
                             fill
                             className="object-cover"

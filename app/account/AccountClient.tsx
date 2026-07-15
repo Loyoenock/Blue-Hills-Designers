@@ -12,6 +12,7 @@ import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
+import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function AccountClient() {
@@ -313,7 +314,7 @@ export default function AccountClient() {
                               <div key={idx} className="flex gap-3 items-center bg-[#F7F5F0] p-3 rounded-xl border border-[#657892]/15 shadow-sm">
                                 <div className="relative w-10 h-12 rounded overflow-hidden shrink-0 border border-[#657892]/10 bg-[#F7F5F0]">
                                   <Image 
-                                    src={it.image}
+                                    src={getSafeImageSrc(it.image)}
                                     alt={it.productName}
                                     fill
                                     className="object-cover"

@@ -118,7 +118,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data });
 
     } else if (actionLower === 'upsert') {
-      const { data, error } = await supabase.from(tableName).upsert(payload).select();
+      const options = body.options || {};
+      const onConflict = options.onConflict || (tableName === 'categories' ? 'slug' : undefined);
+      const upsertOptions = onConflict ? { onConflict } : undefined;
+      
+      const { data, error } = await supabase.from(tableName).upsert(payload, upsertOptions).select();
       if (error) {
         if (error.code === '23503') {
           return NextResponse.json({

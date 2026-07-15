@@ -192,6 +192,9 @@ const INITIAL_PRODUCTS: Product[] = [
     stock: 5,
     rating: 5.0,
     isDealOfTheDay: true,
+    dealHours: 14,
+    dealMins: 40,
+    dealSecs: 17,
     reviews: [
       { id: 'rev-6', userName: 'Kassim Sempijja', userRole: 'Oil & Gas Director', rating: 5, comment: 'Breathtaking quality. The weight is fantastic, and the camel hair texture is incredibly soft. Well worth the investment.', date: '2026-06-20' }
     ]
@@ -485,7 +488,10 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         short_description: JSON.stringify({
           sizes: payload.sizes || [],
           colors: payload.colors || [],
-          original_short: payload.shortDescription || payload.description?.slice(0, 150) || ''
+          original_short: payload.shortDescription || payload.description?.slice(0, 150) || '',
+          dealHours: payload.dealHours !== undefined ? payload.dealHours : undefined,
+          dealMins: payload.dealMins !== undefined ? payload.dealMins : undefined,
+          dealSecs: payload.dealSecs !== undefined ? payload.dealSecs : undefined
         }),
         price: Number(payload.price) || 0,
         discount_percentage: Number(payload.discountPercentage) || 0,
@@ -777,7 +783,7 @@ async function safeSupabaseInsert(tableName: string, payload: any) {
   }
 }
 
-async function safeSupabaseUpsert(tableName: string, payload: any) {
+async function safeSupabaseUpsert(tableName: string, payload: any, options?: any) {
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unconfigured).`);
     return;
@@ -788,7 +794,7 @@ async function safeSupabaseUpsert(tableName: string, payload: any) {
     const response = await fetchWithRetry('/api/db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'upsert', tableName, payload: mappedPayload })
+      body: JSON.stringify({ action: 'upsert', tableName, payload: mappedPayload, options })
     });
     
     if (!response.ok) {
@@ -968,6 +974,9 @@ export const useStore = create<StoreState>()(
 
               let parsedSizes = localProd?.sizes || ['M', 'L', 'XL'];
               let parsedColors = localProd?.colors || ['Classic Black'];
+              let dealHours = localProd?.dealHours !== undefined ? localProd.dealHours : 14;
+              let dealMins = localProd?.dealMins !== undefined ? localProd.dealMins : 42;
+              let dealSecs = localProd?.dealSecs !== undefined ? localProd.dealSecs : 19;
 
               if (p.short_description) {
                 try {
@@ -978,6 +987,15 @@ export const useStore = create<StoreState>()(
                     }
                     if (Array.isArray(parsed.colors) && parsed.colors.length > 0) {
                       parsedColors = parsed.colors;
+                    }
+                    if (parsed.dealHours !== undefined && parsed.dealHours !== null) {
+                      dealHours = Number(parsed.dealHours);
+                    }
+                    if (parsed.dealMins !== undefined && parsed.dealMins !== null) {
+                      dealMins = Number(parsed.dealMins);
+                    }
+                    if (parsed.dealSecs !== undefined && parsed.dealSecs !== null) {
+                      dealSecs = Number(parsed.dealSecs);
                     }
                   }
                 } catch {
@@ -1000,6 +1018,9 @@ export const useStore = create<StoreState>()(
                 isFeatured: p.is_featured,
                 isDealOfTheDay: p.is_deal,
                 discountPercentage: Number(p.discount_percentage) || 0,
+                dealHours,
+                dealMins,
+                dealSecs,
                 reviews: prodReviews
               };
             });
