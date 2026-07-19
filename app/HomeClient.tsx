@@ -12,7 +12,8 @@ import { useStore } from '../store/useStore';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import MobileNav from '../components/MobileNav';
-import AIStylist from '../components/AIStylist';
+import dynamic from 'next/dynamic';
+const AIStylist = dynamic(() => import('../components/AIStylist'), { ssr: false });
 import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../types';
 import { getSafeImageSrc } from '../lib/utils';
@@ -21,7 +22,7 @@ import { getSafeImageSrc } from '../lib/utils';
 export default function HomeClient() {
   const router = useRouter();
   const { 
-    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings 
+    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing 
   } = useStore();
   const currency = settings?.currencySymbol || 'Ugx';
   
@@ -41,6 +42,7 @@ export default function HomeClient() {
   const [bookingTime, setBookingTime] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [bookingError, setBookingError] = useState('');
 
   // Newsletter state
   const [newsEmail, setNewsEmail] = useState('');
@@ -131,45 +133,109 @@ export default function HomeClient() {
     setTimeout(() => setAddedAlert(false), 3000);
   };
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
+  const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    bookConsultation({
-      clientName,
-      clientEmail,
-      clientPhone,
-      date: bookingDate,
-      time: bookingTime,
-      notes: bookingNotes
-    });
-    setBookingSuccess(true);
-    setTimeout(() => {
-      setBookingSuccess(false);
-      setBookingOpen(false);
-      // Reset form
-      setClientName('');
-      setClientEmail('');
-      setClientPhone('');
-      setBookingDate('');
-      setBookingTime('');
-      setBookingNotes('');
-    }, 3000);
+    setBookingError('');
+    setBookingSuccess(false);
+
+    if (!clientName.trim() || !clientEmail.trim() || !clientPhone.trim() || !bookingDate || !bookingTime) {
+      setBookingError('Please fill in all required fields to secure your session.');
+      return;
+    }
+
+    try {
+      await bookConsultation({
+        clientName,
+        clientEmail,
+        clientPhone,
+        date: bookingDate,
+        time: bookingTime,
+        notes: bookingNotes
+      });
+      setBookingSuccess(true);
+      setTimeout(() => {
+        setBookingSuccess(false);
+        setBookingOpen(false);
+        // Reset form
+        setClientName('');
+        setClientEmail('');
+        setClientPhone('');
+        setBookingDate('');
+        setBookingTime('');
+        setBookingNotes('');
+      }, 3000);
+    } catch (err: any) {
+      setBookingError(err?.message || 'An error occurred while securing your appointment. Please try again.');
+    }
   };
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setNewsSuccess('');
     setNewsError('');
-    const res = subscribeNewsletter(newsEmail);
-    if (res.success) {
-      setNewsSuccess(res.message);
-      setNewsEmail('');
-    } else {
-      setNewsError(res.message);
+
+    if (!newsEmail.trim() || !newsEmail.includes('@')) {
+      setNewsError('Please provide a valid executive email address.');
+      return;
+    }
+
+    try {
+      const res = subscribeNewsletter(newsEmail);
+      if (res.success) {
+        setNewsSuccess(res.message);
+        setNewsEmail('');
+      } else {
+        setNewsError(res.message);
+      }
+    } catch (err: any) {
+      setNewsError(err?.message || 'An error occurred while subscribing. Please try again.');
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col justify-between">
+      {/* Structured JSON-LD Data for local business SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'ClothingStore',
+            'name': 'Blue Hills Designers',
+            'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuAmpv6v2jUImM-jAyTmG0q-i13M_jPYdiZXbf68Zl2bCdBouS5ywBgJ1WwTCNIftLOEUDY3cwSepn8ah0xGo8iYnF_ZciO0DY-ap3YOoWwyMMcx9oEq5PyC2MMYkCrqUhb66K4fDd8g5_bLA0pMH40J4VVr96tUHzvQ5xuyY0fmuYnTEE5Xic_YBbFkMW5R2uGTnRXTmyjwWu40540eKlc-StS0rh-0qA8vXaNhplpCJixzWGFaCPIUHg',
+            'description': 'Luxury corporate menswear boutique at Lubowa Shopping Mall, Entebbe Road, Kampala. Featuring premium sourced ready-to-wear clothing from Turkey, Egypt, China, and the UK.',
+            'address': {
+              '@type': 'PostalAddress',
+              'streetAddress': 'Lubowa Shopping Mall, Ground Floor, Entebbe Road',
+              'addressLocality': 'Kampala',
+              'addressRegion': 'Central',
+              'addressCountry': 'UG'
+            },
+            'geo': {
+              '@type': 'GeoCoordinates',
+              'latitude': 0.2647,
+              'longitude': 32.5714
+            },
+            'url': 'https://blue-hills-designers.com',
+            'telephone': '+256772123456',
+            'priceRange': '$$$',
+            'openingHoursSpecification': {
+              '@type': 'OpeningHoursSpecification',
+              'dayOfWeek': [
+                'Monday',
+                'Tuesday',
+                'Wednesday',
+                'Thursday',
+                'Friday',
+                'Saturday',
+                'Sunday'
+              ],
+              'opens': '08:00',
+              'closes': '21:00'
+            }
+          })
+        }}
+      />
       <Header />
 
       {/* Added Alert Notification */}
@@ -294,25 +360,25 @@ export default function HomeClient() {
             {[
               {
                 name: "Suits & Blazers",
-                count: "6 Items",
+                count: `${products.filter(p => p.category === 'Suits').length || 6} Items`,
                 image: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6IMogg257U3uh1MtNS7HPgjGVwT2a6GeLfzTMCVYFuVskYnj6fDlCuYrlv0FdF1-KuhJO8Cw3C64A3_YnDyPvjWjzReX0_GkIXvhjxTYwDxTjonhszpsfhfENG3m8weu8uEZgfMISqEkEEKLF_JY4_-LrOBxk5gazOV-8oMMyEBLNXNlKdsbazYKsmNH-82Bugaouk2vagQ0xnRQILrQ2OOs2sztjrnLQpJCXRwPBrkdDitTrLUDXyw",
                 category: "Suits"
               },
               {
                 name: "Formal Shirts",
-                count: "4 Items",
+                count: `${products.filter(p => p.category === 'Shirts').length || 4} Items`,
                 image: "https://lh3.googleusercontent.com/aida-public/AB6AXuChMtp4jLNpzg9FCNudNK17V5dgPQ7gdqkInztWABOY1s9Wo0WquLDnHGVLaFpcTJ4l9h6f7O76xtk__qJO_Ydu6Yi8rjMn_p2JvvfRREDwwJDPBy83dd3IQCntFWraFkYmJ3LGWRlxwD6c1rBnh-lIF619KM6eoScw650fwNxZT1n7azvn0SlmFjNVIFyK5tBpwfFwh1WTbVRuvsh2okhFkLe5EGxiuvMmY0nIuf3ePWzFrNsg5MqpzA",
                 category: "Shirts"
               },
               {
                 name: "Elite Footwear",
-                count: "3 Items",
+                count: `${products.filter(p => p.category === 'Shoes').length || 3} Items`,
                 image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBJyBXI8NaRR-Ck9F2JIpri68oWsCpNA7Ie-oMwo57RWPijvkzyQJtObOPa0rGqyJX9b2iSarTYZ0B-ZUf5YMtgLQLVIFHtgXW-hXS8HqXtoVijqL3nTsOuMFOmp8oazTtu0fjyeKdouINqfmtXIPlV_BiBb50VRTLlLwy-kRcaqVwlXhGkWDIIi3Z_0V7dZlsIQyDe7Swp-FIz1670sbanWFsYnbJPpp_gKYtjtWNCKOGLCw9haspdWA",
                 category: "Shoes"
               },
               {
                 name: "Luxury Accessories",
-                count: "2 Items",
+                count: `${products.filter(p => p.category === 'Accessories').length || 2} Items`,
                 image: "https://lh3.googleusercontent.com/aida-public/AB6AXuD3GGmGC1lq3ebCU1W9mOX-CfsyMwa4SWAdF9TyTo1wg7-ga-zvcf_MDn5JW_wtISyBjg2HNciG8q-CCdHS96i2TIsWXLlFbJDRpyNsOVqrcftwcWSFDQKUyp1N6J5g21PI941CMbXy5XaX2bncnqHxnDRk1QnC9Doz53_m_8W99oeomA9E9yp8Sz40LQVf9o_x1ayUjuzCDH6sxZrKUsxdw4tpyjR1Z5guKYUyAkqbvsKk9IWfUaMlDw",
                 category: "Accessories"
               }
@@ -365,103 +431,125 @@ export default function HomeClient() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {featuredProducts.map((p) => {
-              const inWishlist = wishlist.includes(p.id);
-              return (
-                <div key={p.id} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-2xl overflow-hidden group hover:border-[#1C4D8D]/30 transition-all duration-300 flex flex-col justify-between shadow-md">
-                  {/* Image container */}
-                  <div className="relative h-[360px] overflow-hidden bg-[#F7F5F0]">
-                    <Image 
-                      src={getSafeImageSrc(p.images?.[0])}
-                      alt={p.name}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      referrerPolicy="no-referrer"
-                    />
-                    
-                    {/* Dark gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-
-                    {/* Department badge */}
-                    <span className="absolute top-4 left-4 bg-[#1D2B3F]/80 backdrop-blur-md text-[#F7F5F0] border border-[#657892]/20 text-[9px] font-mono font-semibold uppercase px-2.5 py-1 rounded">
-                      {p.category}
-                    </span>
-
-                    {/* Stock indicator if low */}
-                    {p.stock <= 10 && (
-                      <span className="absolute top-4 right-4 bg-red-950/80 border border-red-500/20 text-red-400 text-[9px] font-mono px-2.5 py-1 rounded">
-                        Limited: {p.stock} Left
-                      </span>
-                    )}
-
-                    {/* Hover controls */}
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
-                      <button 
-                        onClick={() => handleOpenQuickView(p)}
-                        className="w-11 h-11 rounded-full bg-[#1D2B3F]/80 text-[#F7F5F0] hover:bg-[#1C4D8D] transition-all flex items-center justify-center border border-[#657892]/20 shadow-lg cursor-pointer"
-                        title="Quick View"
-                      >
-                        <Eye className="w-4.5 h-4.5" />
-                      </button>
-                      <button 
-                        onClick={() => handleQuickAdd(p)}
-                        className="w-11 h-11 rounded-full bg-[#1D2B3F]/80 text-[#F7F5F0] hover:bg-[#C6A15B] hover:text-[#1D2B3F] transition-all flex items-center justify-center border border-[#657892]/20 shadow-lg cursor-pointer"
-                        title="Add to Wardrobe"
-                      >
-                        <ShoppingCart className="w-4.5 h-4.5" />
-                      </button>
+            {isSyncing && featuredProducts.length === 0 ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={`featured-skeleton-${i}`} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-2xl overflow-hidden flex flex-col justify-between shadow-md h-[550px] animate-pulse">
+                  <div className="relative h-[360px] bg-neutral-200" />
+                  <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="h-6 bg-neutral-300 rounded w-3/4 animate-pulse" />
+                      <div className="h-4 bg-neutral-200 rounded w-1/4 animate-pulse" />
                     </div>
-                  </div>
-
-                  {/* Body details */}
-                  <div className="p-6 space-y-4">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="space-y-1">
-                        <h3 className="font-serif text-lg md:text-xl text-[#1D2B3F] font-medium group-hover:text-[#1C4D8D] transition-colors">
-                          {p.name}
-                        </h3>
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3.5 h-3.5 text-[#C6A15B] fill-[#C6A15B]" />
-                          <span className="text-xs text-[#657892] font-medium font-mono">{p.rating}</span>
-                        </div>
-                      </div>
-                      <div className="font-mono font-bold text-[#1D2B3F] text-lg">
-                        {currency} {p.price}
-                      </div>
+                    <div className="space-y-2 flex-1 pt-2">
+                      <div className="h-3 bg-neutral-200 rounded w-full animate-pulse" />
+                      <div className="h-3 bg-neutral-200 rounded w-5/6 mt-2 animate-pulse" />
                     </div>
-
-                    <p className="text-[#657892] text-xs font-light leading-relaxed line-clamp-2">
-                      {p.description}
-                    </p>
-
-                    <div className="border-t border-[#657892]/10 pt-4 flex items-center justify-between">
-                      <button 
-                        onClick={() => toggleWishlist(p.id)}
-                        className={`text-xs flex items-center gap-1.5 transition-colors ${
-                          inWishlist ? 'text-red-500' : 'text-[#657892]/60 hover:text-[#1C4D8D]'
-                        }`}
-                      >
-                        <Heart className={`w-4 h-4 ${inWishlist ? 'fill-red-500 text-red-500' : ''}`} />
-                        <span>{inWishlist ? 'Wishlisted' : 'Add to Wishlist'}</span>
-                      </button>
-                      <Link 
-                        href={`/shop`}
-                        className="text-[10px] uppercase font-mono tracking-wider text-[#1C4D8D] hover:text-[#C6A15B] transition-colors"
-                      >
-                        Tailoring Guides
-                      </Link>
+                    <div className="border-t border-[#657892]/10 pt-4 flex justify-between">
+                      <div className="h-4 bg-neutral-200 rounded w-1/3 animate-pulse" />
+                      <div className="h-4 bg-neutral-200 rounded w-1/4 animate-pulse" />
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              featuredProducts.map((p) => {
+                const inWishlist = wishlist.includes(p.id);
+                return (
+                  <div key={p.id} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-2xl overflow-hidden group hover:border-[#1C4D8D]/30 transition-all duration-300 flex flex-col justify-between shadow-md">
+                    {/* Image container */}
+                    <div className="relative h-[360px] overflow-hidden bg-[#F7F5F0]">
+                      <Image 
+                        src={getSafeImageSrc(p.images?.[0])}
+                        alt={p.name}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        referrerPolicy="no-referrer"
+                      />
+                      
+                      {/* Dark gradient overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+
+                      {/* Department badge */}
+                      <span className="absolute top-4 left-4 bg-[#1D2B3F]/80 backdrop-blur-md text-[#F7F5F0] border border-[#657892]/20 text-[9px] font-mono font-semibold uppercase px-2.5 py-1 rounded">
+                        {p.category}
+                      </span>
+
+                      {/* Stock indicator if low */}
+                      {p.stock <= 10 && (
+                        <span className="absolute top-4 right-4 bg-red-950/80 border border-red-500/20 text-red-400 text-[9px] font-mono px-2.5 py-1 rounded">
+                          Limited: {p.stock} Left
+                        </span>
+                      )}
+
+                      {/* Hover controls */}
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
+                        <button 
+                          onClick={() => handleOpenQuickView(p)}
+                          className="w-11 h-11 rounded-full bg-[#1D2B3F]/80 text-[#F7F5F0] hover:bg-[#1C4D8D] transition-all flex items-center justify-center border border-[#657892]/20 shadow-lg cursor-pointer"
+                          title="Quick View"
+                        >
+                          <Eye className="w-4.5 h-4.5" />
+                        </button>
+                        <button 
+                          onClick={() => handleQuickAdd(p)}
+                          className="w-11 h-11 rounded-full bg-[#1D2B3F]/80 text-[#F7F5F0] hover:bg-[#C6A15B] hover:text-[#1D2B3F] transition-all flex items-center justify-center border border-[#657892]/20 shadow-lg cursor-pointer"
+                          title="Add to Wardrobe"
+                        >
+                          <ShoppingCart className="w-4.5 h-4.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Body details */}
+                    <div className="p-6 space-y-4">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="space-y-1">
+                          <h3 className="font-serif text-lg md:text-xl text-[#1D2B3F] font-medium group-hover:text-[#1C4D8D] transition-colors">
+                            {p.name}
+                          </h3>
+                          <div className="flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 text-[#C6A15B] fill-[#C6A15B]" />
+                            <span className="text-xs text-[#657892] font-medium font-mono">{p.rating}</span>
+                          </div>
+                        </div>
+                        <div className="font-mono font-bold text-[#1D2B3F] text-lg">
+                          {currency} {p.price}
+                        </div>
+                      </div>
+
+                      <p className="text-[#657892] text-xs font-light leading-relaxed line-clamp-2">
+                        {p.description}
+                      </p>
+
+                      <div className="border-t border-[#657892]/10 pt-4 flex items-center justify-between">
+                        <button 
+                          onClick={() => toggleWishlist(p.id)}
+                          className={`text-xs flex items-center gap-1.5 transition-colors ${
+                            inWishlist ? 'text-red-500' : 'text-[#657892]/60 hover:text-[#1C4D8D]'
+                          }`}
+                        >
+                          <Heart className={`w-4 h-4 ${inWishlist ? 'fill-red-500 text-red-500' : ''}`} />
+                          <span>{inWishlist ? 'Wishlisted' : 'Add to Wishlist'}</span>
+                        </button>
+                        <Link 
+                          href={`/shop`}
+                          className="text-[10px] uppercase font-mono tracking-wider text-[#1C4D8D] hover:text-[#C6A15B] transition-colors"
+                        >
+                          Tailoring Guides
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </section>
 
       {/* DEAL OF THE DAY (Lubowa Camel Hair Overcoat) */}
-      {dealProduct && (
+      {dealProduct ? (
         <section className="py-24 bg-[#1D2B3F] border-t border-[#657892]/20 relative overflow-hidden">
           {/* Visual embellishment */}
           <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#B9CDE5]/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
@@ -563,6 +651,34 @@ export default function HomeClient() {
             </div>
           </div>
         </section>
+      ) : (
+        isSyncing && (
+          <section className="py-24 bg-[#1D2B3F] border-t border-[#657892]/20 relative overflow-hidden animate-pulse">
+            <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+              <div className="lg:col-span-5 h-[500px] md:h-[600px] rounded-2xl bg-[#657892]/10 border border-[#657892]/20" />
+              <div className="lg:col-span-7 space-y-8">
+                <div className="space-y-4">
+                  <div className="h-4 bg-[#657892]/20 rounded w-1/3" />
+                  <div className="h-12 bg-[#657892]/20 rounded w-2/3 animate-pulse" />
+                  <div className="h-20 bg-[#657892]/20 rounded w-full animate-pulse" />
+                </div>
+                <div className="space-y-3">
+                  <div className="h-3 bg-[#657892]/20 rounded w-1/4" />
+                  <div className="flex gap-4">
+                    <div className="h-16 w-20 bg-[#657892]/20 rounded-xl animate-pulse" />
+                    <div className="h-16 w-20 bg-[#657892]/20 rounded-xl animate-pulse" />
+                    <div className="h-16 w-20 bg-[#657892]/20 rounded-xl animate-pulse" />
+                  </div>
+                </div>
+                <div className="h-1 bg-[#657892]/10" />
+                <div className="flex gap-4">
+                  <div className="h-12 w-40 bg-[#657892]/20 rounded animate-pulse" />
+                  <div className="h-12 w-40 bg-[#657892]/20 rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </section>
+        )
       )}
 
       {/* NEW ARRIVALS */}
@@ -575,52 +691,70 @@ export default function HomeClient() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {newArrivals.map((p) => {
-              const inWishlist = wishlist.includes(p.id);
-              return (
-                <div key={p.id} className="group bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden hover:border-[#1C4D8D]/20 transition-all flex flex-col justify-between shadow-md">
-                  <div className="relative h-[280px] overflow-hidden bg-[#F7F5F0]">
-                    <Image 
-                      src={getSafeImageSrc(p.images?.[0])}
-                      alt={p.name}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-                    
-                    {/* NEW ribbon badge */}
-                    <span className="absolute top-3 left-3 bg-[#C6A15B] text-[#1D2B3F] text-[8px] font-mono font-extrabold tracking-widest uppercase px-2 py-0.5 rounded shadow">
-                      NEW
-                    </span>
-
-                    <button 
-                      onClick={() => toggleWishlist(p.id)}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#F7F5F0]/80 backdrop-blur-md flex items-center justify-center text-[#1D2B3F]/60 hover:text-red-500 transition-colors border border-[#657892]/20"
-                      title="Wishlist"
-                    >
-                      <Heart className={`w-4 h-4 ${inWishlist ? 'fill-red-500 text-red-500' : ''}`} />
-                    </button>
-                  </div>
-
-                  <div className="p-5 space-y-3">
-                    <span className="text-[10px] uppercase font-mono tracking-widest text-[#C6A15B] block">{p.category}</span>
-                    <h3 className="font-serif text-base text-[#1D2B3F] font-medium group-hover:text-[#1C4D8D] transition-colors line-clamp-1">{p.name}</h3>
-                    
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="font-mono text-sm font-semibold text-[#1D2B3F]/90">{currency} {p.price}</span>
-                      <button 
-                        onClick={() => handleQuickAdd(p)}
-                        className="text-[10px] tracking-widest uppercase font-mono text-[#1C4D8D] font-semibold hover:text-[#C6A15B] transition-colors cursor-pointer"
-                      >
-                        + Quick Purchase
-                      </button>
+            {isSyncing && newArrivals.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={`new-skeleton-${i}`} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden flex flex-col justify-between shadow-md h-[380px] animate-pulse">
+                  <div className="relative h-[280px] bg-neutral-200" />
+                  <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="h-3 bg-neutral-200 rounded w-1/3 animate-pulse" />
+                      <div className="h-5 bg-neutral-200 rounded w-3/4 animate-pulse" />
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-[#657892]/10">
+                      <div className="h-4 bg-neutral-200 rounded w-1/4 animate-pulse" />
+                      <div className="h-4 bg-neutral-200 rounded w-1/3 animate-pulse" />
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              newArrivals.map((p) => {
+                const inWishlist = wishlist.includes(p.id);
+                return (
+                  <div key={p.id} className="group bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden hover:border-[#1C4D8D]/20 transition-all flex flex-col justify-between shadow-md">
+                    <div className="relative h-[280px] overflow-hidden bg-[#F7F5F0]">
+                      <Image 
+                        src={getSafeImageSrc(p.images?.[0])}
+                        alt={p.name}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                      
+                      {/* NEW ribbon badge */}
+                      <span className="absolute top-3 left-3 bg-[#C6A15B] text-[#1D2B3F] text-[8px] font-mono font-extrabold tracking-widest uppercase px-2 py-0.5 rounded shadow">
+                        NEW
+                      </span>
+
+                      <button 
+                        onClick={() => toggleWishlist(p.id)}
+                        className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#F7F5F0]/80 backdrop-blur-md flex items-center justify-center text-[#1D2B3F]/60 hover:text-red-500 transition-colors border border-[#657892]/20"
+                        title="Wishlist"
+                      >
+                        <Heart className={`w-4 h-4 ${inWishlist ? 'fill-red-500 text-red-500' : ''}`} />
+                      </button>
+                    </div>
+
+                    <div className="p-5 space-y-3">
+                      <span className="text-[10px] uppercase font-mono tracking-widest text-[#C6A15B] block">{p.category}</span>
+                      <h3 className="font-serif text-base text-[#1D2B3F] font-medium group-hover:text-[#1C4D8D] transition-colors line-clamp-1">{p.name}</h3>
+                      
+                      <div className="flex justify-between items-center pt-2">
+                        <span className="font-mono text-sm font-semibold text-[#1D2B3F]/90">{currency} {p.price}</span>
+                        <button 
+                          onClick={() => handleQuickAdd(p)}
+                          className="text-[10px] tracking-widest uppercase font-mono text-[#1C4D8D] font-semibold hover:text-[#C6A15B] transition-colors cursor-pointer"
+                        >
+                          + Quick Purchase
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </section>
@@ -972,6 +1106,10 @@ export default function HomeClient() {
                     />
                   </div>
                   
+                  {bookingError && (
+                    <p className="text-red-500 text-xs font-semibold animate-fade-in font-mono text-center pt-1">{bookingError}</p>
+                  )}
+
                   <div className="pt-2">
                     <button 
                       type="submit"
