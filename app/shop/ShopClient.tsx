@@ -25,6 +25,7 @@ function ShopContent() {
   const wishlist = useStore((state) => state.wishlist);
   const toggleWishlist = useStore((state) => state.toggleWishlist);
   const settings = useStore((state) => state.settings);
+  const isSyncing = useStore((state) => state.isSyncing);
   const currency = settings?.currencySymbol || 'Ugx';
 
   const maxPriceLimit = useMemo(() => {
@@ -34,6 +35,7 @@ function ShopContent() {
   }, [products]);
 
   const [mounted, setMounted] = useState(false);
+  const [urlParsed, setUrlParsed] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSize, setSelectedSize] = useState<string>('All');
@@ -49,7 +51,8 @@ function ShopContent() {
       const maxVal = Math.max(...products.map(p => Number(p.price) || 0));
       if (maxVal > 0) {
         const timer = setTimeout(() => {
-          setPriceRange(maxVal);
+          // Only update priceRange to max if it hasn't been set by URL yet
+          setPriceRange(prev => (prev === 10000000 ? maxVal : prev));
         }, 0);
         return () => clearTimeout(timer);
       }
@@ -63,10 +66,9 @@ function ShopContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Sync state with URL search params
+  // Sync state FROM URL search params
   useEffect(() => {
     const timer = setTimeout(() => {
-      setMounted(true);
       const cat = searchParams.get('category');
       if (cat) {
         setSelectedCategory(cat);
@@ -75,26 +77,96 @@ function ShopContent() {
       if (filter === 'wishlist') {
         setSelectedCategory('Wishlist');
       }
+      
+      const q = searchParams.get('search');
+      if (q) setSearch(q);
+
+      const size = searchParams.get('size');
+      if (size) setSelectedSize(size);
+
+      const color = searchParams.get('color');
+      if (color) setSelectedColor(color);
+
+      const maxP = searchParams.get('maxPrice');
+      if (maxP) setPriceRange(Number(maxP));
+
+      const sort = searchParams.get('sortBy');
+      if (sort) setSortBy(sort);
+
+      const page = searchParams.get('page');
+      if (page) setCurrentPage(Number(page));
+
+      setMounted(true);
+      setUrlParsed(true);
     }, 0);
     return () => clearTimeout(timer);
   }, [searchParams]);
+
+  // Sync state TO URL search params when filters change
+  useEffect(() => {
+    if (!urlParsed) return;
+
+    const params = new URLSearchParams();
+    if (search.trim()) {
+      params.set('search', search);
+    }
+    if (selectedCategory !== 'All') {
+      params.set('category', selectedCategory);
+    }
+    if (selectedSize !== 'All') {
+      params.set('size', selectedSize);
+    }
+    if (selectedColor !== 'All') {
+      params.set('color', selectedColor);
+    }
+    if (priceRange < maxPriceLimit) {
+      params.set('maxPrice', priceRange.toString());
+    }
+    if (sortBy !== 'featured') {
+      params.set('sortBy', sortBy);
+    }
+    if (currentPage > 1) {
+      params.set('page', currentPage.toString());
+    }
+
+    const queryString = params.toString();
+    const currentQuery = searchParams.toString();
+
+    if (queryString !== currentQuery) {
+      const newUrl = `/shop${queryString ? `?${queryString}` : ''}`;
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [search, selectedCategory, selectedSize, selectedColor, priceRange, sortBy, currentPage, maxPriceLimit, urlParsed, router, searchParams]);
 
   // All categories, sizes, and colors extracted dynamically
   const categories = ['All', 'Suits', 'Shirts', 'Shoes', 'Accessories'];
   const sizes = ['All', '48R', '50R', '52R', '54R', '56R', '39', '40', '41', '42', '43', '44', '45'];
   const colors = ['All', 'Midnight Navy', 'Charcoal', 'Cognac Brown', 'Obsidian Black', 'Pristine White', 'Emerald Green', 'Classic Camel'];
 
+  // Pre-compiled search index for highly performant, multi-word, partial keyword matching
+  const searchIndex = useMemo(() => {
+    return products.map(p => ({
+      id: p.id,
+      searchText: `${p.name} ${p.description} ${p.category} ${p.colors.join(' ')} ${p.sizes.join(' ')}`.toLowerCase()
+    }));
+  }, [products]);
+
+  // Search filter using index
+  const searchedProductIds = useMemo(() => {
+    if (!search.trim()) return null;
+    const terms = search.toLowerCase().trim().split(/\s+/);
+    return searchIndex
+      .filter(item => terms.every(term => item.searchText.includes(term)))
+      .map(item => item.id);
+  }, [search, searchIndex]);
+
   // Filtering Logic
   const filteredProducts = useMemo(() => {
     let result = [...products];
 
-    // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(q) || 
-        p.description.toLowerCase().includes(q)
-      );
+    // Search filter via index
+    if (searchedProductIds !== null) {
+      result = result.filter(p => searchedProductIds.includes(p.id));
     }
 
     // Category filter
@@ -129,7 +201,7 @@ function ShopContent() {
     }
 
     return result;
-  }, [products, search, selectedCategory, selectedSize, selectedColor, priceRange, sortBy, wishlist]);
+  }, [products, searchedProductIds, selectedCategory, selectedSize, selectedColor, priceRange, sortBy, wishlist]);
 
   // Paginated chunk
   const paginatedProducts = useMemo(() => {
@@ -147,7 +219,7 @@ function ShopContent() {
     setPriceRange(maxPriceLimit);
     setSortBy('featured');
     setCurrentPage(1);
-    router.push('/shop');
+    router.replace('/shop');
   };
 
   const handleQuickAdd = (p: Product) => {
@@ -445,7 +517,45 @@ function ShopContent() {
 
             {/* Shelf Grid container */}
             <AnimatePresence mode="wait">
-              {paginatedProducts.length === 0 ? (
+              {isSyncing && products.length === 0 ? (
+                <motion.div
+                  key="loading-skeletons"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8" : "flex flex-col gap-6"}
+                >
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div 
+                      key={`shop-skeleton-${i}`} 
+                      className={`bg-[#F7F5F0] border border-[#657892]/20 rounded-2xl overflow-hidden flex animate-pulse shadow-md ${
+                        viewMode === 'list' ? 'flex-col sm:flex-row h-auto sm:h-[240px]' : 'flex-col justify-between h-[550px]'
+                      }`}
+                    >
+                      <div className={`relative bg-neutral-200 ${
+                        viewMode === 'list' ? 'h-[240px] sm:w-[240px] shrink-0' : 'h-[320px]'
+                      }`} />
+                      <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="h-6 bg-neutral-300 rounded w-2/3 animate-pulse" />
+                            <div className="h-6 bg-neutral-300 rounded w-1/4 animate-pulse" />
+                          </div>
+                          <div className="h-4 bg-neutral-200 rounded w-1/3 animate-pulse" />
+                          <div className="h-12 bg-neutral-200 rounded w-full animate-pulse mt-2" />
+                        </div>
+                        <div className="border-t border-[#657892]/10 pt-4 flex justify-between items-center">
+                          <div className="space-y-1">
+                            <div className="h-3 bg-neutral-200 rounded w-20 animate-pulse" />
+                            <div className="h-3 bg-neutral-200 rounded w-28 animate-pulse" />
+                          </div>
+                          <div className="h-8 bg-neutral-300 rounded w-28 animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+              ) : paginatedProducts.length === 0 ? (
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
