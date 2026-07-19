@@ -39,6 +39,13 @@ export interface User {
   rewardsPoints: number;
 }
 
+export interface Coupon {
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  minSubtotal?: number;
+}
+
 export interface CartItem {
   id: string; // unique cart item id (e.g. product.id + size + color)
   product: Product;

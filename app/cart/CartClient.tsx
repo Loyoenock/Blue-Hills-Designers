@@ -19,7 +19,17 @@ export default function CartClient() {
   const removeFromCart = useStore((state) => state.removeFromCart);
   const clearCart = useStore((state) => state.clearCart);
   const settings = useStore((state) => state.settings);
+
+  const appliedCoupon = useStore((state) => state.appliedCoupon);
+  const selectedShippingMethod = useStore((state) => state.selectedShippingMethod);
+  const setShippingMethod = useStore((state) => state.setShippingMethod);
+  const applyCoupon = useStore((state) => state.applyCoupon);
+  const removeCoupon = useStore((state) => state.removeCoupon);
+  const cartError = useStore((state) => state.cartError);
+  const clearCartError = useStore((state) => state.clearCartError);
+
   const [mounted, setMounted] = useState(false);
+  const [couponMsg, setCouponMsg] = useState<{ text: string; isError: boolean }>({ text: '', isError: false });
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -33,9 +43,37 @@ export default function CartClient() {
   const currency = settings?.currencySymbol || 'Ugx';
   const threshold = settings?.freeShippingThreshold ?? 2000;
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const deliveryFee = subtotal > threshold ? 0 : 50; // Free delivery for executive runs > threshold
-  const loyaltyPointsEarned = Math.floor(subtotal * 0.1); // 10% cash value points
-  const total = subtotal + deliveryFee;
+
+  // 1. Coupon calculation
+  let couponDiscount = 0;
+  if (appliedCoupon) {
+    if (appliedCoupon.discountType === 'percentage') {
+      couponDiscount = Math.round(subtotal * (appliedCoupon.discountValue / 100));
+    } else if (appliedCoupon.discountType === 'fixed') {
+      couponDiscount = appliedCoupon.discountValue;
+    }
+  }
+
+  // 2. Shipping fee calculation
+  let deliveryFee = 0;
+  if (selectedShippingMethod === 'standard') {
+    deliveryFee = subtotal > threshold ? 0 : 50;
+  } else if (selectedShippingMethod === 'express') {
+    deliveryFee = 120;
+  } else if (selectedShippingMethod === 'pickup') {
+    deliveryFee = 0;
+  }
+
+  // 3. Tax computation (VAT 18% inclusive)
+  const taxRate = settings?.taxRate || 18;
+  const taxableAmount = subtotal - couponDiscount;
+  const taxAmount = Math.round((taxableAmount / (1 + taxRate / 100)) * (taxRate / 100));
+
+  // 4. Total calculation
+  const total = Math.max(0, subtotal - couponDiscount + deliveryFee);
+  
+  // Loyalty points earned
+  const loyaltyPointsEarned = Math.floor(taxableAmount * 0.1);
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
@@ -86,6 +124,20 @@ export default function CartClient() {
               className="grid grid-cols-1 lg:grid-cols-12 gap-10"
               id="active-cart-container"
             >
+              {cartError && (
+                <div className="col-span-12 bg-amber-500/10 border border-amber-500/20 text-amber-800 p-4 rounded-xl text-xs flex justify-between items-start shadow-sm animate-fade-in">
+                  <div className="space-y-0.5">
+                    <p className="font-bold uppercase tracking-wider text-[10px]">Atelier Capacity Restriction</p>
+                    <p className="font-light">{cartError}</p>
+                  </div>
+                  <button 
+                    onClick={clearCartError}
+                    className="text-[#657892] hover:text-[#1D2B3F] font-bold text-xs p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               
               {/* CART ITEMS LIST TABLE (8 columns on lg) */}
               <div className="lg:col-span-8 space-y-6">
@@ -198,19 +250,32 @@ export default function CartClient() {
                       <span className="text-[#657892]">Boutique Subtotal</span>
                       <span className="text-[#1D2B3F] font-semibold">{currency} {subtotal}</span>
                     </div>
+
+                    {appliedCoupon && (
+                      <div className="flex justify-between text-emerald-700">
+                        <span>Sartorial Discount ({appliedCoupon.code})</span>
+                        <span className="font-semibold">-{currency} {couponDiscount}</span>
+                      </div>
+                    )}
+
                     <div className="flex justify-between">
-                      <span className="text-[#657892]">White-Glove Delivery</span>
+                      <span className="text-[#657892]">Delivery Method ({selectedShippingMethod === 'standard' ? 'Standard' : selectedShippingMethod === 'express' ? 'Express' : 'Pickup'})</span>
                       <span className="text-[#C6A15B] font-semibold uppercase">
                         {deliveryFee === 0 ? 'Complimentary' : `${currency} ${deliveryFee}`}
                       </span>
                     </div>
-                    {deliveryFee > 0 && (
+                    {selectedShippingMethod === 'standard' && deliveryFee > 0 && (
                       <p className="text-[10px] text-[#657892] font-sans leading-normal">
                         Tip: Add {currency} {(threshold - subtotal)} more to qualify for complimentary white-glove hand courier.
                       </p>
                     )}
+
+                    <div className="flex justify-between border-t border-[#657892]/15 pt-3">
+                      <span className="text-[#657892]">VAT Component ({taxRate}%)</span>
+                      <span className="text-[#1D2B3F] font-light">Included ({currency} {taxAmount})</span>
+                    </div>
                     
-                    <div className="flex justify-between border-t border-[#657892]/15 pt-4">
+                    <div className="flex justify-between border-t border-[#657892]/15 pt-3">
                       <span className="text-[#657892]">Loyalty Rewards Earned</span>
                       <span className="text-[#C6A15B] font-semibold">+{loyaltyPointsEarned} Points</span>
                     </div>
@@ -219,6 +284,94 @@ export default function CartClient() {
                       <span>Total Amount</span>
                       <span className="font-mono text-lg text-[#1D2B3F]">{currency} {total}</span>
                     </div>
+                  </div>
+
+                  {/* SHIPPING METHOD CHANGER */}
+                  <div className="space-y-2 border-t border-[#657892]/15 pt-4">
+                    <span className="text-[10px] text-[#657892] uppercase tracking-widest font-mono font-bold block">Tailor Courier Method</span>
+                    <div className="grid grid-cols-1 gap-2">
+                      {[
+                        { id: 'standard', name: 'Standard Hand Courier', desc: subtotal > threshold ? 'Complimentary' : `${currency} 50` },
+                        { id: 'express', name: 'Express Tailor Dispatch', desc: `${currency} 120` },
+                        { id: 'pickup', name: 'Lubowa Showroom Pickup', desc: 'Complimentary' }
+                      ].map((method) => {
+                        const active = selectedShippingMethod === method.id;
+                        return (
+                          <button
+                            key={method.id}
+                            type="button"
+                            onClick={() => setShippingMethod(method.id as any)}
+                            className={`p-2.5 rounded-lg border text-left flex justify-between items-center transition-all cursor-pointer text-xs ${
+                              active 
+                                ? 'bg-[#1C4D8D]/10 border-[#1C4D8D] text-[#1D2B3F]' 
+                                : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1D2B3F]/30 bg-[#F7F5F0]'
+                            }`}
+                          >
+                            <div>
+                              <p className="font-semibold">{method.name}</p>
+                              <p className="text-[9px] text-[#657892] font-light">Lubowa dispatch protocol</p>
+                            </div>
+                            <span className="font-mono font-bold">{method.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* COUPOUN CODE ENGINE */}
+                  <div className="space-y-2 border-t border-[#657892]/15 pt-4">
+                    <span className="text-[10px] text-[#657892] uppercase tracking-widest font-mono font-bold block">Atelier Invitation Code</span>
+                    {appliedCoupon ? (
+                      <div className="flex justify-between items-center bg-[#C6A15B]/10 border border-[#C6A15B]/30 p-2 rounded-lg">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-[#C6A15B] font-mono">{appliedCoupon.code}</span>
+                          <p className="text-[9px] text-[#657892]">Discount applied: -{appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.discountValue}%` : `${currency} ${appliedCoupon.discountValue}`}</p>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={removeCoupon}
+                          className="text-[10px] uppercase font-mono tracking-wider text-red-600 hover:underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <form 
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const fd = new FormData(e.currentTarget);
+                          const code = fd.get('couponCode') as string;
+                          if (code) {
+                            const res = applyCoupon(code);
+                            if (!res.success) {
+                              setCouponMsg({ text: res.message, isError: true });
+                            } else {
+                              setCouponMsg({ text: res.message, isError: false });
+                              e.currentTarget.reset();
+                            }
+                          }
+                        }}
+                        className="flex gap-2"
+                      >
+                        <input 
+                          type="text" 
+                          name="couponCode"
+                          placeholder="WELCOME10, GENTLEMAN20..." 
+                          className="flex-1 bg-white border border-[#657892]/30 rounded-lg px-3 py-2 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none"
+                        />
+                        <button 
+                          type="submit"
+                          className="bg-[#1C4D8D] hover:bg-opacity-90 text-[#F7F5F0] text-[10px] uppercase tracking-widest font-bold px-3 rounded-lg transition-all cursor-pointer"
+                        >
+                          Apply
+                        </button>
+                      </form>
+                    )}
+                    {couponMsg.text && (
+                      <p className={`text-[9px] font-mono leading-normal mt-1 ${couponMsg.isError ? 'text-red-600' : 'text-emerald-700'}`}>
+                        {couponMsg.text}
+                      </p>
+                    )}
                   </div>
 
                   {/* Security Assurance Box */}

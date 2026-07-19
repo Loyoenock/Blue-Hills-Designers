@@ -21,6 +21,11 @@ export default function CheckoutClient() {
   const currentUser = useStore((state) => state.currentUser);
   const placeOrder = useStore((state) => state.placeOrder);
   const settings = useStore((state) => state.settings);
+  
+  const appliedCoupon = useStore((state) => state.appliedCoupon);
+  const selectedShippingMethod = useStore((state) => state.selectedShippingMethod);
+  const clearCart = useStore((state) => state.clearCart);
+
   const [mounted, setMounted] = useState(false);
   const [isQuick, setIsQuick] = useState(false);
 
@@ -82,8 +87,34 @@ export default function CheckoutClient() {
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const threshold = settings?.freeShippingThreshold ?? 2000;
   const currency = settings?.currencySymbol || 'Ugx';
-  const deliveryFee = subtotal > threshold ? 0 : 50;
-  const total = subtotal + deliveryFee;
+
+  // 1. Coupon calculation
+  let couponDiscount = 0;
+  if (appliedCoupon) {
+    if (appliedCoupon.discountType === 'percentage') {
+      couponDiscount = Math.round(subtotal * (appliedCoupon.discountValue / 100));
+    } else if (appliedCoupon.discountType === 'fixed') {
+      couponDiscount = appliedCoupon.discountValue;
+    }
+  }
+
+  // 2. Shipping fee calculation
+  let deliveryFee = 0;
+  if (selectedShippingMethod === 'standard') {
+    deliveryFee = subtotal > threshold ? 0 : 50;
+  } else if (selectedShippingMethod === 'express') {
+    deliveryFee = 120;
+  } else if (selectedShippingMethod === 'pickup') {
+    deliveryFee = 0;
+  }
+
+  // 3. Tax computation (VAT 18% inclusive)
+  const taxRate = settings?.taxRate || 18;
+  const taxableAmount = subtotal - couponDiscount;
+  const taxAmount = Math.round((taxableAmount / (1 + taxRate / 100)) * (taxRate / 100));
+
+  // 4. Total calculation
+  const total = Math.max(0, subtotal - couponDiscount + deliveryFee);
 
   const handleOrderSubmission = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +152,7 @@ export default function CheckoutClient() {
 
     setCreatedOrderNumber(details.id);
     setCheckoutSuccess(true);
+    clearCart();
   };
 
   return (
@@ -744,13 +776,19 @@ export default function CheckoutClient() {
                       <span>Items total</span>
                       <span className="text-[#1D2B3F] font-semibold">{currency} {subtotal}</span>
                     </div>
+                    {appliedCoupon && (
+                      <div className="flex justify-between text-emerald-700">
+                        <span>Atelier Code ({appliedCoupon.code})</span>
+                        <span className="font-semibold">-{currency} {couponDiscount}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-[#657892]">
-                      <span>White-Glove Courier</span>
+                      <span>Courier Protocol ({selectedShippingMethod === 'standard' ? 'Standard' : selectedShippingMethod === 'express' ? 'Express' : 'Pickup'})</span>
                       <span className="text-[#C6A15B] font-semibold uppercase">{deliveryFee === 0 ? 'Complimentary' : `${currency} ${deliveryFee}`}</span>
                     </div>
                     <div className="flex justify-between text-[#657892]">
-                      <span>Escrow Holds / Tax</span>
-                      <span className="text-[#657892]">{settings?.taxRate ? `${settings.taxRate}% VAT Included` : 'Included'}</span>
+                      <span>VAT Component ({taxRate}%)</span>
+                      <span className="text-[#1D2B3F] font-light">Included ({currency} {taxAmount})</span>
                     </div>
                     
                     <div className="flex justify-between text-sm border-t border-[#657892]/25 pt-4 font-sans font-bold text-[#1D2B3F]">

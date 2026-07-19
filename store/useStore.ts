@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings 
+  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
@@ -15,6 +15,9 @@ interface StoreState {
   currentUser: User | null;
   currentUserId?: string | null;
   cart: CartItem[];
+  appliedCoupon: Coupon | null;
+  selectedShippingMethod: 'standard' | 'express' | 'pickup';
+  cartError: string | null;
   orders: Order[];
   payments: Payment[];
   settings: AppSettings;
@@ -35,6 +38,10 @@ interface StoreState {
   updateCartQty: (cartItemId: string, qty: number) => void;
   removeFromCart: (cartItemId: string) => void;
   clearCart: () => void;
+  clearCartError: () => void;
+  applyCoupon: (code: string) => { success: boolean; message: string };
+  removeCoupon: () => void;
+  setShippingMethod: (method: 'standard' | 'express' | 'pickup') => void;
 
   // Checkout / Order actions
   placeOrder: (orderData: Omit<Order, 'id' | 'date'>) => Order;
@@ -854,6 +861,13 @@ async function seedCategories() {
   }
 }
 
+const VALID_COUPONS: Coupon[] = [
+  { code: 'WELCOME10', discountType: 'percentage', discountValue: 10 },
+  { code: 'GENTLEMAN20', discountType: 'percentage', discountValue: 20 },
+  { code: 'SAVILEROW50', discountType: 'fixed', discountValue: 50 },
+  { code: 'KAMPALA30', discountType: 'percentage', discountValue: 30 },
+];
+
 export const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
@@ -861,6 +875,9 @@ export const useStore = create<StoreState>()(
       users: INITIAL_USERS,
       currentUser: null,
       cart: [],
+      appliedCoupon: null,
+      selectedShippingMethod: 'standard',
+      cartError: null,
       orders: INITIAL_ORDERS,
       payments: INITIAL_PAYMENTS,
       settings: INITIAL_SETTINGS,
@@ -1231,6 +1248,13 @@ export const useStore = create<StoreState>()(
             const authUser = authData?.user;
             const targetUserId = authUser?.id || get().currentUserId;
 
+            if (authUser?.user_metadata?.cart) {
+              const userCart = authUser.user_metadata.cart;
+              if (Array.isArray(userCart) && userCart.length > 0) {
+                set({ cart: userCart });
+              }
+            }
+
             if (targetUserId) {
               const matchedProfile = get().users.find(u => u.id === targetUserId);
               if (matchedProfile) {
@@ -1339,6 +1363,13 @@ export const useStore = create<StoreState>()(
           const authUser = data.user;
           if (!authUser) {
             return { success: false, error: 'Authentication failed. No user object returned.' };
+          }
+
+          if (authUser.user_metadata?.cart) {
+            const userCart = authUser.user_metadata.cart;
+            if (Array.isArray(userCart) && userCart.length > 0) {
+              set({ cart: userCart });
+            }
           }
 
           // Try to fetch profile from profiles table
@@ -1539,17 +1570,36 @@ export const useStore = create<StoreState>()(
 
       addToCart: (product, size, color, qty) => {
         const cart = get().cart;
+        const products = get().products;
+        const dbProduct = products.find(p => p.id === product.id) || product;
+        const maxStock = dbProduct.stock;
+
         const cartItemId = `${product.id}-${size}-${color}`;
-        
         const existing = cart.find(item => item.id === cartItemId);
+        
+        // Count total qty of this product in cart
+        const totalProductQtyInCart = cart.reduce((sum, item) => item.product.id === product.id ? sum + item.quantity : sum, 0);
+        
+        if (totalProductQtyInCart + qty > maxStock) {
+          const allowedQty = maxStock - totalProductQtyInCart;
+          if (allowedQty <= 0) {
+            set({ cartError: `Cannot add more ${product.name}. Out of stock! (Available: ${maxStock})` });
+            return;
+          } else {
+            set({ cartError: `Only added ${allowedQty} of ${product.name} due to stock limits.` });
+            qty = allowedQty;
+          }
+        } else {
+          set({ cartError: null });
+        }
+
+        let updatedCart: CartItem[] = [];
         if (existing) {
-          set(state => ({
-            cart: state.cart.map(item => 
-              item.id === cartItemId 
-                ? { ...item, quantity: item.quantity + qty }
-                : item
-            )
-          }));
+          updatedCart = cart.map(item => 
+            item.id === cartItemId 
+              ? { ...item, quantity: item.quantity + qty }
+              : item
+          );
         } else {
           const newItem: CartItem = {
             id: cartItemId,
@@ -1558,8 +1608,24 @@ export const useStore = create<StoreState>()(
             selectedColor: color,
             quantity: qty
           };
-          set(state => ({ cart: [...state.cart, newItem] }));
+          updatedCart = [...cart, newItem];
         }
+
+        set({ cart: updatedCart });
+        
+        // Sync with Supabase (non-blocking, optimistic)
+        const syncCartToSupabase = async (cartList: CartItem[]) => {
+          try {
+            const supabase = getSupabaseClient();
+            const currentUser = get().currentUser;
+            if (supabase && currentUser) {
+              await supabase.auth.updateUser({ data: { cart: cartList } });
+            }
+          } catch (e) {
+            console.warn('Silent fallback for Supabase cart sync:', e);
+          }
+        };
+        syncCartToSupabase(updatedCart);
       },
 
       updateCartQty: (cartItemId, qty) => {
@@ -1567,20 +1633,115 @@ export const useStore = create<StoreState>()(
           get().removeFromCart(cartItemId);
           return;
         }
-        set(state => ({
-          cart: state.cart.map(item => 
-            item.id === cartItemId ? { ...item, quantity: qty } : item
-          )
-        }));
+
+        const cart = get().cart;
+        const itemToUpdate = cart.find(item => item.id === cartItemId);
+        if (!itemToUpdate) return;
+
+        const products = get().products;
+        const dbProduct = products.find(p => p.id === itemToUpdate.product.id) || itemToUpdate.product;
+        const maxStock = dbProduct.stock;
+
+        // Calculate total qty of this product in other cart items
+        const otherItemsQty = cart
+          .filter(item => item.id !== cartItemId && item.product.id === dbProduct.id)
+          .reduce((sum, item) => sum + item.quantity, 0);
+
+        if (otherItemsQty + qty > maxStock) {
+          const allowedQty = maxStock - otherItemsQty;
+          if (allowedQty <= 0) {
+            set({ cartError: `Cannot update. ${dbProduct.name} is out of stock!` });
+            return;
+          } else {
+            set({ cartError: `Capped quantity of ${dbProduct.name} to ${allowedQty} units due to available stock.` });
+            qty = allowedQty;
+          }
+        } else {
+          set({ cartError: null });
+        }
+
+        const updatedCart = cart.map(item => 
+          item.id === cartItemId ? { ...item, quantity: qty } : item
+        );
+
+        set({ cart: updatedCart });
+        
+        // Sync
+        const syncCartToSupabase = async (cartList: CartItem[]) => {
+          try {
+            const supabase = getSupabaseClient();
+            const currentUser = get().currentUser;
+            if (supabase && currentUser) {
+              await supabase.auth.updateUser({ data: { cart: cartList } });
+            }
+          } catch (e) {
+            console.warn('Silent fallback for Supabase cart sync:', e);
+          }
+        };
+        syncCartToSupabase(updatedCart);
       },
 
       removeFromCart: (cartItemId) => {
-        set(state => ({
-          cart: state.cart.filter(item => item.id !== cartItemId)
-        }));
+        const updatedCart = get().cart.filter(item => item.id !== cartItemId);
+        set({ cart: updatedCart });
+        
+        // Sync
+        const syncCartToSupabase = async (cartList: CartItem[]) => {
+          try {
+            const supabase = getSupabaseClient();
+            const currentUser = get().currentUser;
+            if (supabase && currentUser) {
+              await supabase.auth.updateUser({ data: { cart: cartList } });
+            }
+          } catch (e) {
+            console.warn('Silent fallback for Supabase cart sync:', e);
+          }
+        };
+        syncCartToSupabase(updatedCart);
       },
 
-      clearCart: () => set({ cart: [] }),
+      clearCart: () => {
+        set({ cart: [] });
+        // Sync
+        const syncCartToSupabase = async () => {
+          try {
+            const supabase = getSupabaseClient();
+            const currentUser = get().currentUser;
+            if (supabase && currentUser) {
+              await supabase.auth.updateUser({ data: { cart: [] } });
+            }
+          } catch (e) {
+            console.warn('Silent fallback for Supabase cart sync:', e);
+          }
+        };
+        syncCartToSupabase();
+      },
+
+      clearCartError: () => set({ cartError: null }),
+
+      applyCoupon: (code) => {
+        const sanitizedCode = code.trim().toUpperCase();
+        const coupon = VALID_COUPONS.find(c => c.code === sanitizedCode);
+        if (!coupon) {
+          return { success: false, message: 'Invalid luxury coupon code.' };
+        }
+        
+        const subtotal = get().cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+        if (coupon.minSubtotal && subtotal < coupon.minSubtotal) {
+          return { success: false, message: `This coupon requires a minimum subtotal of ${coupon.minSubtotal}.` };
+        }
+
+        set({ appliedCoupon: coupon });
+        return { success: true, message: `Coupon ${coupon.code} applied successfully!` };
+      },
+
+      removeCoupon: () => {
+        set({ appliedCoupon: null });
+      },
+
+      setShippingMethod: (method) => {
+        set({ selectedShippingMethod: method });
+      },
 
       placeOrder: (orderData) => {
         const newOrder: Order = {
@@ -2206,6 +2367,8 @@ export const useStore = create<StoreState>()(
         wishlist: state.wishlist,
         settings: state.settings,
         currentUserId: state.currentUser?.id || null,
+        appliedCoupon: state.appliedCoupon,
+        selectedShippingMethod: state.selectedShippingMethod,
       }),
       storage: createJSONStorage(() => (typeof window !== 'undefined' ? window.localStorage : {
         getItem: () => null,
