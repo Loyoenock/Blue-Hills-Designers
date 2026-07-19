@@ -32,6 +32,8 @@ interface StoreState {
   logout: () => Promise<void>;
   updateProfile: (name: string, phone: string) => void;
   updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resetPasswordRecovery: (password: string) => Promise<{ success: boolean; error?: string }>;
 
   // Cart actions
   addToCart: (product: Product, size: string, color: string, qty: number) => void;
@@ -1565,6 +1567,77 @@ export const useStore = create<StoreState>()(
         } catch (err: any) {
           console.error('Password update error:', err);
           return { success: false, error: err.message || 'Failed to update security password.' };
+        }
+      },
+
+      forgotPassword: async (email) => {
+        try {
+          const supabase = getSupabaseClient();
+          if (!supabase) {
+            return { success: false, error: 'Cannot issue password reset while database is offline or unconfigured.' };
+          }
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`
+          });
+          if (error) {
+            return { success: false, error: error.message };
+          }
+          return { success: true };
+        } catch (err: any) {
+          console.error('ForgotPassword error:', err);
+          return { success: false, error: err.message || 'Failed to trigger reset password transmission.' };
+        }
+      },
+
+      resetPasswordRecovery: async (password) => {
+        try {
+          const supabase = getSupabaseClient();
+          if (!supabase) {
+            return { success: false, error: 'Cannot complete password reset while database is offline or unconfigured.' };
+          }
+          const { error, data } = await supabase.auth.updateUser({
+            password
+          });
+          if (error) {
+            return { success: false, error: error.message };
+          }
+
+          const authUser = data?.user;
+          if (authUser) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', authUser.id)
+              .maybeSingle();
+
+            let user: User;
+            if (profile) {
+              user = {
+                id: profile.id,
+                name: profile.name || profile.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
+                email: profile.email || authUser.email || '',
+                phone: profile.phone || authUser.user_metadata?.phone || '',
+                role: capitalizeRole(profile.role),
+                spending: profile.spending || profile.lifetime_spending || 0,
+                rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0
+              };
+            } else {
+              user = {
+                id: authUser.id,
+                name: authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
+                email: authUser.email || '',
+                phone: authUser.user_metadata?.phone || '',
+                role: 'Customer',
+                spending: 0,
+                rewardsPoints: 0
+              };
+            }
+            set({ currentUser: user });
+          }
+          return { success: true };
+        } catch (err: any) {
+          console.error('ResetPasswordRecovery error:', err);
+          return { success: false, error: err.message || 'Failed to update security credentials.' };
         }
       },
 

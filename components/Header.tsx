@@ -10,6 +10,7 @@ import {
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { getSupabaseClient } from '../lib/supabase';
+import { setAuthCookies, clearAuthCookies } from '../lib/auth-cookies';
 
 export default function Header() {
   const pathname = usePathname();
@@ -37,6 +38,7 @@ export default function Header() {
     // Set up Supabase Realtime subscription to receive instant database updates
     const supabase = getSupabaseClient();
     let subscription: any = null;
+    let authSubscription: any = null;
 
     if (supabase) {
       subscription = supabase
@@ -48,6 +50,18 @@ export default function Header() {
         .subscribe((status) => {
           console.log('Supabase Realtime subscription status:', status);
         });
+
+      // Set up onAuthStateChange listener for session synchronization and token refreshes
+      const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('Header Supabase Auth Change:', event, !!session);
+        if (session) {
+          setAuthCookies(session.access_token, session.refresh_token, session.expires_in || 3600);
+          syncFromSupabase();
+        } else {
+          clearAuthCookies();
+        }
+      });
+      authSubscription = authSub;
     }
 
     // High-frequency polling (every 5 seconds) as a fallback for absolute cross-device/cross-browser sync
@@ -60,6 +74,9 @@ export default function Header() {
       clearInterval(interval);
       if (subscription && supabase) {
         supabase.removeChannel(subscription);
+      }
+      if (authSubscription) {
+        authSubscription.unsubscribe();
       }
     };
   }, [syncFromSupabase]);

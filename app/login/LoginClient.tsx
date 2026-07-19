@@ -16,6 +16,7 @@ import { motion } from 'motion/react';
 export default function LoginClient() {
   const router = useRouter();
   const login = useStore((state) => state.login);
+  const forgotPassword = useStore((state) => state.forgotPassword);
   const currentUser = useStore((state) => state.currentUser);
   const users = useStore((state) => state.users);
   const [mounted, setMounted] = useState(false);
@@ -25,7 +26,9 @@ export default function LoginClient() {
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -43,17 +46,27 @@ export default function LoginClient() {
     e.preventDefault();
     setErrorMsg('');
     setSuccess(false);
+    setForgotPasswordSuccess(false);
     setIsLoading(true);
 
     try {
-      const res = await login(email, password);
-      if (res.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          router.push('/account');
-        }, 1500);
+      if (isForgotPassword) {
+        const res = await forgotPassword(email);
+        if (res.success) {
+          setForgotPasswordSuccess(true);
+        } else {
+          setErrorMsg(res.error || 'Failed to submit recovery request.');
+        }
       } else {
-        setErrorMsg(res.error || 'Login authorized keys mismatch.');
+        const res = await login(email, password);
+        if (res.success) {
+          setSuccess(true);
+          setTimeout(() => {
+            router.push('/account');
+          }, 1500);
+        } else {
+          setErrorMsg(res.error || 'Login authorized credentials mismatch.');
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected authentication error occurred.');
@@ -93,8 +106,14 @@ export default function LoginClient() {
           <div className="col-span-1 lg:col-span-7 flex flex-col justify-center max-w-lg mx-auto w-full space-y-8 lg:pl-10">
             <div className="space-y-2">
               <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Boutique Access</span>
-              <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] tracking-tight font-bold">Executive Sign In</h1>
-              <p className="text-[#657892] text-xs md:text-sm font-light">Submit your registered credentials or select a fast validation profile below.</p>
+              <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] tracking-tight font-bold">
+                {isForgotPassword ? 'Recover Credentials' : 'Executive Sign In'}
+              </h1>
+              <p className="text-[#657892] text-xs md:text-sm font-light">
+                {isForgotPassword 
+                  ? 'Submit your registered email address to receive a secure password recovery link.' 
+                  : 'Submit your registered credentials or select a fast validation profile below.'}
+              </p>
             </div>
 
             {/* Error / Success logs */}
@@ -110,6 +129,15 @@ export default function LoginClient() {
                 <span>Keys confirmed. Opening private showroom portal...</span>
               </div>
             )}
+            {forgotPasswordSuccess && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex gap-3 text-emerald-800 text-xs font-mono">
+                <Check className="w-5 h-5 shrink-0 text-emerald-600" />
+                <div>
+                  <span className="font-bold block">Transmission Successful!</span>
+                  <span>A secure recovery link has been dispatched. Please inspect your email inbox.</span>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleLoginSubmit} className="space-y-5 font-sans" id="login-credentials-form">
               <div className="space-y-1.5">
@@ -123,40 +151,49 @@ export default function LoginClient() {
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Security Password</label>
-                  <button 
-                    type="button"
-                    onClick={() => alert("Please select a predefined validation profile below to bypass password checks.")}
-                    className="text-[10px] font-mono text-[#1C4D8D] hover:underline"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-                <input 
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/30 focus:border-[#1C4D8D] outline-none shadow-sm"
-                  required
-                />
-              </div>
 
-              <div className="flex items-center justify-between text-xs text-[#1D2B3F]/70">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+              {!isForgotPassword && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Security Password</label>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setErrorMsg('');
+                        setForgotPasswordSuccess(false);
+                        setIsForgotPassword(true);
+                      }}
+                      className="text-[10px] font-mono text-[#1C4D8D] hover:underline cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
                   <input 
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="accent-[#1C4D8D]"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/30 focus:border-[#1C4D8D] outline-none shadow-sm"
+                    required
                   />
-                  <span>Keep credential keys active</span>
-                </label>
-              </div>
+                </div>
+              )}
 
-              <div className="pt-2">
+              {!isForgotPassword && (
+                <div className="flex items-center justify-between text-xs text-[#1D2B3F]/70">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input 
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="accent-[#1C4D8D]"
+                    />
+                    <span>Keep credential keys active</span>
+                  </label>
+                </div>
+              )}
+
+              <div className="pt-2 space-y-3">
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -166,15 +203,29 @@ export default function LoginClient() {
                   {isLoading ? (
                     <span className="flex items-center gap-2">
                       <span className="w-4 h-4 border-2 border-t-transparent border-[#F7F5F0] rounded-full animate-spin"></span>
-                      <span>Verifying Credentials...</span>
+                      <span>{isForgotPassword ? 'Dispatching Link...' : 'Verifying Credentials...'}</span>
                     </span>
                   ) : (
                     <>
-                      <span>Authorize Sign In</span>
+                      <span>{isForgotPassword ? 'Transmit Recovery Link' : 'Authorize Sign In'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
+
+                {isForgotPassword && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg('');
+                      setForgotPasswordSuccess(false);
+                      setIsForgotPassword(false);
+                    }}
+                    className="w-full border border-[#657892]/30 hover:bg-[#657892]/5 text-[#1D2B3F] py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all text-center cursor-pointer font-mono"
+                  >
+                    ← Back to Authorized Sign In
+                  </button>
+                )}
               </div>
             </form>
 
