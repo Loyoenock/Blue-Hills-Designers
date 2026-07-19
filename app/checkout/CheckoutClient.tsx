@@ -6,14 +6,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   CheckCircle, Shield, ShoppingBag, CreditCard, Landmark, 
-  MapPin, CheckCircle2, ChevronRight, Truck, Award,
-  Loader2, Eye, Receipt, Mail, AlertTriangle, FileText, Check, X, Printer
+  MapPin, CheckCircle2, ChevronRight, Truck, Award
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
 import { getSafeImageSrc } from '../../lib/utils';
+import { getSupabaseClient } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CheckoutClient() {
@@ -51,19 +51,12 @@ export default function CheckoutClient() {
 
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [createdOrderNumber, setCreatedOrderNumber] = useState('');
-
-  // Extended Transactional states
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState(0);
-  const [processingMsg, setProcessingMsg] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [paymentGatewayOpen, setPaymentGatewayOpen] = useState(false);
-  const [gatewayError, setGatewayError] = useState<string | null>(null);
-  const [momoPin, setMomoPin] = useState('');
-  const [otpValue, setOtpValue] = useState('');
-  const [createdOrder, setCreatedOrder] = useState<any | null>(null);
-  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
-  const [simulatedEmailSent, setSimulatedEmailSent] = useState(false);
+  
+  // Transactional, Validation, and Email simulation state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [emailInvoice, setEmailInvoice] = useState('');
+  const [showInvoiceHtml, setShowInvoiceHtml] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -130,31 +123,80 @@ export default function CheckoutClient() {
   // 4. Total calculation
   const total = Math.max(0, subtotal - couponDiscount + deliveryFee);
 
-  // Complete Order Placement Transaction
-  const executeOrderPlacement = async () => {
-    setPaymentGatewayOpen(false);
-    setIsProcessing(true);
-    setProcessingStep(4);
-    setProcessingMsg("Broadcasting garments allocation to secure relational database...");
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
-    const orderItems = cart.map(item => ({
-      productId: item.product.id,
-      productName: item.product.name,
-      price: item.product.price,
-      quantity: item.quantity,
-      selectedSize: item.selectedSize,
-      selectedColor: item.selectedColor,
-      image: item.product.images[0]
-    }));
+  const handleOrderSubmission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setErrorMsg('');
 
     try {
-      const details = placeOrder({
+      // 1. Grab fresh session token if authenticated
+      let token = '';
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          token = session.access_token;
+        }
+      }
+
+      const orderItems = cart.map(item => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        price: item.product.price,
+        quantity: item.quantity,
+        selectedSize: item.selectedSize || 'M',
+        selectedColor: item.selectedColor || 'Default',
+        image: item.product.images[0]
+      }));
+
+      const payload = {
+        cart,
+        appliedCoupon,
+        selectedShippingMethod,
+        email,
+        phone,
         customerName: currentUser ? currentUser.name : email.split('@')[0].toUpperCase(),
+        shippingAddress: {
+          country,
+          district: district || city,
+          city,
+          address
+        },
+        paymentMethod,
+        paymentDetails: {
+          momoProvider,
+          momoNumber,
+          cardNumber,
+          cardExpiry,
+          cardCVV
+        }
+      };
+
+      // 2. Transmit to secure transactional server endpoint
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resData.error || 'Server rejected checkout transaction authorization request.');
+      }
+
+      // 3. Prepare local order objects
+      const localOrder = {
+        id: resData.orderNumber,
+        customerName: payload.customerName,
         customerEmail: email,
         customerPhone: phone,
-        amount: total,
-        status: 'Pending',
+        amount: resData.invoice.total,
+        status: 'Pending' as const,
+        date: new Date().toISOString().split('T')[0],
         items: orderItems,
         shippingAddress: {
           country,
@@ -164,116 +206,54 @@ export default function CheckoutClient() {
         },
         paymentMethod,
         notes: paymentMethod === 'Mobile Money' 
-          ? `Mobile Money operator: ${momoProvider}, Wallet No: ${momoNumber}` 
+          ? `MTN/Airtel Provider: ${momoProvider}, Wallet: ${momoNumber}` 
           : paymentMethod === 'Visa' 
-            ? `Visa ending with ${cardNumber.slice(-4)}` 
+            ? `Visa card ending in ${cardNumber.slice(-4)}` 
             : 'Cash on delivery requested.'
-      });
+      };
 
-      setCreatedOrder(details);
-      setCreatedOrderNumber(details.id);
+      const localPayment = {
+        id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
+        orderId: localOrder.id,
+        customerName: localOrder.customerName,
+        customerEmail: localOrder.customerEmail,
+        amount: localOrder.amount,
+        paymentMethod: localOrder.paymentMethod,
+        status: resData.payment.status === 'Paid' ? ('Paid' as const) : ('Pending' as const),
+        transactionId: resData.payment.transactionId,
+        date: localOrder.date
+      };
 
-      setProcessingStep(5);
-      setProcessingMsg(`Sending digital dispatch itinerary & receipt to ${email}...`);
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      // 4. Update local client state safely (Zustand setState) to prevent double insert loops
+      useStore.setState((state) => ({
+        orders: [localOrder, ...state.orders],
+        payments: [localPayment, ...(state.payments || [])],
+        products: state.products.map(p => {
+          const orderedItem = orderItems.find(item => item.productId === p.id);
+          if (orderedItem) {
+            return { ...p, stock: Math.max(0, p.stock - orderedItem.quantity) };
+          }
+          return p;
+        }),
+        currentUser: currentUser ? {
+          ...currentUser,
+          spending: currentUser.spending + localOrder.amount,
+          rewardsPoints: currentUser.rewardsPoints + Math.floor((subtotal - couponDiscount) * 0.1)
+        } : null
+      }));
 
-      setSimulatedEmailSent(true);
+      // 5. Update component states for successful flow
+      setCreatedOrderNumber(resData.orderNumber);
+      setEmailInvoice(resData.emailHtml);
       setCheckoutSuccess(true);
-      setIsProcessing(false);
       clearCart();
+
     } catch (err: any) {
-      console.error(err);
-      setValidationError(err?.message || "An unexpected error occurred during database commit. Please retry.");
-      setIsProcessing(false);
+      console.error('Checkout failure:', err);
+      setErrorMsg(err.message || 'An unexpected error occurred during checkout processing.');
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  const handleOrderSubmission = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setValidationError(null);
-    setGatewayError(null);
-
-    // 1. Basic validation
-    if (!email || !phone || !city || !address) {
-      setValidationError("Please fill out all address and contact details to proceed.");
-      return;
-    }
-
-    if (!isQuick && step === 1 && !district) {
-      setValidationError("Please fill out all address registry fields to proceed.");
-      return;
-    }
-
-    if (paymentMethod === 'Mobile Money' && !momoNumber) {
-      setValidationError("Please enter a valid mobile money number.");
-      return;
-    }
-
-    if (paymentMethod === 'Visa' && (!cardNumber || !cardExpiry || !cardCVV)) {
-      setValidationError("Please specify cardholder credentials.");
-      return;
-    }
-
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setValidationError("Please enter a valid corporate-formatted email address.");
-      return;
-    }
-
-    // Phone length validation
-    if (phone.replace(/\s/g, '').length < 8) {
-      setValidationError("Please enter a valid phone contact line.");
-      return;
-    }
-
-    // Stock level allocation checks
-    const products = useStore.getState().products;
-    for (const item of cart) {
-      const dbProduct = products.find(p => p.id === item.product.id);
-      if (dbProduct && item.quantity > dbProduct.stock) {
-        setValidationError(`Atelier Capacity Limit: Only ${dbProduct.stock} units of "${dbProduct.name}" are currently available in Lubowa Stock. You requested ${item.quantity}. Please adjust your trunk list quantity.`);
-        return;
-      }
-    }
-
-    // Progress loader triggers
-    setIsProcessing(true);
-    setProcessingStep(1);
-    setProcessingMsg("Reserving bespoke garments in Lubowa Atelier ledger...");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    setProcessingStep(2);
-    setProcessingMsg("Securing priority high-security courier dispatch corridor...");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    setProcessingStep(3);
-    setProcessingMsg("Contacting external billing settlement service...");
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    if (paymentMethod !== 'Cash on Delivery') {
-      setPaymentGatewayOpen(true);
-    } else {
-      await executeOrderPlacement();
-    }
-  };
-
-  const handlePaymentCancel = () => {
-    setPaymentGatewayOpen(false);
-    setIsProcessing(false);
-    setValidationError("Payment Canceled: Secure authorization was canceled. Sizing configurations remain saved. Please select a payment option to complete your order.");
-  };
-
-  const handlePaymentDecline = () => {
-    setPaymentGatewayOpen(false);
-    setIsProcessing(false);
-    setValidationError("Payment Declined: The secure bank gateway reported insufficient funds, card restriction, or authorization failure. Please check your credit/wallet parameters or use Cash on Delivery.");
-  };
-
-  const handlePaymentTimeout = () => {
-    setPaymentGatewayOpen(false);
-    setIsProcessing(false);
-    setValidationError("Payment Network Timeout: The MTN/Airtel escrow response timed out. Please verify your connection status and re-verify PIN authorization, or select Cash on Delivery.");
   };
 
   return (
@@ -329,27 +309,28 @@ export default function CheckoutClient() {
                 </div>
               </div>
 
-              {/* Simulated Email Confirmation Indicator */}
-              <div className="bg-[#1C4D8D]/5 border border-[#1C4D8D]/15 rounded-xl p-4 flex gap-3 text-left animate-fade-in">
-                <Mail className="w-5 h-5 text-[#1C4D8D] shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-[#1D2B3F] uppercase tracking-wider text-[10px] font-mono">Secure Email Receipt Transmitted</p>
-                  <p className="text-[10px] text-[#657892] leading-relaxed">
-                    A copy of your private client purchase itinerary and ready-to-wear dispatch protocol has been sent to <span className="font-bold text-[#1C4D8D]">{email || "your email address"}</span>.
-                  </p>
+              {emailInvoice && (
+                <div className="border-t border-[#657892]/20 pt-6 text-left">
+                  <button 
+                    type="button"
+                    onClick={() => setShowInvoiceHtml(!showInvoiceHtml)}
+                    className="w-full flex items-center justify-between text-[11px] uppercase tracking-wider font-mono font-bold text-[#1C4D8D] hover:underline cursor-pointer"
+                  >
+                    <span>{showInvoiceHtml ? '▲ Hide Private Sartorial Invoice' : '▼ View Private Sartorial Invoice'}</span>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded font-sans uppercase font-bold tracking-wider">Email Transmitted</span>
+                  </button>
+                  
+                  {showInvoiceHtml && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 bg-white border border-[#657892]/25 rounded-2xl p-1 overflow-hidden shadow-inner max-h-[400px] overflow-y-auto"
+                    >
+                      <div dangerouslySetInnerHTML={{ __html: emailInvoice }} />
+                    </motion.div>
+                  )}
                 </div>
-              </div>
-
-              {/* View Invoice button */}
-              <div className="pt-1">
-                <button 
-                  onClick={() => setInvoiceModalOpen(true)}
-                  className="w-full bg-[#C6A15B]/10 hover:bg-[#C6A15B]/20 text-[#C6A15B] border border-[#C6A15B]/30 text-xs py-3 px-4 rounded-xl font-mono uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>View Bespoke Invoice Receipt</span>
-                </button>
-              </div>
+              )}
 
               <div className="pt-2 flex flex-col sm:flex-row gap-4">
                 <Link 
@@ -377,56 +358,20 @@ export default function CheckoutClient() {
             >
               {/* Form entries panel (8 columns on lg) */}
               <div className="lg:col-span-7 space-y-8">
-                {validationError && (
-                  <div className="bg-red-500/10 border border-red-500/20 text-red-700 p-4 rounded-xl text-xs flex gap-3 items-start shadow-sm animate-fade-in" id="validation-error-banner">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 animate-pulse" />
-                    <div>
-                      <p className="font-bold uppercase tracking-wider text-[10px] font-mono">Atelier Validation Advisory</p>
-                      <p className="font-light mt-0.5">{validationError}</p>
-                    </div>
-                  </div>
-                )}
-
-                {isProcessing && (
-                  <div className="space-y-6 bg-[#F7F5F0] border border-[#657892]/20 p-8 rounded-2xl shadow-md flex flex-col items-center justify-center min-h-[350px] animate-fade-in">
-                    <Loader2 className="w-12 h-12 text-[#C6A15B] animate-spin" />
-                    <div className="space-y-2 text-center max-w-sm">
-                      <h4 className="font-serif text-[#1D2B3F] text-lg font-bold">Securing Atelier Dispatch</h4>
-                      <p className="text-[11px] text-[#657892] font-mono font-bold uppercase tracking-widest text-[#C6A15B] animate-pulse">{processingMsg}</p>
-                    </div>
-                    {/* Visual Progress Timeline */}
-                    <div className="w-full max-w-md bg-[#657892]/10 h-1.5 rounded-full overflow-hidden mt-4">
-                      <div 
-                        className="bg-[#1C4D8D] h-full transition-all duration-500"
-                        style={{ width: `${(processingStep / 5) * 100}%` }}
-                      ></div>
-                    </div>
-                    <div className="flex justify-between w-full max-w-md text-[9px] text-[#657892] font-mono mt-2">
-                      <span className={processingStep >= 1 ? "text-[#1C4D8D] font-bold" : ""}>1. RESERVE</span>
-                      <span className={processingStep >= 2 ? "text-[#1C4D8D] font-bold" : ""}>2. CORRIDOR</span>
-                      <span className={processingStep >= 3 ? "text-[#1C4D8D] font-bold" : ""}>3. GATEWAY</span>
-                      <span className={processingStep >= 4 ? "text-[#1C4D8D] font-bold" : ""}>4. LEDGER</span>
-                      <span className={processingStep >= 5 ? "text-[#1C4D8D] font-bold" : ""}>5. DISPATCH</span>
-                    </div>
-                  </div>
-                )}
-
                 {settings?.maintenanceMode && (
                   <div className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-xl text-xs flex flex-col gap-1 shadow-sm select-none">
                     <p className="font-bold uppercase tracking-wider text-[10px]">Storefront Under Maintenance</p>
                     <p className="font-light">We are currently conducting scheduled adjustments. Direct ordering is temporarily restricted. Please visit our showroom at Lubowa Shopping Mall or contact us directly at {settings?.supportPhone || settings?.conciergePhone || '+256 772 123456'}.</p>
                   </div>
                 )}
-
-                {!isProcessing && (
-                  isQuick ? (
-                    /* SIMPLIFIED QUICK CHECKOUT PANEL */
-                    <div className="space-y-6 bg-[#F7F5F0] border border-[#657892]/20 p-6 rounded-2xl shadow-md animate-fade-in" id="quick-checkout-panel">
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-bold">Express Portal</span>
-                        <h2 className="font-serif text-2xl text-[#1D2B3F] font-bold">Instant Order Checkout</h2>
-                        <p className="text-xs text-[#657892] font-light">Complete your purchase in seconds. Enter your details below.</p>
-                      </div>
+                {isQuick ? (
+                  /* SIMPLIFIED QUICK CHECKOUT PANEL */
+                  <div className="space-y-6 bg-[#F7F5F0] border border-[#657892]/20 p-6 rounded-2xl shadow-md animate-fade-in" id="quick-checkout-panel">
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-[0.3em] text-[#C6A15B] font-mono font-bold">Express Portal</span>
+                      <h2 className="font-serif text-2xl text-[#1D2B3F] font-bold">Instant Order Checkout</h2>
+                      <p className="text-xs text-[#657892] font-light">Complete your purchase in seconds. Enter your details below.</p>
+                    </div>
 
                     <form onSubmit={handleOrderSubmission} className="space-y-5" id="quick-checkout-details-form">
                       {/* Contact details */}
@@ -589,16 +534,32 @@ export default function CheckoutClient() {
                         )}
                       </div>
 
+                      {errorMsg && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs leading-normal font-mono mb-3">
+                          <strong>Sartorial Checkout Interrupted:</strong> {errorMsg}
+                        </div>
+                      )}
+
                       <button
                         type="submit"
-                        disabled={!!settings?.maintenanceMode}
-                        className={`w-full text-[#F7F5F0] py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans ${
-                          settings?.maintenanceMode 
+                        disabled={isSubmitting || !!settings?.maintenanceMode}
+                        className={`w-full text-[#F7F5F0] py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans flex items-center justify-center gap-2 ${
+                          (isSubmitting || settings?.maintenanceMode) 
                             ? 'bg-gray-400 border-gray-400 cursor-not-allowed' 
                             : 'bg-[#1C4D8D] hover:bg-opacity-95 cursor-pointer'
                         }`}
                       >
-                        {settings?.maintenanceMode ? 'Ordering Suspended' : `Complete Quick Order (${currency} ${total})`}
+                        {isSubmitting ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            <span>Authorizing Quick Settlement...</span>
+                          </>
+                        ) : (
+                          settings?.maintenanceMode ? 'Ordering Suspended' : `Complete Quick Order (${currency} ${total})`
+                        )}
                       </button>
                     </form>
                   </div>
@@ -721,9 +682,8 @@ export default function CheckoutClient() {
                           onClick={() => {
                             if (email && phone && district && city && address) {
                               setStep(2);
-                              setValidationError(null);
                             } else {
-                              setValidationError("Address Registration Incomplete: Please fill out all required shipping fields (Email, Phone, District, City, Address) to advance to the secure payment portal.");
+                              alert("Please fill out all address registry fields to proceed to payment secure portal.");
                             }
                           }}
                           className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-8 py-3.5 rounded-lg text-xs font-semibold uppercase tracking-widest font-sans flex items-center gap-2 shadow-sm cursor-pointer transition-all duration-300"
@@ -891,19 +851,35 @@ export default function CheckoutClient() {
                         )}
                       </div>
 
+                      {errorMsg && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs leading-normal font-mono mb-3">
+                          <strong>Sartorial Checkout Interrupted:</strong> {errorMsg}
+                        </div>
+                      )}
+
                       {/* Final Order Submit button */}
                       <div className="pt-4">
                         <button
                           type="submit"
-                          disabled={!!settings?.maintenanceMode}
-                          className={`w-full text-[#F7F5F0] py-4 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans ${
-                            settings?.maintenanceMode 
+                          disabled={isSubmitting || !!settings?.maintenanceMode}
+                          className={`w-full text-[#F7F5F0] py-4 rounded-lg font-bold uppercase tracking-widest text-xs transition-all shadow-md font-sans flex items-center justify-center gap-2 ${
+                            (isSubmitting || settings?.maintenanceMode) 
                               ? 'bg-gray-400 border-gray-400 cursor-not-allowed' 
                               : 'bg-[#1C4D8D] hover:bg-opacity-95 cursor-pointer'
                           }`}
                           id="submit-order-final-btn"
                         >
-                          {settings?.maintenanceMode ? 'Ordering Suspended' : `Confirm Tailoring Order Settlement (${currency} ${total})`}
+                          {isSubmitting ? (
+                            <>
+                              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              <span>Authorizing Secure Escrow Settlement...</span>
+                            </>
+                          ) : (
+                            settings?.maintenanceMode ? 'Ordering Suspended' : `Confirm Tailoring Order Settlement (${currency} ${total})`
+                          )}
                         </button>
                         <p className="text-[9px] text-center text-[#657892]/60 mt-3 font-mono">
                           Confirming your order activates a secure SSL token. Garment reservations hold for 2 hours.
@@ -913,7 +889,6 @@ export default function CheckoutClient() {
                   )}
                 </form>
                   </>
-                )
                 )}
 
               </div>
@@ -995,305 +970,6 @@ export default function CheckoutClient() {
           )}
         </AnimatePresence>
       </main>
-
-      {/* SECURE SIMULATED PAYMENT VERIFICATION GATEWAY OVERLAY */}
-      <AnimatePresence>
-        {paymentGatewayOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-[#1D2B3F]/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto"
-            id="secure-payment-gateway-overlay"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-2xl border border-[#657892]/20 shadow-2xl max-w-md w-full overflow-hidden"
-            >
-              {/* Header banner indicating secure handshake */}
-              <div className="bg-[#1D2B3F] text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-[#C6A15B]" />
-                  <span className="text-[10px] font-mono tracking-widest uppercase font-bold text-[#F7F5F0]">Secure Escrow Auth v2.1</span>
-                </div>
-                <button 
-                  onClick={handlePaymentCancel}
-                  className="text-white/60 hover:text-white transition-all p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Gateway Body */}
-              <div className="p-6 space-y-6">
-                {paymentMethod === 'Mobile Money' ? (
-                  <div className="space-y-4 text-center">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${
-                      momoProvider === 'MTN' ? 'bg-yellow-100 text-yellow-600 border border-yellow-200' : 'bg-red-100 text-red-600 border border-red-200'
-                    }`}>
-                      <span className="font-bold text-xs font-mono">{momoProvider}</span>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-serif text-lg font-bold text-[#1D2B3F]">Authorize Debit Request</h4>
-                      <p className="text-xs text-[#657892] font-light">
-                        A secure pull transaction was requested for <span className="font-semibold text-[#1D2B3F]">{phone}</span> ({momoProvider} Wallet).
-                      </p>
-                    </div>
-
-                    <div className="bg-[#F7F5F0] p-4 rounded-xl border border-[#657892]/10 space-y-3 text-left">
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="text-[#657892]">Beneficiary:</span>
-                        <span className="text-[#1D2B3F] font-bold">Blue Hills Designers Ltd</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="text-[#657892]">Amount:</span>
-                        <span className="text-[#1D2B3F] font-bold">{currency} {total}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-left">
-                      <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono font-bold">Enter Mobile Wallet PIN</label>
-                      <input 
-                        type="password"
-                        placeholder="••••"
-                        maxLength={4}
-                        value={momoPin}
-                        onChange={(e) => setMomoPin(e.target.value.replace(/\D/g, ''))}
-                        className="w-full text-center bg-[#F7F5F0] border border-[#657892]/20 rounded-xl py-3.5 text-lg font-mono tracking-[0.6em] text-[#1D2B3F] focus:border-[#1C4D8D] outline-none"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4 text-center">
-                    <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto">
-                      <CreditCard className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-serif text-lg font-bold text-[#1D2B3F]">3D Secure OTP Authentication</h4>
-                      <p className="text-xs text-[#657892] font-light">
-                        Verified by Visa has dispatched a one-time verification passcode to card registry ending in <span className="font-mono font-semibold">*{cardNumber.slice(-4)}</span>.
-                      </p>
-                    </div>
-
-                    <div className="bg-[#F7F5F0] p-4 rounded-xl border border-[#657892]/10 space-y-3 text-left">
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="text-[#657892]">Merchant:</span>
-                        <span className="text-[#1D2B3F] font-bold">BLUE HILLS ONLINE ATELIER</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="text-[#657892]">Amount:</span>
-                        <span className="text-[#1D2B3F] font-bold">{currency} {total}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-left">
-                      <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono font-bold">Enter 6-Digit One-Time PIN (OTP)</label>
-                      <input 
-                        type="text"
-                        placeholder="000000"
-                        maxLength={6}
-                        value={otpValue}
-                        onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ''))}
-                        className="w-full text-center bg-[#F7F5F0] border border-[#657892]/20 rounded-xl py-3.5 text-lg font-mono tracking-[0.6em] text-[#1D2B3F] focus:border-[#1C4D8D] outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Gateway Control buttons */}
-                <div className="space-y-2 pt-2">
-                  <button 
-                    onClick={executeOrderPlacement}
-                    className="w-full bg-[#1D2B3F] hover:bg-[#1D2B3F]/90 text-[#F7F5F0] text-xs py-3.5 rounded-xl font-bold uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md"
-                  >
-                    <CheckCircle className="w-4 h-4 text-[#C6A15B]" />
-                    <span>Authorize Settlement</span>
-                  </button>
-
-                  <div className="grid grid-cols-2 gap-2 text-center pt-2">
-                    <button 
-                      onClick={handlePaymentDecline}
-                      className="text-[9px] font-mono text-red-600 bg-red-50 hover:bg-red-100 border border-red-200/40 rounded py-1.5 uppercase transition-all"
-                    >
-                      Simulate Decline
-                    </button>
-                    <button 
-                      onClick={handlePaymentTimeout}
-                      className="text-[9px] font-mono text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200/40 rounded py-1.5 uppercase transition-all"
-                    >
-                      Simulate Timeout
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer advisory */}
-              <div className="bg-[#F7F5F0] px-6 py-3 border-t border-[#657892]/10 text-center text-[9px] text-[#657892] font-mono">
-                Protected by Bank of Uganda cyber-risk guidelines. Token ID: secure_handshake_48w92
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* PRIVATE CLIENT LUXURY ATELIER INVOICE MODAL */}
-      <AnimatePresence>
-        {invoiceModalOpen && createdOrder && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-[#1D2B3F]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto"
-            id="private-client-invoice-modal"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-[#F7F5F0] rounded-2xl border-2 border-[#C6A15B]/30 shadow-2xl max-w-2xl w-full overflow-hidden p-6 md:p-8 space-y-6"
-            >
-              {/* Top controls */}
-              <div className="flex justify-between items-center border-b border-[#657892]/20 pb-4">
-                <div className="flex items-center gap-2">
-                  <Award className="w-5 h-5 text-[#C6A15B]" />
-                  <span className="text-[11px] font-mono tracking-widest uppercase font-bold text-[#1D2B3F]">Private Atelier Registry Copy</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.print();
-                      }
-                    }}
-                    className="p-2 hover:bg-[#657892]/10 rounded-lg text-[#1D2B3F] transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
-                    title="Print Registry Invoice"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span className="hidden sm:inline">Print / Save</span>
-                  </button>
-                  <button 
-                    onClick={() => setInvoiceModalOpen(false)}
-                    className="p-2 hover:bg-[#657892]/10 rounded-lg text-[#1D2B3F]/70 transition-all cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Printable Invoice Container */}
-              <div className="space-y-6 text-[#1D2B3F] font-sans" id="printable-invoice">
-                {/* Invoice Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] tracking-[0.25em] text-[#C6A15B] font-mono font-bold">BLUE HILLS DESIGNERS</span>
-                    <h1 className="font-serif text-2xl font-bold tracking-tight">Purchase Allocation Invoice</h1>
-                    <p className="text-[10px] text-[#657892] leading-normal font-light">
-                      Lubowa Shopping Mall, Showroom 12, Kampala, Uganda<br />
-                      Tel: +256 (0) 772 123456 • concierge@bluehillsdesigners.com
-                    </p>
-                  </div>
-                  <div className="text-left sm:text-right space-y-1 font-mono text-[11px]">
-                    <p><span className="text-[#657892]">Invoice Ref:</span> <span className="font-bold">{createdOrder.id}</span></p>
-                    <p><span className="text-[#657892]">Allocation Date:</span> <span>{new Date(createdOrder.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
-                    <p><span className="text-[#657892]">Billing Method:</span> <span className="font-bold">{createdOrder.paymentMethod}</span></p>
-                    <p><span className="text-[#657892]">Status:</span> <span className="text-emerald-700 font-bold uppercase">Reserved & Paid</span></p>
-                  </div>
-                </div>
-
-                {/* Client / Shipping Registry details */}
-                <div className="bg-[#B9CDE5]/10 border border-[#657892]/25 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1 text-xs">
-                    <p className="text-[10px] text-[#657892] uppercase tracking-wider font-mono">Private Client Profile</p>
-                    <p className="font-bold">{createdOrder.customerName}</p>
-                    <p className="font-light text-[#657892]">{createdOrder.customerEmail}</p>
-                    <p className="font-light text-[#657892]">{createdOrder.customerPhone}</p>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    <p className="text-[10px] text-[#657892] uppercase tracking-wider font-mono">Courier Destination Protocol</p>
-                    <p className="font-bold">{createdOrder.shippingAddress.address}</p>
-                    <p className="font-light text-[#657892]">{createdOrder.shippingAddress.city}, {createdOrder.shippingAddress.district}</p>
-                    <p className="font-light text-[#657892]">{createdOrder.shippingAddress.country}</p>
-                  </div>
-                </div>
-
-                {/* Items Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead>
-                      <tr className="border-b border-[#657892]/20 text-[#657892] font-mono text-[10px] uppercase">
-                        <th className="py-2.5">Bespoke Design / Garment Detail</th>
-                        <th className="py-2.5 text-center">Specs</th>
-                        <th className="py-2.5 text-center">Qty</th>
-                        <th className="py-2.5 text-right">Price</th>
-                        <th className="py-2.5 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#657892]/10">
-                      {createdOrder.items.map((item: any, i: number) => (
-                        <tr key={i} className="text-[#1D2B3F]">
-                          <td className="py-3 font-semibold">{item.productName}</td>
-                          <td className="py-3 text-center text-[10px] font-mono text-[#657892]">
-                            Size: {item.selectedSize} <br />
-                            Color: {item.selectedColor || 'Classic'}
-                          </td>
-                          <td className="py-3 text-center font-mono">{item.quantity}</td>
-                          <td className="py-3 text-right font-mono">{currency} {item.price}</td>
-                          <td className="py-3 text-right font-mono font-bold">{currency} {item.price * item.quantity}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Calculations summary */}
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pt-4 border-t border-[#657892]/20 font-mono text-xs">
-                  <div className="max-w-xs text-[10px] text-[#657892] leading-relaxed font-light">
-                    * This is a luxury legal allocation invoice. Blue Hills Designers certifies that your ready-made executive wear has been isolated and sanitized according to regional standards. Sizing corrections are permitted within 14 days at our Lubowa showroom.
-                  </div>
-                  <div className="w-full sm:w-64 space-y-2">
-                    <div className="flex justify-between text-[#657892]">
-                      <span>Trunk Subtotal:</span>
-                      <span>{currency} {subtotal}</span>
-                    </div>
-                    {couponDiscount > 0 && (
-                      <div className="flex justify-between text-emerald-700">
-                        <span>Coupon Discount:</span>
-                        <span>-{currency} {couponDiscount}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-[#657892]">
-                      <span>Courier Fee:</span>
-                      <span>{deliveryFee === 0 ? 'Complimentary' : `${currency} ${deliveryFee}`}</span>
-                    </div>
-                    <div className="flex justify-between text-[#657892]">
-                      <span>Inclusive VAT (18%):</span>
-                      <span>Included ({currency} {taxAmount})</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-sans font-bold border-t border-[#657892]/30 pt-2 text-[#1D2B3F]">
-                      <span>Net Settlement:</span>
-                      <span className="font-mono text-base text-[#1D2B3F]">{currency} {total}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Luxury Seal & Stamp */}
-                <div className="pt-6 flex justify-between items-end">
-                  <div className="border border-[#C6A15B]/30 rounded-lg p-3 text-[10px] font-serif text-[#C6A15B]/80 max-w-[200px] text-center uppercase tracking-widest bg-[#C6A15B]/5">
-                    Authentic Atelier Garments Reserve Certificate
-                  </div>
-                  <div className="text-right font-mono text-[9px] text-[#657892] space-y-1">
-                    <p className="font-serif text-[#1D2B3F] text-xs italic">A. Namara</p>
-                    <div className="w-24 h-[1px] bg-[#657892]/30 ml-auto"></div>
-                    <p>concierge signing officer</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <Footer />
       <MobileNav />
