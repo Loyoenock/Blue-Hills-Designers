@@ -15,7 +15,7 @@ import MobileNav from '../../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Review } from '../../../types';
 import { getSafeImageSrc } from '../../../lib/utils';
-
+import { getSupabaseClient } from '../../../lib/supabase';
 
 export default function ProductClient() {
   const params = useParams();
@@ -29,6 +29,7 @@ export default function ProductClient() {
   const toggleWishlist = useStore((state) => state.toggleWishlist);
   const addReview = useStore((state) => state.addReview);
   const settings = useStore((state) => state.settings);
+  const isSyncing = useStore((state) => state.isSyncing);
   const currency = settings?.currencySymbol || 'Ugx';
   const threshold = settings?.freeShippingThreshold ?? 2000;
   
@@ -51,34 +52,310 @@ export default function ProductClient() {
   // Size Guide overlay state
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
 
-  // Retrieve current product
-  const product = useMemo(() => {
+  // Fallback single product fetch from Supabase
+  const [dbProduct, setDbProduct] = useState<Product | null>(null);
+  const [dbLoading, setDbLoading] = useState(false);
+
+  // Recently Viewed state
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
+
+  // 1. Retrieve current product from the store
+  const storeProduct = useMemo(() => {
     return products.find(p => p.id === productId);
   }, [products, productId]);
 
+  // Combined active product (store-first, fallback to dbProduct)
+  const activeProduct = useMemo(() => {
+    return storeProduct || dbProduct;
+  }, [storeProduct, dbProduct]);
+
+  // 2. Direct database lookup fallback if product is missing from current store state
+  useEffect(() => {
+    if (!storeProduct && productId && mounted && !isSyncing) {
+      const fetchSingleProduct = async () => {
+        setDbLoading(true);
+        try {
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            // Fetch product
+            const { data: p, error: pErr } = await supabase
+              .from('products')
+              .select('*')
+              .eq('id', productId)
+              .single();
+
+            if (!pErr && p) {
+              // Fetch categories to map category name
+              const { data: dbCats } = await supabase.from('categories').select('*');
+              const catName = dbCats?.find((c: any) => c.id === p.category_id)?.name || 'Suits';
+
+              // Fetch reviews
+              const { data: dbReviews } = await supabase
+                .from('reviews')
+                .select('*')
+                .eq('product_id', productId);
+              
+              const { data: dbProfilesList } = await supabase.from('profiles').select('*');
+
+              const mappedReviews = dbReviews ? dbReviews.map((r: any) => {
+                const profile = dbProfilesList?.find((prof: any) => prof.id === r.user_id);
+                return {
+                  id: r.id,
+                  productId: r.product_id,
+                  userName: profile?.full_name || 'Gentleman Customer',
+                  userRole: profile?.role || 'Customer',
+                  rating: r.rating,
+                  comment: r.comment,
+                  date: r.created_at?.split('T')[0] || r.created_at
+                };
+              }) : [];
+
+              // Fetch images
+              let dbImages: any[] = [];
+              try {
+                const { data: imgData } = await supabase
+                  .from('product_images')
+                  .select('*')
+                  .eq('product_id', productId);
+                if (imgData) dbImages = imgData;
+              } catch (e) {
+                console.warn('Could not query product_images:', e);
+              }
+
+              const productImages = dbImages
+                .sort((a: any, b: any) => (a.display_order || 1) - (b.display_order || 1))
+                .map((img: any) => img.image_url);
+
+              const finalImages = productImages.length > 0 ? productImages : [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600'];
+
+              let parsedSizes = ['M', 'L', 'XL'];
+              let parsedColors = ['Classic Black'];
+              let dealHours = 14, dealMins = 42, dealSecs = 19;
+
+              if (p.short_description) {
+                try {
+                  const parsed = JSON.parse(p.short_description);
+                  if (parsed && typeof parsed === 'object') {
+                    if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) {
+                      parsedSizes = parsed.sizes;
+                    }
+                    if (Array.isArray(parsed.colors) && parsed.colors.length > 0) {
+                      parsedColors = parsed.colors;
+                    }
+                    if (parsed.dealHours !== undefined) dealHours = Number(parsed.dealHours);
+                    if (parsed.dealMins !== undefined) dealMins = Number(parsed.dealMins);
+                    if (parsed.dealSecs !== undefined) dealSecs = Number(parsed.dealSecs);
+                  }
+                } catch {}
+              }
+
+              const mappedSingle: Product = {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                category: catName,
+                price: Number(p.price) || 0,
+                images: finalImages,
+                sizes: parsedSizes,
+                colors: parsedColors,
+                stock: Number(p.stock) || 0,
+                rating: Number(p.rating) || 0,
+                isNew: p.is_new,
+                isFeatured: p.is_featured,
+                isDealOfTheDay: p.is_deal,
+                discountPercentage: Number(p.discount_percentage) || 0,
+                dealHours,
+                dealMins,
+                dealSecs,
+                reviews: mappedReviews
+              };
+
+              setDbProduct(mappedSingle);
+            }
+          }
+        } catch (err) {
+          console.error('Error in fetchSingleProduct fallback:', err);
+        } finally {
+          setDbLoading(false);
+        }
+      };
+
+      fetchSingleProduct();
+    }
+  }, [storeProduct, productId, mounted, isSyncing]);
+
+  // 3. Initialize product attributes when loaded
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
-      if (product) {
-        setActiveImage(getSafeImageSrc(product.images?.[0]));
-        setSelectedSize(product.sizes[0] || '');
-        setSelectedColor(product.colors[0] || '');
+      if (activeProduct) {
+        setActiveImage(getSafeImageSrc(activeProduct.images?.[0]));
+        setSelectedSize(activeProduct.sizes[0] || '');
+        setSelectedColor(activeProduct.colors[0] || '');
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [product]);
+  }, [activeProduct]);
+
+  // 4. Track Recently Viewed Footprint
+  useEffect(() => {
+    if (typeof window !== 'undefined' && productId && mounted && activeProduct) {
+      try {
+        const stored = localStorage.getItem('recently_viewed_garments');
+        let list: string[] = stored ? JSON.parse(stored) : [];
+        
+        // Exclude current id from history to prevent duplicate
+        list = list.filter(id => id !== productId);
+        
+        // Save history
+        const updatedList = [productId, ...list].slice(0, 8); // Track up to 8
+        localStorage.setItem('recently_viewed_garments', JSON.stringify(updatedList));
+        
+        // Set state excluding the current product, taking the 4 most recent
+        setRecentlyViewedIds(list.slice(0, 4));
+      } catch (err) {
+        console.warn('Error syncing recently viewed products:', err);
+      }
+    }
+  }, [productId, mounted, activeProduct]);
+
+  // Map recently viewed IDs back to product entries
+  const recentlyViewedProducts = useMemo(() => {
+    return recentlyViewedIds
+      .map(id => products.find(p => p.id === id))
+      .filter((p): p is Product => !!p);
+  }, [products, recentlyViewedIds]);
 
   // Similar Products suggestion (belonging to same category, excluding current product)
   const similarProducts = useMemo(() => {
-    if (!product) return [];
+    if (!activeProduct) return [];
     return products
-      .filter(p => p.category === product.category && p.id !== product.id)
+      .filter(p => p.category === activeProduct.category && p.id !== activeProduct.id)
       .slice(0, 3);
-  }, [products, product]);
+  }, [products, activeProduct]);
+
+  // Inventory Status Details
+  const getStockDetails = () => {
+    if (!activeProduct) return { text: 'Sold Out', className: 'text-rose-700 font-semibold' };
+    if (activeProduct.stock <= 0) {
+      return { text: 'Sold Out', className: 'text-rose-700 font-semibold' };
+    }
+    if (activeProduct.stock <= 3) {
+      return { text: `Extremely Limited Trunk (${activeProduct.stock} left)`, className: 'text-amber-700 font-bold animate-pulse' };
+    }
+    if (activeProduct.stock <= 8) {
+      return { text: `Limited Edition (${activeProduct.stock} left)`, className: 'text-amber-600 font-semibold' };
+    }
+    return { text: `In Stock (${activeProduct.stock} left)`, className: 'text-emerald-700 font-semibold' };
+  };
+
+  const stockDetails = getStockDetails();
 
   if (!mounted) return null;
 
-  if (!product) {
+  // 5. Skeleton Loading State (Prevents layout shift and flashes)
+  const isLoading = (isSyncing && products.length === 0) || dbLoading;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0] text-[#1D2B3F]">
+        <Header />
+        
+        {/* Breadcrumbs Header skeleton */}
+        <div className="bg-[#1D2B3F] border-b border-[#657892]/20 py-6">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center gap-2 text-xs">
+            <div className="h-4 w-12 bg-white/20 rounded animate-pulse" />
+            <span className="text-[#657892]/50">/</span>
+            <div className="h-4 w-16 bg-white/20 rounded animate-pulse" />
+            <span className="text-[#657892]/50">/</span>
+            <div className="h-4 w-32 bg-white/20 rounded animate-pulse" />
+          </div>
+        </div>
+
+        <main className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex-1 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+            
+            {/* LEFT COLUMN: Gallery Skeleton */}
+            <div className="lg:col-span-6 space-y-4">
+              <div className="relative aspect-[3/4] bg-neutral-200 animate-pulse rounded-2xl border border-[#657892]/20 shadow-sm" />
+              <div className="flex gap-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="w-16 aspect-[3/4] rounded-lg bg-neutral-200 animate-pulse border border-[#657892]/20" />
+                ))}
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Details Skeleton */}
+            <div className="lg:col-span-6 space-y-8 flex flex-col justify-between">
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-1/4" />
+                  <div className="h-10 bg-neutral-200 animate-pulse rounded w-3/4" />
+                  <div className="h-5 bg-neutral-200 animate-pulse rounded w-1/3" />
+                </div>
+
+                <div className="border-y border-[#657892]/20 py-4 flex justify-between items-center">
+                  <div className="space-y-2 w-1/3">
+                    <div className="h-3 bg-neutral-200 animate-pulse rounded w-1/2" />
+                    <div className="h-6 bg-neutral-200 animate-pulse rounded w-3/4" />
+                  </div>
+                  <div className="space-y-2 w-1/3 text-right">
+                    <div className="h-3 bg-neutral-200 animate-pulse rounded w-1/2 ml-auto" />
+                    <div className="h-6 bg-neutral-200 animate-pulse rounded w-3/4 ml-auto" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-full" />
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-5/6" />
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-4/5" />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-1/4" />
+                  <div className="flex gap-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="h-8 w-12 bg-neutral-200 animate-pulse rounded" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-1/4" />
+                  <div className="flex gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-8 w-24 bg-neutral-200 animate-pulse rounded" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="h-4 bg-neutral-200 animate-pulse rounded w-1/6" />
+                  <div className="h-10 w-24 bg-neutral-200 animate-pulse rounded" />
+                </div>
+
+                <div className="pt-6 border-t border-[#657892]/20 flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1 h-14 bg-neutral-200 animate-pulse rounded-lg" />
+                  <div className="flex-1 h-14 bg-neutral-200 animate-pulse rounded-lg" />
+                </div>
+              </div>
+
+              <div className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-xl p-4 grid grid-cols-2 gap-4 mt-8">
+                <div className="h-12 bg-neutral-200 animate-pulse rounded animate-pulse" />
+                <div className="h-12 bg-neutral-200 animate-pulse rounded animate-pulse" />
+              </div>
+            </div>
+
+          </div>
+        </main>
+        
+        <Footer />
+        <MobileNav />
+      </div>
+    );
+  }
+
+  // Not Found State
+  if (!activeProduct) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0] text-[#1D2B3F]">
         <Header />
@@ -94,17 +371,17 @@ export default function ProductClient() {
     );
   }
 
-  const isWish = wishlist.includes(product.id);
+  const isWish = wishlist.includes(activeProduct.id);
 
   const handleAddToCartSubmit = () => {
-    addToCart(product, selectedSize, selectedColor, quantity);
+    addToCart(activeProduct, selectedSize, selectedColor, quantity);
     setAddedAlert(true);
     setTimeout(() => setAddedAlert(false), 3000);
   };
 
   const handleQuickCheckout = () => {
     clearCart();
-    addToCart(product, selectedSize, selectedColor, quantity);
+    addToCart(activeProduct, selectedSize, selectedColor, quantity);
     router.push('/checkout?quick=true');
   };
 
@@ -115,7 +392,7 @@ export default function ProductClient() {
       return;
     }
 
-    addReview(product.id, reviewRating, reviewComment, reviewerName, 'Executive Client');
+    addReview(activeProduct.id, reviewRating, reviewComment, reviewerName, 'Executive Client');
 
     setReviewSuccess(true);
     setReviewerName('');
@@ -147,9 +424,9 @@ export default function ProductClient() {
         <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center gap-2 text-xs text-[#F7F5F0]/60 uppercase tracking-widest font-mono">
           <Link href="/shop" className="hover:text-[#F7F5F0] transition-colors">Shop</Link>
           <ChevronRight className="w-3 h-3 text-[#657892]/50" />
-          <span className="text-[#F7F5F0]/80">{product.category}</span>
+          <span className="text-[#F7F5F0]/80">{activeProduct.category}</span>
           <ChevronRight className="w-3 h-3 text-[#657892]/50" />
-          <span className="text-[#C6A15B] truncate max-w-xs">{product.name}</span>
+          <span className="text-[#C6A15B] truncate max-w-xs">{activeProduct.name}</span>
         </div>
       </div>
 
@@ -162,14 +439,26 @@ export default function ProductClient() {
               className="relative aspect-[3/4] bg-[#F7F5F0] rounded-2xl overflow-hidden border border-[#657892]/20 group cursor-zoom-in shadow-sm"
               onClick={() => setZoomScale(!zoomScale)}
             >
-              <Image 
-                src={getSafeImageSrc(activeImage)}
-                alt={product.name}
-                fill
-                className={`object-cover object-top transition-transform duration-500 ${zoomScale ? 'scale-150' : 'scale-100 group-hover:scale-102'}`}
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                referrerPolicy="no-referrer"
-              />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeImage}
+                  initial={{ opacity: 0.8 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0.8 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute inset-0 w-full h-full"
+                >
+                  <Image 
+                    src={getSafeImageSrc(activeImage)}
+                    alt={activeProduct.name}
+                    fill
+                    priority
+                    className={`object-cover object-top transition-transform duration-500 ${zoomScale ? 'scale-150' : 'scale-100 group-hover:scale-102'}`}
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              </AnimatePresence>
               <div className="absolute inset-0 bg-gradient-to-t from-[#1D2B3F]/10 via-transparent to-transparent pointer-events-none" />
               
               {/* Scale Zoom feedback badge */}
@@ -180,7 +469,7 @@ export default function ProductClient() {
 
             {/* Thumbnail selector gallery */}
             <div className="flex gap-3">
-              {product.images.map((img, i) => (
+              {activeProduct.images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImage(img)}
@@ -188,7 +477,7 @@ export default function ProductClient() {
                     activeImage === img ? 'border-[#C6A15B] ring-1 ring-[#C6A15B]' : 'border-[#657892]/20 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <Image src={getSafeImageSrc(img)} alt={`${product.name} alt ${i}`} fill className="object-cover object-top" sizes="64px" referrerPolicy="no-referrer" />
+                  <Image src={getSafeImageSrc(img)} alt={`${activeProduct.name} alt ${i}`} fill className="object-cover object-top" sizes="64px" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -201,25 +490,25 @@ export default function ProductClient() {
               {/* Product title & ratings */}
               <div className="space-y-2">
                 <div className="flex justify-between items-start gap-4">
-                  <span className="text-[10px] uppercase tracking-[0.3em] text-[#1C4D8D] font-mono font-bold">{product.category} atelier</span>
+                  <span className="text-[10px] uppercase tracking-[0.3em] text-[#1C4D8D] font-mono font-bold">{activeProduct.category} atelier</span>
                   <button 
-                    onClick={() => toggleWishlist(product.id)}
+                    onClick={() => toggleWishlist(activeProduct.id)}
                     className="p-2 bg-[#F7F5F0] hover:bg-[#1C4D8D]/5 border border-[#657892]/20 rounded-full text-[#1D2B3F]/60 hover:text-red-600 transition-colors cursor-pointer"
                   >
                     <Heart className={`w-4.5 h-4.5 ${isWish ? 'fill-red-600 text-red-600 border-red-600' : ''}`} />
                   </button>
                 </div>
-                <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] font-bold leading-tight tracking-tight">{product.name}</h1>
+                <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] font-bold leading-tight tracking-tight">{activeProduct.name}</h1>
                 
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-0.5">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'text-[#C6A15B] fill-[#C6A15B]' : 'text-[#657892]/20'}`} />
+                      <Star key={i} className={`w-4 h-4 ${i < Math.floor(activeProduct.rating) ? 'text-[#C6A15B] fill-[#C6A15B]' : 'text-[#657892]/20'}`} />
                     ))}
                   </div>
-                  <span className="text-xs text-[#1D2B3F]/60 font-mono font-medium">{product.rating} / 5</span>
+                  <span className="text-xs text-[#1D2B3F]/60 font-mono font-medium">{activeProduct.rating} / 5</span>
                   <span className="text-[#657892]/20 text-xs font-mono">•</span>
-                  <span className="text-xs text-[#657892] font-mono">({product.reviews.length} executive reviews)</span>
+                  <span className="text-xs text-[#657892] font-mono">({activeProduct.reviews.length} executive reviews)</span>
                 </div>
               </div>
 
@@ -227,19 +516,19 @@ export default function ProductClient() {
               <div className="border-y border-[#657892]/20 py-4 flex justify-between items-center font-mono">
                 <div>
                   <span className="text-[10px] text-[#657892] uppercase tracking-widest block">Investment Value</span>
-                  <span className="text-2xl font-bold text-[#1C4D8D]">{currency} {product.price}</span>
+                  <span className="text-2xl font-bold text-[#1C4D8D]">{currency} {activeProduct.price}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-[#657892] uppercase tracking-widest block">Showroom Status</span>
-                  <span className={product.stock > 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
-                    {product.stock > 0 ? `In Stock (${product.stock} left)` : 'Sold Out'}
+                  <span className={stockDetails.className}>
+                    {stockDetails.text}
                   </span>
                 </div>
               </div>
 
               {/* Rich descriptions */}
               <p className="text-[#1D2B3F]/80 text-xs md:text-sm font-light leading-relaxed">
-                {product.description}
+                {activeProduct.description}
               </p>
 
               {/* Selections Form */}
@@ -256,7 +545,7 @@ export default function ProductClient() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {product.sizes.map((sz) => (
+                    {activeProduct.sizes.map((sz) => (
                       <button
                         key={sz}
                         onClick={() => setSelectedSize(sz)}
@@ -276,7 +565,7 @@ export default function ProductClient() {
                 <div className="space-y-2">
                   <span className="text-[10px] uppercase tracking-widest text-[#1D2B3F] font-mono font-bold">Color Palette</span>
                   <div className="flex flex-wrap gap-2">
-                    {product.colors.map((col) => (
+                    {activeProduct.colors.map((col) => (
                       <button
                         key={col}
                         onClick={() => setSelectedColor(col)}
@@ -311,7 +600,7 @@ export default function ProductClient() {
                     </button>
                     <span className="px-3.5 font-mono text-xs text-[#1D2B3F] font-bold">{quantity}</span>
                     <button 
-                      onClick={() => setQuantity(prev => Math.min(product.stock, prev + 1))}
+                      onClick={() => setQuantity(prev => Math.min(activeProduct.stock, prev + 1))}
                       className="px-3 py-1.5 text-[#1D2B3F]/60 hover:text-[#1D2B3F] font-semibold"
                     >
                       +
@@ -324,7 +613,7 @@ export default function ProductClient() {
               <div className="pt-6 border-t border-[#657892]/20 flex flex-col sm:flex-row gap-4 items-stretch">
                 <button
                   onClick={handleAddToCartSubmit}
-                  disabled={product.stock <= 0}
+                  disabled={activeProduct.stock <= 0}
                   className="flex-1 bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-4 rounded-lg font-semibold uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2.5 disabled:opacity-40 shadow-md hover:shadow-[#1C4D8D]/10 cursor-pointer font-sans"
                   id="add-to-trunk-btn"
                 >
@@ -333,7 +622,7 @@ export default function ProductClient() {
                 </button>
                 <button
                   onClick={handleQuickCheckout}
-                  disabled={product.stock <= 0}
+                  disabled={activeProduct.stock <= 0}
                   className="flex-1 bg-[#C6A15B] hover:bg-[#C6A15B]/90 text-[#1D2B3F] py-4 rounded-lg font-bold uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2.5 disabled:opacity-40 shadow-md hover:shadow-[#C6A15B]/10 cursor-pointer font-sans"
                   id="quick-checkout-btn"
                 >
@@ -375,15 +664,20 @@ export default function ProductClient() {
                 <MessageSquare className="w-5 h-5 text-[#1C4D8D]" />
                 <span>Executive Sartorial Feedback</span>
               </h3>
-              <span className="text-xs font-mono text-[#657892]">({product.reviews.length} reviews)</span>
+              <span className="text-xs font-mono text-[#657892]">({activeProduct.reviews.length} reviews)</span>
             </div>
 
-            {product.reviews.length === 0 ? (
+            {activeProduct.reviews.length === 0 ? (
               <p className="text-xs text-[#657892] font-mono italic">No custom fitting reports compiled yet. Be the first to submit.</p>
             ) : (
               <div className="space-y-4">
-                {product.reviews.map((rev, idx) => (
-                  <div key={idx} className="bg-[#B9CDE5]/5 border border-[#657892]/15 rounded-xl p-4 space-y-2 shadow-sm">
+                {activeProduct.reviews.map((rev, idx) => (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    key={idx} 
+                    className="bg-[#B9CDE5]/5 border border-[#657892]/15 rounded-xl p-4 space-y-2 shadow-sm"
+                  >
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-bold text-[#1D2B3F]">{rev.userName}</span>
                       <span className="text-[10px] text-[#657892]/70 font-mono">{rev.date}</span>
@@ -394,7 +688,7 @@ export default function ProductClient() {
                       ))}
                     </div>
                     <p className="text-[#1D2B3F]/80 text-xs leading-relaxed font-light">{rev.comment}</p>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -431,7 +725,7 @@ export default function ProductClient() {
                   <select 
                     value={reviewRating} 
                     onChange={(e) => setReviewRating(Number(e.target.value))}
-                    className="bg-[#F7F5F0] border border-[#657892]/30 rounded px-2.5 py-1.5 text-[#1D2B3F] font-mono focus:border-[#1C4D8D] shadow-sm outline-none"
+                    className="bg-[#F7F5F0] border border-[#657892]/30 rounded px-2.5 py-1.5 text-[#1D2B3F] font-mono focus:border-[#1C4D8D] shadow-sm outline-none cursor-pointer"
                   >
                     <option value={5}>5 Stars - Perfection</option>
                     <option value={4}>4 Stars - Prestigious</option>
@@ -473,6 +767,31 @@ export default function ProductClient() {
                 <div key={p.id} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden group hover:border-[#1C4D8D]/30 transition-all flex flex-col justify-between shadow-sm">
                   <div className="relative aspect-[3/4] overflow-hidden bg-[#F7F5F0]">
                     <Image src={getSafeImageSrc(p.images?.[0])} alt={p.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width: 768px) 100vw, 30vw" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="p-4 space-y-2">
+                    <h4 className="font-serif font-bold text-[#1D2B3F] truncate text-sm">{p.name}</h4>
+                    <div className="flex justify-between items-center font-mono text-xs">
+                      <span className="text-[#1C4D8D] font-semibold">{currency} {p.price}</span>
+                      <Link href={`/product/${p.id}`} className="text-[#657892] hover:text-[#1C4D8D] flex items-center gap-0.5">
+                        Inspect →
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* RECENTLY VIEWED PRODUCTS */}
+        {recentlyViewedProducts.length > 0 && (
+          <div className="pt-16 border-t border-[#657892]/20 space-y-6 animate-fade-in">
+            <h3 className="font-serif text-xl text-[#1D2B3F] font-bold tracking-tight">Your Sartorial Footprint (Recently Viewed)</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+              {recentlyViewedProducts.map((p) => (
+                <div key={p.id} className="bg-[#F7F5F0] border border-[#657892]/20 rounded-xl overflow-hidden group hover:border-[#1C4D8D]/30 transition-all flex flex-col justify-between shadow-sm">
+                  <div className="relative aspect-[3/4] overflow-hidden bg-[#F7F5F0]">
+                    <Image src={getSafeImageSrc(p.images?.[0])} alt={p.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width: 768px) 100vw, 25vw" referrerPolicy="no-referrer" />
                   </div>
                   <div className="p-4 space-y-2">
                     <h4 className="font-serif font-bold text-[#1D2B3F] truncate text-sm">{p.name}</h4>
