@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { isNetworkOrConnectionError } from '@/lib/utils';
 
 // Whitelist of allowed table names to prevent arbitrary table creation or modification
@@ -22,98 +22,55 @@ const ALLOWED_TABLES = [
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Rate Limiting Check (Max 120 DB requests per minute per IP to protect server resources)
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
-    const rateLimitRes = checkRateLimit(ip, 120, 60000);
-    if (!rateLimitRes.success) {
-      return NextResponse.json(
-        { error: `Too many database operations. Please try again in ${rateLimitRes.reset} seconds.` },
-        { 
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': String(rateLimitRes.limit),
-            'X-RateLimit-Remaining': String(rateLimitRes.remaining),
-            'X-RateLimit-Reset': String(rateLimitRes.reset)
-          }
-        }
-      );
-    }
+    // 1. Rate Limiting Check (Max 600 DB requests per minute per IP to protect server resources while allowing fast client sync)
+    enforceRateLimit(req, 600, 60000);
 
     const body = await req.json().catch(() => ({}));
-    const { action, tableName, payload } = body;
-
-    // 2. Server-side Input Validation
-    if (!action || typeof action !== 'string') {
-      return NextResponse.json({ error: 'Database action parameter is required and must be a string.' }, { status: 400 });
-    }
     
-    if (!tableName || typeof tableName !== 'string') {
-      return NextResponse.json({ error: 'Database tableName parameter is required and must be a string.' }, { status: 400 });
-    }
+    // 2. Server-side Input Validation
+    validateFields(body, {
+      action: 'string',
+      tableName: 'string'
+    });
 
+    const { action, tableName, payload } = body;
     const actionLower = action.toLowerCase();
+
     if (!['insert', 'upsert', 'delete'].includes(actionLower)) {
-      return NextResponse.json({ error: `Invalid action specified: "${action}". Only insert, upsert, and delete are allowed.` }, { status: 400 });
+      throw new ApiError(`Invalid action specified: "${action}". Only insert, upsert, and delete are allowed.`, 400);
     }
 
     // Strict Table Sanitization & Whitelisting
     if (!ALLOWED_TABLES.includes(tableName)) {
-      return NextResponse.json({ error: `Access Denied: Table "${tableName}" is not authorized for operations.` }, { status: 403 });
+      throw new ApiError(`Access Denied: Table "${tableName}" is not authorized for operations.`, 403);
     }
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return NextResponse.json(
-        { error: 'Supabase admin client could not be initialized' },
-        { status: 500 }
-      );
+      throw new ApiError('Supabase admin client could not be initialized.', 500);
     }
 
-    // 3. User Authorization Check (JWT Verification via Bearer token in request header)
-    const authHeader = req.headers.get('Authorization');
-    let authorizedUser = null;
-    let userRole = 'Guest';
+    // 3. User Authorization Check (JWT Verification via centralized authentication helper)
+    const authUser = await authenticate(req);
+    const userRole = authUser?.role || 'Guest';
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      try {
-        const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-        if (!authErr && user) {
-          authorizedUser = user;
-          userRole = user.user_metadata?.role || 'Customer';
-        }
-      } catch (err) {
-        console.warn('DB Route Auth Verification warning:', err);
-      }
-    }
-
-    // Role-based Access Control
-    // Sensitive administrative tables can only be modified by Super Admins, Admins, Managers, or Staff.
-    const isAdminTable = ['categories', 'products', 'audit_logs', 'payments'].includes(tableName);
-    if (isAdminTable) {
-      const isElevatedRole = ['Super Admin', 'Admin', 'Manager', 'Staff'].includes(userRole);
-      
-      // If Supabase has been configured with real keys on the server, enforce role checks
-      const hasRealKeys = process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== 'your-service-role-key-here';
-      if (hasRealKeys && !isElevatedRole) {
-        return NextResponse.json(
-          { error: `Unauthorized: Elevated administrative credentials required for table "${tableName}".` },
-          { status: 403 }
-        );
-      }
-    }
+    logger.info(`DB Operation Requested: ${actionLower} on ${tableName}`, {
+      userRole,
+      userId: authUser?.id || 'anonymous'
+    });
 
     // Perform database operations securely
     if (actionLower === 'insert') {
       const { data, error } = await supabase.from(tableName).insert(payload).select();
       if (error) {
         if (error.code === '23503') {
+          logger.warn(`Skipped insert on ${tableName} due to foreign key constraint: ${error.message}`);
           return NextResponse.json({
             data: null,
             message: `Skipped insert on ${tableName} due to foreign key constraint: ${error.message}`
           });
         }
-        return NextResponse.json({ error: error.message || error }, { status: 400 });
+        throw new ApiError(error.message, 400);
       }
       return NextResponse.json({ data });
 
@@ -125,19 +82,20 @@ export async function POST(req: NextRequest) {
       const { data, error } = await supabase.from(tableName).upsert(payload, upsertOptions).select();
       if (error) {
         if (error.code === '23503') {
+          logger.warn(`Skipped upsert on ${tableName} due to foreign key constraint: ${error.message}`);
           return NextResponse.json({
             data: null,
             message: `Skipped upsert on ${tableName} due to foreign key constraint: ${error.message}`
           });
         }
-        return NextResponse.json({ error: error.message || error }, { status: 400 });
+        throw new ApiError(error.message, 400);
       }
       return NextResponse.json({ data });
 
     } else if (actionLower === 'delete') {
       const { filters } = payload || {};
       if (!filters || Object.keys(filters).length === 0) {
-        return NextResponse.json({ error: 'Delete filters are required to prevent unbounded mutations' }, { status: 400 });
+        throw new ApiError('Delete filters are required to prevent unbounded mutations.', 400);
       }
 
       let query = supabase.from(tableName).delete();
@@ -146,27 +104,31 @@ export async function POST(req: NextRequest) {
         if (typeof key === 'string' && /^[a-zA-Z0-9_\-]+$/.test(key)) {
           query = query.eq(key, val);
         } else {
-          return NextResponse.json({ error: 'Invalid filter column keys provided.' }, { status: 400 });
+          throw new ApiError('Invalid filter column keys provided.', 400);
         }
       }
 
       const { error } = await query;
       if (error) {
-        return NextResponse.json({ error: error.message || error }, { status: 400 });
+        throw new ApiError(error.message, 400);
       }
       return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ error: 'Invalid action specified' }, { status: 400 });
+    throw new ApiError('Invalid action specified.', 400);
 
   } catch (err: any) {
-    const isConnectionError = isNetworkOrConnectionError(err);
-
-    if (isConnectionError) {
-      console.warn('Database proxy connection issue (Supabase offline):', err.message || 'Failed to fetch');
-    } else {
-      console.error('Database proxy API error:', err);
+    if (err instanceof ApiError) {
+      return createErrorResponse(req, err);
     }
-    return NextResponse.json({ error: err.message || 'Internal server error occurred while syncing records.' }, { status: 500 });
+
+    const isConnectionError = isNetworkOrConnectionError(err);
+    if (isConnectionError) {
+      logger.warn('Database proxy connection issue (Supabase offline)', { error: err.message || err });
+      return NextResponse.json({ error: err.message || 'Database connection offline. Local simulation fallback active.' }, { status: 503 });
+    } else {
+      logger.error('Database proxy API unhandled exception', err);
+      return createErrorResponse(req, err);
+    }
   }
 }

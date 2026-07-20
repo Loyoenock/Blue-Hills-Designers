@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
 import crypto from 'crypto';
 
 // Whitelist of allowed extensions for media storage uploads to prevent malicious scripts
@@ -10,7 +10,7 @@ async function getBucketName(supabase: any): Promise<string> {
   try {
     const { data: buckets, error } = await supabase.storage.listBuckets();
     if (error) {
-      console.error('Error listing buckets in getBucketName:', error);
+      logger.error('Error listing buckets in getBucketName helper', error);
       return 'app-file'; // Fallback
     }
     
@@ -20,73 +20,57 @@ async function getBucketName(supabase: any): Promise<string> {
     );
     
     if (match) {
-      console.log(`Matched existing storage bucket: "${match.id}"`);
+      logger.info(`Matched existing storage bucket: "${match.id}"`);
       return match.id;
     }
     
     // If not found, attempt to create 'app-file'
-    console.warn('Bucket "app-file" (case-insensitive) not found. Attempting to create "app-file"...');
+    logger.warn('Bucket "app-file" (case-insensitive) not found. Attempting to create "app-file"...');
     const { error: createError } = await supabase.storage.createBucket('app-file', {
       public: true
     });
     
     if (createError) {
-      console.error('Failed to auto-create "app-file" bucket:', createError);
+      logger.error('Failed to auto-create "app-file" bucket', createError);
     } else {
-      console.log('Successfully created "app-file" bucket.');
+      logger.info('Successfully created "app-file" bucket.');
     }
     return 'app-file';
   } catch (err) {
-    console.error('Exception in getBucketName helper:', err);
+    logger.error('Exception in getBucketName helper', err);
     return 'app-file';
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Rate Limiting Check (Max 40 storage requests per minute per IP to prevent exhaustion attacks)
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
-    const rateLimitRes = checkRateLimit(ip, 40, 60000);
-    if (!rateLimitRes.success) {
-      return NextResponse.json(
-        { error: `Too many storage operations. Please try again in ${rateLimitRes.reset} seconds.` },
-        { 
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': String(rateLimitRes.limit),
-            'X-RateLimit-Remaining': String(rateLimitRes.remaining),
-            'X-RateLimit-Reset': String(rateLimitRes.reset)
-          }
-        }
-      );
-    }
+    // 1. Rate Limiting Check (Max 150 storage requests per minute per IP to prevent exhaustion attacks while enabling batch uploads)
+    enforceRateLimit(req, 150, 60000);
 
     const body = await req.json().catch(() => ({}));
-    const { action, userId, featureName, itemId, fileBase64, extension, mimeType, path, paths } = body;
-
+    
     // 2. Base Input Validation
-    if (!action || typeof action !== 'string') {
-      return NextResponse.json({ error: 'Action parameter is required and must be a string.' }, { status: 400 });
-    }
+    validateFields(body, {
+      action: 'string'
+    });
 
+    const { action, userId, featureName, itemId, fileBase64, extension, mimeType, path, paths } = body;
     const actionLower = action.toLowerCase();
+
     if (!['upload', 'getsignedurl', 'getsignedurls', 'delete'].includes(actionLower)) {
-      return NextResponse.json({ error: `Invalid action specified: "${action}". Only upload, getSignedUrl, getSignedUrls, and delete are allowed.` }, { status: 400 });
+      throw new ApiError(`Invalid action specified: "${action}". Only upload, getSignedUrl, getSignedUrls, and delete are allowed.`, 400);
     }
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return NextResponse.json(
-        { error: 'Supabase admin client could not be initialized' },
-        { status: 500 }
-      );
+      throw new ApiError('Supabase admin client could not be initialized.', 500);
     }
 
     const bucketName = await getBucketName(supabase);
 
     if (actionLower === 'upload') {
       if (!userId || !featureName || !itemId || !fileBase64 || !extension) {
-        return NextResponse.json({ error: 'Missing required upload parameters' }, { status: 400 });
+        throw new ApiError('Missing required upload parameters.', 400);
       }
 
       // Path Sanitization & Directory Traversal Protection
@@ -96,7 +80,7 @@ export async function POST(req: NextRequest) {
       const safeExtension = String(extension).replace(/^\./, '').replace(/[^a-zA-Z0-9]/g, '');
 
       if (!ALLOWED_EXTENSIONS.includes(safeExtension.toLowerCase())) {
-        return NextResponse.json({ error: `File type extension ".${safeExtension}" is not permitted for upload.` }, { status: 400 });
+        throw new ApiError(`File type extension ".${safeExtension}" is not permitted for upload.`, 400);
       }
 
       // Convert base64 data URL to buffer safely
@@ -116,12 +100,14 @@ export async function POST(req: NextRequest) {
 
       // Safety check: ensure clean base64 string
       if (typeof base64Clean !== 'string' || base64Clean.length === 0) {
-        return NextResponse.json({ error: 'Invalid base64 payload provided.' }, { status: 400 });
+        throw new ApiError('Invalid base64 payload provided.', 400);
       }
 
       const buffer = Buffer.from(base64Clean, 'base64');
       const fileUuid = crypto.randomUUID();
       const filePath = `${safeUserId}/${safeFeatureName}/${safeItemId}/${fileUuid}.${safeExtension}`;
+
+      logger.info('Initiating storage file upload', { filePath, mimeType: detectedMimeType });
 
       let uploadResult = await supabase.storage
         .from(bucketName)
@@ -136,15 +122,15 @@ export async function POST(req: NextRequest) {
         (uploadResult.error as any).statusCode === '404' ||
         (uploadResult.error as any).statusCode === 404
       )) {
-        console.warn(`Bucket "${bucketName}" not found. Attempting to create it...`);
+        logger.warn(`Bucket "${bucketName}" not found. Attempting to create it...`);
         try {
           const { error: createError } = await supabase.storage.createBucket(bucketName, {
             public: true
           });
           if (createError) {
-            console.error(`Failed to auto-create "${bucketName}" bucket:`, createError);
+            logger.error(`Failed to auto-create "${bucketName}" bucket`, createError);
           } else {
-            console.log(`Successfully created "${bucketName}" bucket. Retrying upload...`);
+            logger.info(`Successfully created "${bucketName}" bucket. Retrying upload...`);
             uploadResult = await supabase.storage
               .from(bucketName)
               .upload(filePath, buffer, {
@@ -153,86 +139,93 @@ export async function POST(req: NextRequest) {
               });
           }
         } catch (bucketCreateErr) {
-          console.error('Exception during bucket auto-creation:', bucketCreateErr);
+          logger.error('Exception during bucket auto-creation', bucketCreateErr);
         }
       }
 
       if (uploadResult.error) {
-        console.error('Storage upload error:', uploadResult.error);
-        return NextResponse.json({ error: uploadResult.error.message }, { status: 400 });
+        logger.error('Storage upload error', uploadResult.error);
+        throw new ApiError(uploadResult.error.message, 400);
       }
 
+      logger.info('File uploaded successfully to storage', { filePath });
       return NextResponse.json({ path: filePath });
 
     } else if (actionLower === 'getsignedurl') {
       if (!path || typeof path !== 'string') {
-        return NextResponse.json({ error: 'Missing required parameter: path string' }, { status: 400 });
+        throw new ApiError('Missing required parameter: path string.', 400);
       }
 
       // Prevent Directory Traversal
       if (path.includes('..') || path.startsWith('/')) {
-        return NextResponse.json({ error: 'Malicious path traversal block activated.' }, { status: 400 });
+        throw new ApiError('Malicious path traversal block activated.', 400);
       }
+
+      logger.info('Creating single signed URL for storage object', { path });
 
       const { data, error } = await supabase.storage
         .from(bucketName)
         .createSignedUrl(path, 60 * 60 * 24); // 24 hours expiry
 
       if (error) {
-        console.error('Storage sign url error:', error);
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        logger.error('Storage sign url error', error);
+        throw new ApiError(error.message, 400);
       }
 
       return NextResponse.json({ signedUrl: data.signedUrl });
 
     } else if (actionLower === 'getsignedurls') {
       if (!paths || !Array.isArray(paths)) {
-        return NextResponse.json({ error: 'Missing required parameter: paths array' }, { status: 400 });
+        throw new ApiError('Missing required parameter: paths array.', 400);
       }
 
       // Check all path variables for traversal signatures
       for (const p of paths) {
         if (typeof p !== 'string' || p.includes('..') || p.startsWith('/')) {
-          return NextResponse.json({ error: 'Malicious path traversal block activated on file subset.' }, { status: 400 });
+          throw new ApiError('Malicious path traversal block activated on file subset.', 400);
         }
       }
+
+      logger.info('Creating multiple signed URLs for storage objects', { pathsCount: paths.length });
 
       const { data, error } = await supabase.storage
         .from(bucketName)
         .createSignedUrls(paths, 60 * 60 * 24); // 24 hours expiry
 
       if (error) {
-        console.error('Storage sign urls error:', error);
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        logger.error('Storage sign urls error', error);
+        throw new ApiError(error.message, 400);
       }
 
       return NextResponse.json({ signedUrls: data });
 
     } else if (actionLower === 'delete') {
       if (!path || typeof path !== 'string') {
-        return NextResponse.json({ error: 'Missing required parameter: path string' }, { status: 400 });
+        throw new ApiError('Missing required parameter: path string.', 400);
       }
 
       // Block Directory Traversal
       if (path.includes('..') || path.startsWith('/')) {
-        return NextResponse.json({ error: 'Malicious path traversal block activated.' }, { status: 400 });
+        throw new ApiError('Malicious path traversal block activated.', 400);
       }
+
+      logger.info('Removing storage file', { path });
 
       const { data, error } = await supabase.storage
         .from(bucketName)
         .remove([path]);
 
       if (error) {
-        console.error('Storage delete error:', error);
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        logger.error('Storage delete error', error);
+        throw new ApiError(error.message, 400);
       }
 
+      logger.info('Storage file deleted successfully', { path });
       return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ error: 'Invalid action specified' }, { status: 400 });
+    throw new ApiError('Invalid action specified.', 400);
   } catch (err: any) {
-    console.error('Storage API route error:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error occurred on storage desk.' }, { status: 500 });
+    return createErrorResponse(req, err);
   }
 }

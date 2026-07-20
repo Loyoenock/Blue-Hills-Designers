@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
 
 // Lazy initialize so it doesn't crash on build if key is missing
 let aiClient: GoogleGenAI | null = null;
@@ -8,7 +8,7 @@ let aiClient: GoogleGenAI | null = null;
 function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn("GEMINI_API_KEY is not defined in environment variables. Falling back to local support simulation.");
+    logger.warn("GEMINI_API_KEY is not defined in environment variables. Falling back to local support simulation.");
     return null;
   }
   if (!aiClient) {
@@ -55,41 +55,29 @@ Tone Guidelines:
 export async function POST(req: NextRequest) {
   let messages: any[] = [];
   let userName: string | undefined = undefined;
+  
   try {
     // 1. Rate Limiting Check (Max 20 AI style chats per minute per IP to defend API key usage)
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
-    const rateLimitRes = checkRateLimit(ip, 20, 60000);
-    if (!rateLimitRes.success) {
-      return NextResponse.json(
-        { error: `Too many support messages. Please try again in ${rateLimitRes.reset} seconds.` },
-        { 
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': String(rateLimitRes.limit),
-            'X-RateLimit-Remaining': String(rateLimitRes.remaining),
-            'X-RateLimit-Reset': String(rateLimitRes.reset)
-          }
-        }
-      );
-    }
+    enforceRateLimit(req, 20, 60000);
 
     const body = await req.json().catch(() => ({}));
+    
+    // 2. Thread & Input Validation
+    validateFields(body, {
+      messages: 'array'
+    });
+
     messages = body.messages || [];
     userName = body.userName;
-    
-    // 2. Thread & Array Validation
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: 'Invalid messages thread.' }, { status: 400 });
-    }
 
     if (messages.length > 50) {
-      return NextResponse.json({ error: 'Conversation thread limit exceeded. Please restart the styling consult.' }, { status: 400 });
+      throw new ApiError('Conversation thread limit exceeded. Please restart the styling consult.', 400);
     }
 
     // 3. Row-by-row Message Integrity check
     for (const msg of messages) {
       if (!msg || typeof msg !== 'object' || typeof msg.role !== 'string' || typeof msg.content !== 'string') {
-        return NextResponse.json({ error: 'Malformed messages detected inside styling conversation thread.' }, { status: 400 });
+        throw new ApiError('Malformed messages detected inside styling conversation thread.', 400);
       }
     }
 
@@ -104,11 +92,11 @@ export async function POST(req: NextRequest) {
       // Return a highly-curated luxury simulated response if Gemini API key is missing
       const lastUserMessage = messages[messages.length - 1]?.content || "";
       const simulatedReply = getSimulatedStylistReply(lastUserMessage, safeUserName);
+      logger.info('Gemini client offline, returning simulated luxury response', { userName: safeUserName });
       return NextResponse.json({ text: simulatedReply, simulated: true });
     }
 
     // Convert messages to Gemini's format: we can use models.generateContent with a constructed prompt
-    // combining the system instructions and the chat history.
     let fullPrompt = `${SYSTEM_INSTRUCTIONS}\n\n`;
     if (safeUserName) {
       fullPrompt += `CRITICAL GUIDELINE: The customer you are speaking to is logged in. Their name is "${safeUserName}". You MUST address them by their name (e.g. "Mr. ${safeUserName}", "Sir ${safeUserName}", or "Gentleman ${safeUserName}") in your responses to show elite high-class personal recognition. Avoid generic greetings if you know their name.\n\n`;
@@ -116,11 +104,12 @@ export async function POST(req: NextRequest) {
     fullPrompt += `Client Conversation History:\n`;
     for (const msg of messages) {
       const speaker = msg.role === 'user' ? 'Client' : 'Stylist Support';
-      // Restrict message slice to prevent excessively large payload transfers to GenAI
       const cleanContent = msg.content.slice(0, 1000);
       fullPrompt += `${speaker}: ${cleanContent}\n`;
     }
     fullPrompt += `\nStylist Support:`;
+
+    logger.info('Sending structured chat prompt to Gemini model', { userName: safeUserName });
 
     const response = await client.models.generateContent({
       model: 'gemini-3.5-flash',
@@ -128,10 +117,18 @@ export async function POST(req: NextRequest) {
     });
 
     const replyText = response.text || (safeUserName ? `I apologize, Mr. ${safeUserName}. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?` : "I apologize, Executive. A temporary disconnect occurred in my styling desk. How else may I assist your style agenda today?");
+    
+    logger.info('Received prompt response from Gemini model successfully');
     return NextResponse.json({ text: replyText });
 
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    // If it's an explicit validation or rate-limit ApiError, handle cleanly via standard centralized error responses
+    if (error instanceof ApiError) {
+      return createErrorResponse(req, error);
+    }
+
+    // Fall back to simulated response for other errors (such as network issues, API errors, bad key, model overload)
+    logger.error("Gemini API Error, falling back to simulated styling responses", error);
     const lastUserMessage = messages[messages.length - 1]?.content || "";
     const safeUserName = typeof userName === 'string' 
       ? userName.replace(/[^a-zA-Z0-9\s.\-_]/g, '').slice(0, 50).trim()
@@ -139,7 +136,7 @@ export async function POST(req: NextRequest) {
     const simulatedReply = getSimulatedStylistReply(lastUserMessage, safeUserName);
     return NextResponse.json({ 
       text: simulatedReply,
-      error: error.message,
+      error: error.message || 'Model call exception, fell back to local styling database simulation.',
       simulated: true
     });
   }
@@ -151,7 +148,6 @@ function getSimulatedStylistReply(query: string, userName?: string): string {
   const directName = userName ? `${userName}` : "Sir";
   const executiveTitle = userName ? userName : "Executive";
   
-  // First, address questions about opening days, hours, or schedule
   if (q.includes('hour') || q.includes('open') || q.includes('time') || q.includes('day') || q.includes('saturday') || q.includes('sunday') || q.includes('friday') || q.includes('schedule') || q.includes('when')) {
     return `Good day, ${greetingName}. To assist with your schedule, our Lubowa Shopping Mall showroom operating hours are:
     
@@ -163,7 +159,6 @@ We would be delighted to host you for a styling consultation at any time during 
   
   if (q.includes('suit') || q.includes('tuxedo') || q.includes('blazer')) {
     return `Greetings, ${executiveTitle}. For premium boardroom presence, I strongly recommend our Turkish-imported **Savile Midnight Pinstripe Suit** (Ugx 1,450) or our **Monaco Navy Ready-to-Wear Suit** (Ugx 1,250).
-
 
 *   **The Savile Midnight Pinstripe** is a commanding double-breasted 6x2 wool masterpiece imported from Turkey, featuring peak lapels. It asserts executive authority.
 *   **The Monaco Navy Suit** is an incredibly versatile option imported from Turkey, made of fine wool-blend with finely structured shoulders that sit beautifully.

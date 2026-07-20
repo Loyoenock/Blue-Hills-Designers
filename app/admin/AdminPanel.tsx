@@ -112,9 +112,9 @@ export default function Admin() {
   const [sMaintenance, setSMaintenance] = useState(() => !!settings?.maintenanceMode);
   const [sCurrency, setSCurrency] = useState(() => settings?.currencySymbol || 'Ugx');
   const [settingsSuccess, setSettingsSuccess] = useState(false);
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
   // Initialize settings states
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (settings) {
       setSHours(settings.showroomHours || '');
@@ -127,7 +127,6 @@ export default function Admin() {
       setSCurrency(settings.currencySymbol || 'Ugx');
     }
   }, [settings]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const paymentStats = useMemo(() => {
     const list = payments || [];
@@ -260,7 +259,6 @@ export default function Admin() {
   });
 
   // Handle Save Boutique Settings
-  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings({

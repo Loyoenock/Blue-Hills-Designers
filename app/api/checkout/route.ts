@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { checkRateLimit } from '@/lib/rateLimit';
-import { isNetworkOrConnectionError } from '@/lib/utils';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import crypto from 'crypto';
 
 // Standard Kampala luxury coupons
@@ -16,17 +15,18 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Rate Limiting Check
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
-    const rateLimitRes = checkRateLimit(ip, 60, 60000); // 60 checkout attempts per minute max
-    if (!rateLimitRes.success) {
-      return NextResponse.json(
-        { error: 'Too many requests. Please try again in a moment.' },
-        { status: 429 }
-      );
-    }
+    // 1. Rate Limiting Check (60 checkout attempts per minute max)
+    enforceRateLimit(req, 60, 60000);
 
     const body = await req.json().catch(() => ({}));
+    
+    // 2. Validate essential inputs
+    validateFields(body, {
+      email: 'email',
+      phone: 'string',
+      paymentMethod: 'string'
+    });
+
     const {
       cart,
       appliedCoupon,
@@ -39,39 +39,31 @@ export async function POST(req: NextRequest) {
       paymentDetails
     } = body;
 
-    // 2. Validate essential inputs
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
-      return NextResponse.json({ error: 'Your cart is empty. Please add items to checkout.' }, { status: 400 });
+      throw new ApiError('Your cart is empty. Please add items to checkout.', 400);
     }
-    if (!email || !phone) {
-      return NextResponse.json({ error: 'Email and mobile contact phone number are required.' }, { status: 400 });
-    }
+    
     if (!shippingAddress || !shippingAddress.city || !shippingAddress.address) {
-      return NextResponse.json({ error: 'Complete shipping address is required.' }, { status: 400 });
+      throw new ApiError('Complete shipping address is required.', 400);
     }
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return NextResponse.json({ error: 'Database service is currently unavailable.' }, { status: 500 });
+      throw new ApiError('Database service is currently unavailable.', 500);
     }
 
     // 3. User Authentication Verification (via Bearer token in request header)
-    const authHeader = req.headers.get('Authorization');
-    let authenticatedUserId: string | null = null;
-    let userRole = 'Customer';
+    const authUser = await authenticate(req);
+    const authenticatedUserId = authUser?.id || null;
+    const userRole = authUser?.role || 'Customer';
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      try {
-        const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-        if (!authErr && user) {
-          authenticatedUserId = user.id;
-          userRole = user.user_metadata?.role || 'Customer';
-        }
-      } catch (err) {
-        console.warn('Checkout Route token verification warning:', err);
-      }
-    }
+    logger.info('Checkout request received', {
+      email,
+      authenticatedUserId,
+      userRole,
+      cartSize: cart.length,
+      paymentMethod
+    });
 
     // 4. Validate Inventory & Prices from database
     const validatedCartItems = [];
@@ -80,7 +72,7 @@ export async function POST(req: NextRequest) {
     for (const item of cart) {
       const productId = item.product?.id;
       if (!productId) {
-        return NextResponse.json({ error: 'Invalid product entry in cart.' }, { status: 400 });
+        throw new ApiError('Invalid product entry in cart.', 400);
       }
 
       // Query database for the fresh, authoritative stock level & price
@@ -91,14 +83,12 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (prodErr || !product) {
-        return NextResponse.json({ error: `Product "${item.product?.name || productId}" could not be verified in our atelier registry.` }, { status: 400 });
+        throw new ApiError(`Product "${item.product?.name || productId}" could not be verified in our atelier registry.`, 400);
       }
 
       // Verify stock level
       if (product.stock < item.quantity) {
-        return NextResponse.json({
-          error: `Apologies, "${product.name}" has insufficient stock. Available stock is ${product.stock} units, while you requested ${item.quantity}.`
-        }, { status: 400 });
+        throw new ApiError(`Apologies, "${product.name}" has insufficient stock. Available stock is ${product.stock} units, while you requested ${item.quantity}.`, 400);
       }
 
       const itemPrice = Number(product.price) || 0;
@@ -158,7 +148,7 @@ export async function POST(req: NextRequest) {
       const momoProvider = paymentDetails?.momoProvider || 'MTN';
       const momoNumber = paymentDetails?.momoNumber;
       if (!momoNumber || momoNumber.trim().length < 9) {
-        return NextResponse.json({ error: 'A valid Mobile Money wallet number is required to process MTN/Airtel escrow holds.' }, { status: 400 });
+        throw new ApiError('A valid Mobile Money wallet number is required to process MTN/Airtel escrow holds.', 400);
       }
       // Basic simulation check
       transactionId = `TXN-MM-${momoProvider.substring(0, 3).toUpperCase()}-${crypto.randomInt(100000, 999999)}`;
@@ -168,13 +158,13 @@ export async function POST(req: NextRequest) {
       const cardExpiry = paymentDetails?.cardExpiry;
       const cardCVV = paymentDetails?.cardCVV;
       if (!cardNumber || cardNumber.trim().replace(/\s/g, '').length < 16) {
-        return NextResponse.json({ error: 'A valid 16-digit Visa/MasterCard card number is required.' }, { status: 400 });
+        throw new ApiError('A valid 16-digit Visa/MasterCard card number is required.', 400);
       }
       if (!cardExpiry || !cardExpiry.includes('/')) {
-        return NextResponse.json({ error: 'Invalid card expiration date (MM/YY).' }, { status: 400 });
+        throw new ApiError('Invalid card expiration date (MM/YY).', 400);
       }
       if (!cardCVV || cardCVV.trim().length < 3) {
-        return NextResponse.json({ error: 'A valid 3-digit CVV security code is required.' }, { status: 400 });
+        throw new ApiError('A valid 3-digit CVV security code is required.', 400);
       }
       transactionId = `TXN-VISA-${crypto.randomInt(100000, 999999)}`;
       paymentStatus = 'Paid';
@@ -187,6 +177,7 @@ export async function POST(req: NextRequest) {
     const rolledBackItems: { productId: string; originalStock: number }[] = [];
 
     try {
+      logger.info('Reducing inventory stock with rollback safeguards', { orderNumber });
       // Step A: Decrement inventory stock on products with check
       for (const item of validatedCartItems) {
         const { data: updatedProduct, error: updateErr } = await supabase
@@ -294,6 +285,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Step G: Log checkout security audit telemetry
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
       await supabase
         .from('audit_logs')
         .insert({
@@ -304,7 +296,7 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (dbErr: any) {
-      console.error('Checkout transactional DB failure, initiating stock rollbacks:', dbErr);
+      logger.error('Checkout transactional DB failure, initiating stock rollbacks', dbErr);
 
       // Rollback: Restore original stock levels on failure
       for (const rollback of rolledBackItems) {
@@ -313,17 +305,16 @@ export async function POST(req: NextRequest) {
             .from('products')
             .update({ stock: rollback.originalStock })
             .eq('id', rollback.productId);
+          logger.info(`Successfully restored original stock for product ${rollback.productId} to ${rollback.originalStock}`);
         } catch (rollErr) {
-          console.error(`Rollback stock failure for product ${rollback.productId}:`, rollErr);
+          logger.error(`Rollback stock failure for product ${rollback.productId}`, rollErr);
         }
       }
 
-      return NextResponse.json({
-        error: `Sartorial checkout failure: ${dbErr.message || dbErr}. All product reservations have been rolled back safely.`
-      }, { status: 500 });
+      throw new ApiError(`Sartorial checkout failure: ${dbErr.message || dbErr}. All product reservations have been rolled back safely.`, 500);
     }
 
-    // 8. Generate a legendary, polished plain-text / HTML email invoice confirmation
+    // 8. Generate plain-text / HTML email invoice confirmation
     const emailSubject = `Order Confirmed [${orderNumber}] - Savile Row & Lubowa Showroom`;
     
     const emailHtml = `
@@ -402,7 +393,7 @@ export async function POST(req: NextRequest) {
       </div>
     `;
 
-    console.info(`[SMTP SIMULATOR] Succesfully dispatched order confirmation email to ${email} for Order ${orderNumber}`);
+    logger.info(`[SMTP SIMULATOR] Dispatched order confirmation email to ${email} for Order ${orderNumber}`);
 
     return NextResponse.json({
       success: true,
@@ -426,9 +417,6 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error('Fatal unhandled exception in checkout API Route:', err);
-    return NextResponse.json({
-      error: 'An unexpected internal error occurred while processing your sartorial checkout. Please try again.'
-    }, { status: 500 });
+    return createErrorResponse(req, err);
   }
 }

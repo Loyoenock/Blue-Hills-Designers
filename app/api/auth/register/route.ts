@@ -1,53 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
 import { isNetworkOrConnectionError } from '@/lib/utils';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate limiting check (max 10 registration requests per minute per IP)
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
-    const rateLimitRes = checkRateLimit(ip, 10, 60000);
-    if (!rateLimitRes.success) {
-      return NextResponse.json(
-        { success: false, error: `Too many registration attempts. Please try again in ${rateLimitRes.reset} seconds.` },
-        { 
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': String(rateLimitRes.limit),
-            'X-RateLimit-Remaining': String(rateLimitRes.remaining),
-            'X-RateLimit-Reset': String(rateLimitRes.reset)
-          }
-        }
-      );
-    }
+    enforceRateLimit(req, 10, 60000);
 
     const body = await req.json().catch(() => ({}));
+    
+    // 2. Input Validation
+    validateFields(body, {
+      email: 'email',
+      password: 'string'
+    });
+
     const { name, email, phone, password } = body;
-
-    // 2. Comprehensive input validation
-    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'Email and password are required and must be strings.' },
-        { status: 400 }
-      );
-    }
-
     const emailTrimmed = email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailTrimmed) || emailTrimmed.length > 150) {
-      return NextResponse.json(
-        { success: false, error: 'Please provide a valid email address.' },
-        { status: 400 }
-      );
-    }
 
     if (password.length < 6 || password.length > 100) {
-      return NextResponse.json(
-        { success: false, error: 'Password must be between 6 and 100 characters in length.' },
-        { status: 400 }
-      );
+      throw new ApiError('Password must be between 6 and 100 characters in length.', 400);
+    }
+
+    if (emailTrimmed.length > 150) {
+      throw new ApiError('Please provide a valid email address.', 400);
     }
 
     // 3. Sanitization to mitigate malicious injections
@@ -61,12 +39,11 @@ export async function POST(req: NextRequest) {
       resolvedRole = 'Super Admin';
     }
 
+    logger.info('Attempting new profile registration', { email: emailTrimmed, role: resolvedRole });
+
     const supabaseAdmin = getSupabaseAdmin();
     if (!supabaseAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'Supabase admin client could not be initialized.' },
-        { status: 500 }
-      );
+      throw new ApiError('Supabase admin client could not be initialized.', 500);
     }
 
     let authUser = null;
@@ -91,30 +68,31 @@ export async function POST(req: NextRequest) {
         const isNetworkOrAuthError = isNetworkOrConnectionError(error);
 
         if (isNetworkOrAuthError) {
-          console.warn('Supabase service offline/unreachable during registration. Falling back to local/offline registry.');
+          logger.warn('Supabase service offline/unreachable during registration. Falling back to local/offline registry.', { error: errorMessage });
           fallbackToLocal = true;
         } else {
-          console.error('Supabase admin createUser validation or client error:', error);
-          return NextResponse.json(
-            { success: false, error: error.message },
-            { status: 400 }
-          );
+          logger.error('Supabase admin createUser validation or client error', error);
+          throw new ApiError(error.message, 400);
         }
       } else {
         authUser = data?.user;
       }
     } catch (err: any) {
+      if (err instanceof ApiError) {
+        throw err;
+      }
       errorMessage = err.message || '';
       if (isNetworkOrConnectionError(err)) {
-        console.warn('Network exception during Supabase admin createUser:', errorMessage);
+        logger.warn('Network exception during Supabase admin createUser, will fallback', { error: errorMessage });
+        fallbackToLocal = true;
       } else {
-        console.error('Exception during Supabase admin createUser:', err);
+        logger.error('Exception during Supabase admin createUser', err);
+        throw err;
       }
-      fallbackToLocal = true;
     }
 
     if (fallbackToLocal || !authUser) {
-      console.log('Failing back to offline mock session due to DB/Network connection issue:', errorMessage);
+      logger.info('Failing back to offline mock session due to DB/Network connection issue', { email: emailTrimmed });
       const localUuid = typeof crypto?.randomUUID === 'function'
         ? crypto.randomUUID()
         : `f81d4fae-7dec-11d0-a765-${Math.random().toString(16).substring(2, 14).padEnd(12, '0')}`;
@@ -131,6 +109,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    logger.info('User registration completed successfully', { userId: authUser.id, email: emailTrimmed });
+
     return NextResponse.json({
       success: true,
       user: {
@@ -142,10 +122,6 @@ export async function POST(req: NextRequest) {
       }
     });
   } catch (err: any) {
-    console.error('Server-side registration error:', err);
-    return NextResponse.json(
-      { success: false, error: err.message || 'An unexpected server error occurred.' },
-      { status: 500 }
-    );
+    return createErrorResponse(req, err);
   }
 }

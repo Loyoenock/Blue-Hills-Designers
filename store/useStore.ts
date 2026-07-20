@@ -765,6 +765,22 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3,
   }
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to retrieve active auth session for headers:', err);
+  }
+  return headers;
+}
+
 async function safeSupabaseInsert(tableName: string, payload: any) {
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unconfigured).`);
@@ -773,9 +789,10 @@ async function safeSupabaseInsert(tableName: string, payload: any) {
 
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
+    const headers = await getAuthHeaders();
     const response = await fetchWithRetry('/api/db', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ action: 'insert', tableName, payload: mappedPayload })
     });
     
@@ -801,9 +818,10 @@ async function safeSupabaseUpsert(tableName: string, payload: any, options?: any
 
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
+    const headers = await getAuthHeaders();
     const response = await fetchWithRetry('/api/db', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ action: 'upsert', tableName, payload: mappedPayload, options })
     });
     
@@ -828,9 +846,10 @@ async function safeSupabaseDelete(tableName: string, filters: Record<string, any
   }
 
   try {
+    const headers = await getAuthHeaders();
     const response = await fetchWithRetry('/api/db', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ action: 'delete', tableName, payload: { filters } })
     });
     
