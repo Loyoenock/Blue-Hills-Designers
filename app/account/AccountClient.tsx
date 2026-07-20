@@ -167,16 +167,29 @@ export default function AccountClient() {
             <p className="text-[#B9CDE5] text-xs font-mono uppercase tracking-wider">{currentUser.role} Account registry</p>
           </div>
           
-          <button 
-            onClick={async () => {
-              await logout();
-            }}
-            className="flex items-center gap-2 border border-[#C6A15B]/30 hover:border-[#C6A15B]/60 bg-[#C6A15B]/10 hover:bg-[#C6A15B]/20 text-[#C6A15B] text-xs font-semibold px-4 py-2.5 rounded-lg transition-all uppercase tracking-wider font-mono cursor-pointer shadow-sm"
-            id="account-logout-btn"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {currentUser.role !== 'Customer' && (
+              <Link 
+                href="/admin"
+                className="flex items-center gap-2 border border-[#C6A15B] bg-[#C6A15B] hover:bg-[#C6A15B]/90 text-[#1D2B3F] text-xs font-bold px-4 py-2.5 rounded-lg transition-all uppercase tracking-wider font-mono cursor-pointer shadow-sm"
+                id="account-admin-portal-btn"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Admin Dashboard
+              </Link>
+            )}
+            
+            <button 
+              onClick={async () => {
+                await logout();
+              }}
+              className="flex items-center gap-2 border border-[#C6A15B]/30 hover:border-[#C6A15B]/60 bg-[#C6A15B]/10 hover:bg-[#C6A15B]/20 text-[#C6A15B] text-xs font-semibold px-4 py-2.5 rounded-lg transition-all uppercase tracking-wider font-mono cursor-pointer shadow-sm"
+              id="account-logout-btn"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
 
@@ -188,6 +201,7 @@ export default function AccountClient() {
           <aside className="lg:col-span-3 flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0 gap-1.5 border-b lg:border-b-0 lg:border-r border-[#657892]/20 pr-0 lg:pr-8">
             {[
               { id: 'dashboard', name: 'Executive Dashboard', icon: Compass },
+              ...(currentUser.role !== 'Customer' ? [{ id: 'admin-redirect', name: 'Admin Dashboard', icon: ShieldCheck }] : []),
               { id: 'orders', name: 'Order History', icon: ShoppingBag, count: clientOrders.length },
               { id: 'wishlist', name: 'My Wishlist', icon: Heart, count: wishlist.length },
               { id: 'profile', name: 'Personal Profile', icon: User },
@@ -195,11 +209,17 @@ export default function AccountClient() {
               { id: 'password', name: 'Security Credentials', icon: Key }
             ].map((tab) => {
               const Icon = tab.icon;
-              const active = activeTab === tab.id;
+              const active = activeTab === (tab.id as any);
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => {
+                    if (tab.id === 'admin-redirect') {
+                      router.push('/admin');
+                    } else {
+                      setActiveTab(tab.id as any);
+                    }
+                  }}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-semibold tracking-wider uppercase text-left transition-all shrink-0 cursor-pointer ${
                     active 
                       ? 'bg-[#1C4D8D]/10 text-[#1C4D8D] border border-[#1C4D8D]/30 font-bold shadow-sm' 

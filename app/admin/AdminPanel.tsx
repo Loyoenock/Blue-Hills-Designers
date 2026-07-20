@@ -205,12 +205,12 @@ export default function Admin() {
             <button 
               onClick={() => {
                 // Predefined quick bypass login as Super Admin
-                login('amama@bluehills.com');
+                login('admin@bluehills.com');
               }}
               className="w-full bg-[#5F39FF] text-white py-3 rounded-lg text-xs font-semibold uppercase tracking-widest text-center transition-all cursor-pointer"
               id="bypass-admin-btn"
             >
-              Log In as Master Admin (Amama)
+              Log In as Master Admin (Robert)
             </button>
             <Link 
               href="/login" 
