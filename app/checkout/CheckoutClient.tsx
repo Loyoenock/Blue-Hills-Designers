@@ -64,6 +64,10 @@ export default function CheckoutClient() {
       if (currentUser) {
         setEmail(currentUser.email);
         setPhone(currentUser.phone || '');
+        if (currentUser.country) setCountry(currentUser.country);
+        if (currentUser.district) setDistrict(currentUser.district);
+        if (currentUser.city) setCity(currentUser.city);
+        if (currentUser.address) setAddress(currentUser.address);
       }
       if (typeof window !== 'undefined' && window.location.search.includes('quick=true')) {
         setIsQuick(true);

@@ -30,7 +30,8 @@ interface StoreState {
   login: (email: string, password?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, phone: string, password?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-  updateProfile: (name: string, phone: string) => void;
+  updateProfile: (name: string, phone: string) => Promise<void> | void;
+  updateAddress: (country: string, district: string, city: string, address: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPasswordRecovery: (password: string) => Promise<{ success: boolean; error?: string }>;
@@ -1258,27 +1259,40 @@ export const useStore = create<StoreState>()(
             }
 
             if (targetUserId) {
-              const matchedProfile = get().users.find(u => u.id === targetUserId);
-              if (matchedProfile) {
-                set({ currentUser: matchedProfile });
-              } else {
-                const { data: p } = await supabase
-                  .from('profiles')
-                  .select('*')
-                  .eq('id', targetUserId)
-                  .maybeSingle();
-                if (p) {
-                  const userObj: User = {
-                    id: p.id,
-                    name: p.full_name || p.name || (authUser ? (authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase()) : 'Gentleman Customer'),
-                    email: p.email || (authUser ? authUser.email : '') || '',
-                    phone: p.phone || (authUser ? authUser.user_metadata?.phone : '') || '',
-                    role: capitalizeRole(p.role),
-                    spending: p.lifetime_spending || p.spending || 0,
-                    rewardsPoints: p.reward_points || p.rewardsPoints || 0
-                  };
-                  set({ currentUser: userObj });
+              const { data: p } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', targetUserId)
+                .maybeSingle();
+              
+              const meta = authUser?.user_metadata || {};
+              const userObj: User = {
+                id: targetUserId,
+                name: p?.full_name || p?.name || authUser?.user_metadata?.name || (authUser ? authUser.email?.split('@')[0].toUpperCase() : 'Gentleman Customer'),
+                email: p?.email || authUser?.email || '',
+                phone: p?.phone || authUser?.user_metadata?.phone || '',
+                role: p ? capitalizeRole(p.role) : 'Customer',
+                spending: p ? (p.lifetime_spending || p.spending || 0) : 0,
+                rewardsPoints: p ? (p.reward_points || p.rewardsPoints || 0) : 0,
+                country: meta.country || undefined,
+                district: meta.district || undefined,
+                city: meta.city || undefined,
+                address: meta.address || undefined
+              };
+              set({ currentUser: userObj });
+
+              // Fetch user's wishlist from Supabase
+              try {
+                const { data: dbWishlists, error: wishErr } = await supabase
+                  .from('wishlists')
+                  .select('product_id')
+                  .eq('user_id', targetUserId);
+                if (!wishErr && dbWishlists) {
+                  const productIds = dbWishlists.map((w: any) => w.product_id);
+                  set({ wishlist: productIds });
                 }
+              } catch (wishErr) {
+                console.warn('Failed to load wishlist from Supabase:', wishErr);
               }
             }
           } catch (authError) {
@@ -1382,16 +1396,21 @@ export const useStore = create<StoreState>()(
             .maybeSingle();
 
           let user: User;
+          const meta = authUser.user_metadata || {};
 
           if (profile) {
             user = {
               id: profile.id,
-              name: profile.name || profile.full_name || authUser.user_metadata?.name || email.split('@')[0].toUpperCase(),
+              name: profile.full_name || profile.name || authUser.user_metadata?.name || email.split('@')[0].toUpperCase(),
               email: profile.email || authUser.email || email,
               phone: profile.phone || authUser.user_metadata?.phone || '',
               role: capitalizeRole(profile.role),
               spending: profile.spending || profile.lifetime_spending || 0,
-              rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0
+              rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0,
+              country: meta.country || undefined,
+              district: meta.district || undefined,
+              city: meta.city || undefined,
+              address: meta.address || undefined
             };
           } else {
             // Profile doesn't exist yet, auto-create one
@@ -1402,7 +1421,11 @@ export const useStore = create<StoreState>()(
               phone: authUser.user_metadata?.phone || '',
               role: 'Customer',
               spending: 0,
-              rewardsPoints: 0
+              rewardsPoints: 0,
+              country: meta.country || undefined,
+              district: meta.district || undefined,
+              city: meta.city || undefined,
+              address: meta.address || undefined
             };
             await safeSupabaseUpsert('profiles', user);
           }
@@ -1410,6 +1433,20 @@ export const useStore = create<StoreState>()(
           if (user.email && user.email.toLowerCase() === 'loyohenoch@gmail.com') {
             user.role = 'Super Admin';
             await safeSupabaseUpsert('profiles', user);
+          }
+
+          // Fetch user's wishlist from Supabase
+          try {
+            const { data: dbWishlists, error: wishErr } = await supabase
+              .from('wishlists')
+              .select('product_id')
+              .eq('user_id', user.id);
+            if (!wishErr && dbWishlists) {
+              const productIds = dbWishlists.map((w: any) => w.product_id);
+              set({ wishlist: productIds });
+            }
+          } catch (wishErr) {
+            console.warn('Failed to load wishlist from Supabase on login:', wishErr);
           }
 
           // Update store currentUser and users list
@@ -1516,7 +1553,7 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      updateProfile: (name, phone) => {
+      updateProfile: async (name, phone) => {
         const current = get().currentUser;
         if (!current) return;
 
@@ -1535,7 +1572,67 @@ export const useStore = create<StoreState>()(
           current.role
         );
 
-        safeSupabaseUpsert('profiles', updated);
+        await safeSupabaseUpsert('profiles', updated);
+
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          try {
+            await supabase.auth.updateUser({
+              data: {
+                name,
+                phone
+              }
+            });
+          } catch (e) {
+            console.warn('Failed to update auth metadata for profile:', e);
+          }
+        }
+      },
+
+      updateAddress: async (country, district, city, address) => {
+        try {
+          const supabase = getSupabaseClient();
+          const current = get().currentUser;
+          if (!current) return { success: false, error: 'No active session' };
+
+          const updated = { 
+            ...current, 
+            country, 
+            district, 
+            city, 
+            address 
+          };
+
+          set(state => ({
+            currentUser: updated,
+            users: state.users.map(u => u.id === current.id ? updated : u)
+          }));
+
+          get().addAuditLog(
+            'Address Updated',
+            `Saved billing and dispatch address updated.`,
+            current.id,
+            current.name,
+            current.role
+          );
+
+          if (supabase) {
+            const { error } = await supabase.auth.updateUser({
+              data: {
+                country,
+                district,
+                city,
+                address
+              }
+            });
+            if (error) throw error;
+          }
+
+          return { success: true };
+        } catch (err: any) {
+          console.error('Update address error:', err);
+          return { success: false, error: err.message || 'Failed to update address.' };
+        }
       },
 
       updatePassword: async (password) => {

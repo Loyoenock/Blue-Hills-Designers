@@ -37,6 +37,10 @@ export interface User {
   role: 'Super Admin' | 'Admin' | 'Manager' | 'Staff' | 'Customer';
   spending: number;
   rewardsPoints: number;
+  country?: string;
+  district?: string;
+  city?: string;
+  address?: string;
 }
 
 export interface Coupon {

@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { 
   User, ShoppingBag, MapPin, Key, ChevronRight, Award, 
-  Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut
+  Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut, Heart
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
@@ -18,11 +18,12 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function AccountClient() {
   const router = useRouter();
   const { 
-    currentUser, orders, updateProfile, updatePassword, logout, login, users 
+    currentUser, orders, updateProfile, updateAddress, updatePassword, logout, login, users,
+    wishlist, toggleWishlist, products, addToCart
   } = useStore();
   
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'profile' | 'addresses' | 'password'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'wishlist' | 'profile' | 'addresses' | 'password'>('dashboard');
 
   // Edit Profile form inputs
   const [profileName, setProfileName] = useState('');
@@ -36,12 +37,25 @@ export default function AccountClient() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
+  // Saved Address form inputs
+  const [addressCountry, setAddressCountry] = useState('Uganda');
+  const [addressDistrict, setAddressDistrict] = useState('');
+  const [addressCity, setAddressCity] = useState('');
+  const [addressLine, setAddressLine] = useState('');
+  const [addressSuccess, setAddressSuccess] = useState(false);
+  const [addressError, setAddressError] = useState('');
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
       if (currentUser) {
         setProfileName(currentUser.name);
         setProfilePhone(currentUser.phone || '');
+        setAddressCountry(currentUser.country || 'Uganda');
+        setAddressDistrict(currentUser.district || '');
+        setAddressCity(currentUser.city || '');
+        setAddressLine(currentUser.address || '');
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -175,6 +189,7 @@ export default function AccountClient() {
             {[
               { id: 'dashboard', name: 'Executive Dashboard', icon: Compass },
               { id: 'orders', name: 'Order History', icon: ShoppingBag, count: clientOrders.length },
+              { id: 'wishlist', name: 'My Wishlist', icon: Heart, count: wishlist.length },
               { id: 'profile', name: 'Personal Profile', icon: User },
               { id: 'addresses', name: 'Billing Addresses', icon: MapPin },
               { id: 'password', name: 'Security Credentials', icon: Key }
@@ -436,25 +451,198 @@ export default function AccountClient() {
                 >
                   <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">Saved Addresses</h3>
                   
-                  <div className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl p-6 flex items-start gap-4 max-w-md relative shadow-sm">
-                    <MapPin className="w-6 h-6 text-[#C6A15B] shrink-0 mt-1" />
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-serif text-base text-[#1D2B3F] font-semibold">Primary Address</h4>
-                        <span className="bg-[#1C4D8D]/15 text-[#1C4D8D] text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-[#1C4D8D]/30">Active</span>
-                      </div>
-                      <p className="text-[#657892] text-xs leading-relaxed font-light">
-                        Plot 42, Executive Rise, Lubowa<br />
-                        Lubowa Hill, Wakiso, Kampala, Uganda
-                      </p>
-                      <button 
-                        onClick={() => alert("Address edit keys temporarily locked. Contact support at Lubowa showroom.")} 
-                        className="text-[10px] font-mono font-bold uppercase text-[#1C4D8D] hover:text-[#1C4D8D]/80 flex items-center gap-1.5 transition-colors"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" /> Edit Registry
-                      </button>
+                  {!isEditingAddress ? (
+                    <div className="space-y-4">
+                      {addressLine ? (
+                        <div className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl p-6 flex items-start gap-4 max-w-md relative shadow-sm">
+                          <MapPin className="w-6 h-6 text-[#C6A15B] shrink-0 mt-1" />
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-serif text-base text-[#1D2B3F] font-semibold">Primary Address</h4>
+                              <span className="bg-[#1C4D8D]/15 text-[#1C4D8D] text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-[#1C4D8D]/30">Active</span>
+                            </div>
+                            <p className="text-[#657892] text-xs leading-relaxed font-light">
+                              {addressLine}<br />
+                              {addressCity}{addressDistrict ? `, ${addressDistrict}` : ''}, {addressCountry}
+                            </p>
+                            <button 
+                              onClick={() => setIsEditingAddress(true)} 
+                              className="text-[10px] font-mono font-bold uppercase text-[#1C4D8D] hover:text-[#1C4D8D]/80 flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" /> Edit Registry
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 border border-[#657892]/20 bg-[#B9CDE5]/10 rounded-2xl space-y-4 shadow-sm max-w-md">
+                          <MapPin className="w-8 h-8 text-[#657892]/50 mx-auto" />
+                          <p className="text-xs text-[#657892] font-mono">No delivery addresses currently registered.</p>
+                          <button 
+                            onClick={() => setIsEditingAddress(true)} 
+                            className="inline-block bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-5 py-2.5 rounded text-xs font-semibold uppercase tracking-widest font-sans transition-all cursor-pointer"
+                          >
+                            Add Shipping Address
+                          </button>
+                        </div>
+                      )}
+                      
+                      {addressSuccess && (
+                        <p className="text-[#C6A15B] text-xs font-mono font-bold">Address updated securely in account registry.</p>
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        setAddressError('');
+                        setAddressSuccess(false);
+                        const res = await updateAddress(addressCountry, addressDistrict, addressCity, addressLine);
+                        if (res.success) {
+                          setAddressSuccess(true);
+                          setIsEditingAddress(false);
+                          setTimeout(() => setAddressSuccess(false), 3000);
+                        } else {
+                          setAddressError(res.error || 'Failed to update address.');
+                        }
+                      }} 
+                      className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl p-6 md:p-8 space-y-6 max-w-xl shadow-sm"
+                    >
+                      <div className="space-y-4 font-sans">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Country</label>
+                            <input 
+                              type="text"
+                              value={addressCountry}
+                              onChange={(e) => setAddressCountry(e.target.value)}
+                              className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] focus:border-[#1C4D8D] outline-none shadow-sm"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">District / Region</label>
+                            <input 
+                              type="text"
+                              value={addressDistrict}
+                              onChange={(e) => setAddressDistrict(e.target.value)}
+                              placeholder="e.g. Wakiso"
+                              className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/45 focus:border-[#1C4D8D] outline-none shadow-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">City / Town</label>
+                            <input 
+                              type="text"
+                              value={addressCity}
+                              onChange={(e) => setAddressCity(e.target.value)}
+                              placeholder="e.g. Kampala"
+                              className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/45 focus:border-[#1C4D8D] outline-none shadow-sm"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Detailed Address Line</label>
+                            <input 
+                              type="text"
+                              value={addressLine}
+                              onChange={(e) => setAddressLine(e.target.value)}
+                              placeholder="e.g. Plot 42, Executive Rise, Lubowa"
+                              className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/45 focus:border-[#1C4D8D] outline-none shadow-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-[#657892]/20 flex items-center gap-4 justify-between">
+                        <div className="flex gap-3">
+                          <button
+                            type="submit"
+                            className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-6 py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all cursor-pointer shadow-sm font-sans"
+                          >
+                            Save Address
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingAddress(false)}
+                            className="border border-[#657892]/30 hover:bg-[#657892]/10 text-[#1D2B3F] px-6 py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all cursor-pointer font-sans"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        
+                        {addressError && (
+                          <span className="text-red-600 text-xs font-mono font-bold">{addressError}</span>
+                        )}
+                      </div>
+                    </form>
+                  )}
+                </motion.div>
+              )}
+
+              {/* TAB 6: MY WISHLIST */}
+              {activeTab === 'wishlist' && (
+                <motion.div 
+                  key="wishlist"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="space-y-6"
+                >
+                  <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">My Sartorial Wishlist</h3>
+
+                  {products.filter(p => wishlist.includes(p.id)).length === 0 ? (
+                    <div className="text-center py-16 border border-[#657892]/20 bg-[#B9CDE5]/10 rounded-2xl space-y-4 shadow-sm max-w-2xl">
+                      <Heart className="w-8 h-8 text-[#657892]/40 mx-auto" />
+                      <p className="text-xs text-[#657892] font-mono">Your wardrobe wishlist is currently empty.</p>
+                      <Link href="/shop" className="inline-block bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-5 py-2.5 rounded text-xs font-semibold uppercase tracking-widest font-sans transition-all duration-300">
+                        Explore Collections
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {products.filter(p => wishlist.includes(p.id)).map((p) => (
+                        <div key={p.id} className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group transition-all duration-300 hover:border-[#C6A15B]/40">
+                          <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F7F5F0] border-b border-[#657892]/10">
+                            <Image 
+                              src={getSafeImageSrc(p.images[0])}
+                              alt={p.name}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-500"
+                              sizes="(max-width: 640px) 100vw, 300px"
+                              referrerPolicy="no-referrer"
+                            />
+                            <button
+                              onClick={() => toggleWishlist(p.id)}
+                              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#F7F5F0] border border-[#657892]/15 flex items-center justify-center text-red-500 hover:bg-red-50 transition-colors shadow-sm cursor-pointer"
+                              title="Remove from Wishlist"
+                            >
+                              <Heart className="w-4 h-4 fill-current" />
+                            </button>
+                          </div>
+                          <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                            <div className="space-y-1">
+                              <span className="text-[10px] text-[#657892] font-mono uppercase tracking-wider block">{p.category}</span>
+                              <h4 className="font-serif text-[#1D2B3F] text-sm font-semibold truncate group-hover:text-[#1C4D8D] transition-colors">{p.name}</h4>
+                              <p className="font-mono text-xs text-[#1C4D8D] font-bold">Ugx {p.price.toLocaleString()}</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                addToCart(p, p.sizes[0] || 'M', p.colors[0] || 'Default', 1);
+                                alert(`Registered: 1x ${p.name} added to your styling trunk.`);
+                              }}
+                              className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-2 rounded-lg text-xs font-semibold uppercase tracking-widest text-center transition-all cursor-pointer font-sans shadow-sm"
+                            >
+                              Add to Trunk
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
 
