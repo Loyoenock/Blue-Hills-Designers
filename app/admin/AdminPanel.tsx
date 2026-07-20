@@ -104,7 +104,7 @@ export default function Admin() {
 
   // Boutique Settings state
   const [sHours, setSHours] = useState(() => settings?.showroomHours || '');
-  const [sPhone, setSPhone] = useState(() => settings?.conciergePhone || '');
+  const [sPhone, setSPhone] = useState(() => settings?.conciergePhone || settings?.supportPhone || '');
   const [sThreshold, setSThreshold] = useState(() => settings?.freeShippingThreshold || 0);
   const [sTaxRate, setSTaxRate] = useState(() => settings?.taxRate || 0);
   const [sGreeting, setSGreet] = useState(() => settings?.aiGreetingPrefix || '');
@@ -118,7 +118,7 @@ export default function Admin() {
   useEffect(() => {
     if (settings) {
       setSHours(settings.showroomHours || '');
-      setSPhone(settings.conciergePhone || '');
+      setSPhone(settings.conciergePhone || settings.supportPhone || '');
       setSThreshold(settings.freeShippingThreshold || 0);
       setSTaxRate(settings.taxRate || 0);
       setSGreet(settings.aiGreetingPrefix || '');
@@ -260,11 +260,13 @@ export default function Admin() {
   });
 
   // Handle Save Boutique Settings
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings({
       showroomHours: sHours,
       conciergePhone: sPhone,
+      supportPhone: sPhone,
       freeShippingThreshold: Number(sThreshold),
       taxRate: Number(sTaxRate),
       aiGreetingPrefix: sGreeting,
@@ -1659,7 +1661,7 @@ export default function Admin() {
                         // Reset local states from store settings
                         if (settings) {
                           setSHours(settings.showroomHours || '');
-                          setSPhone(settings.conciergePhone || '');
+                          setSPhone(settings.conciergePhone || settings.supportPhone || '');
                           setSThreshold(settings.freeShippingThreshold || 0);
                           setSTaxRate(settings.taxRate || 0);
                           setSGreet(settings.aiGreetingPrefix || '');
