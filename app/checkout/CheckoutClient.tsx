@@ -213,38 +213,15 @@ export default function CheckoutClient() {
           ? `MTN/Airtel Provider: ${momoProvider}, Wallet: ${momoNumber}` 
           : paymentMethod === 'Visa' 
             ? `Visa card ending in ${cardNumber.slice(-4)}` 
-            : 'Cash on delivery requested.'
+            : 'Cash on delivery requested.',
+        // Add payment and state details for placeOrder to consume
+        paymentId: resData.payment.id || `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
+        paymentStatus: resData.payment.status === 'Paid' ? ('Paid' as const) : ('Pending' as const),
+        paymentTransactionId: resData.payment.transactionId
       };
 
-      const localPayment = {
-        id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
-        orderId: localOrder.id,
-        customerName: localOrder.customerName,
-        customerEmail: localOrder.customerEmail,
-        amount: localOrder.amount,
-        paymentMethod: localOrder.paymentMethod,
-        status: resData.payment.status === 'Paid' ? ('Paid' as const) : ('Pending' as const),
-        transactionId: resData.payment.transactionId,
-        date: localOrder.date
-      };
-
-      // 4. Update local client state safely (Zustand setState) to prevent double insert loops
-      useStore.setState((state) => ({
-        orders: [localOrder, ...state.orders],
-        payments: [localPayment, ...(state.payments || [])],
-        products: state.products.map(p => {
-          const orderedItem = orderItems.find(item => item.productId === p.id);
-          if (orderedItem) {
-            return { ...p, stock: Math.max(0, p.stock - orderedItem.quantity) };
-          }
-          return p;
-        }),
-        currentUser: currentUser ? {
-          ...currentUser,
-          spending: currentUser.spending + localOrder.amount,
-          rewardsPoints: currentUser.rewardsPoints + Math.floor((subtotal - couponDiscount) * 0.1)
-        } : null
-      }));
+      // 4. Update local client state via placeOrder store action (bypassing redundant database inserts)
+      placeOrder(localOrder, true);
 
       // 5. Update component states for successful flow
       setCreatedOrderNumber(resData.orderNumber);

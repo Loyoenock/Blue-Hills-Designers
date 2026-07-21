@@ -47,7 +47,7 @@ interface StoreState {
   setShippingMethod: (method: 'standard' | 'express' | 'pickup') => void;
 
   // Checkout / Order actions
-  placeOrder: (orderData: Omit<Order, 'id' | 'date'>) => Order;
+  placeOrder: (orderData: Omit<Order, 'id' | 'date'> & { id?: string; date?: string; paymentId?: string; paymentStatus?: Payment['status']; paymentTransactionId?: string; }, skipDbSync?: boolean) => Order;
   updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => void;
   updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => void;
   updateSettings: (newSettings: Partial<AppSettings>, updaterName: string, updaterRole: string) => void;
@@ -1971,24 +1971,24 @@ export const useStore = create<StoreState>()(
         set({ selectedShippingMethod: method });
       },
 
-      placeOrder: (orderData) => {
+      placeOrder: (orderData, skipDbSync = false) => {
         const newOrder: Order = {
           ...orderData,
-          id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-          date: new Date().toISOString().split('T')[0]
-        };
+          id: orderData.id || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+          date: orderData.date || new Date().toISOString().split('T')[0]
+        } as Order;
 
         const newPayment: Payment = {
-          id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
+          id: orderData.paymentId || `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
           orderId: newOrder.id,
           customerName: newOrder.customerName,
           customerEmail: newOrder.customerEmail,
           amount: newOrder.amount,
           paymentMethod: newOrder.paymentMethod,
-          status: newOrder.paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid',
-          transactionId: newOrder.paymentMethod === 'Cash on Delivery' 
+          status: orderData.paymentStatus || (newOrder.paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid'),
+          transactionId: orderData.paymentTransactionId || (newOrder.paymentMethod === 'Cash on Delivery' 
             ? 'COD-PENDING' 
-            : `TXN-${newOrder.paymentMethod === 'Visa' ? 'VISA' : 'MM'}-${Math.floor(100000 + Math.random() * 900000)}`,
+            : `TXN-${newOrder.paymentMethod === 'Visa' ? 'VISA' : 'MM'}-${Math.floor(100000 + Math.random() * 900000)}`),
           date: newOrder.date
         };
 
@@ -2031,8 +2031,10 @@ export const useStore = create<StoreState>()(
             current.name,
             current.role
           );
-          // Sync profile details
-          safeSupabaseUpsert('profiles', updatedUser);
+          if (!skipDbSync) {
+            // Sync profile details
+            safeSupabaseUpsert('profiles', updatedUser);
+          }
         } else {
           get().addAuditLog(
             'Guest Order Placement',
@@ -2043,26 +2045,28 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        // Sync order with Supabase relational tables (orders, order_items, order_addresses, payments)
-        const { items, shippingAddress, ...orderPayload } = newOrder;
-        safeSupabaseInsert('orders', orderPayload);
-        for (const item of items) {
-          safeSupabaseInsert('order_items', { ...item, orderId: newOrder.id });
-        }
-        safeSupabaseInsert('order_addresses', { ...shippingAddress, orderId: newOrder.id });
-        safeSupabaseInsert('payments', {
-          orderId: newOrder.id,
-          amount: newOrder.amount,
-          paymentMethod: newOrder.paymentMethod,
-          status: 'Completed',
-          date: newOrder.date
-        });
+        if (!skipDbSync) {
+          // Sync order with Supabase relational tables (orders, order_items, order_addresses, payments)
+          const { items, shippingAddress, ...orderPayload } = newOrder;
+          safeSupabaseInsert('orders', orderPayload);
+          for (const item of items) {
+            safeSupabaseInsert('order_items', { ...item, orderId: newOrder.id });
+          }
+          safeSupabaseInsert('order_addresses', { ...shippingAddress, orderId: newOrder.id });
+          safeSupabaseInsert('payments', {
+            orderId: newOrder.id,
+            amount: newOrder.amount,
+            paymentMethod: newOrder.paymentMethod,
+            status: 'Completed',
+            date: newOrder.date
+          });
 
-        // Sync updated stocks
-        for (const item of items) {
-          const matchedP = get().products.find(p => p.id === item.productId);
-          if (matchedP) {
-            safeSupabaseUpsert('products', { id: matchedP.id, stock: matchedP.stock });
+          // Sync updated stocks
+          for (const item of items) {
+            const matchedP = get().products.find(p => p.id === item.productId);
+            if (matchedP) {
+              safeSupabaseUpsert('products', { id: matchedP.id, stock: matchedP.stock });
+            }
           }
         }
 

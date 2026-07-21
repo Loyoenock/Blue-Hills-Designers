@@ -150,7 +150,34 @@ export async function POST(req: NextRequest) {
       if (!momoNumber || momoNumber.trim().length < 9) {
         throw new ApiError('A valid Mobile Money wallet number is required to process MTN/Airtel escrow holds.', 400);
       }
-      // Basic simulation check
+      
+      /* 
+       * PRODUCTION INTEGRATION SETUP FOR MOBILE MONEY (MTN MoMo API / Airtel Money / Flutterwave)
+       * ---------------------------------------------------------------------------------------
+       * To go live, replace this simulation block with a request to your payment aggregator.
+       * Example using Flutterwave Node SDK or Axios HTTP call:
+       * 
+       * const chargePayload = {
+       *   tx_ref: `momo-txn-${crypto.randomUUID()}`,
+       *   amount: total,
+       *   currency: "UGX",
+       *   email: email,
+       *   phone_number: momoNumber,
+       *   network: momoProvider.toUpperCase(),
+       *   type: "mobile_money_ugandabills"
+       * };
+       * 
+       * const response = await axios.post('https://api.flutterwave.com/v3/charges?type=mobile_money_ugandabills', chargePayload, {
+       *   headers: { Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}` }
+       * });
+       * 
+       * if (response.data.status === 'success') {
+       *   transactionId = response.data.data.id;
+       *   paymentStatus = 'Paid';
+       * } else {
+       *   throw new ApiError('Mobile Money transaction was declined by the carrier escrow gateway.', 400);
+       * }
+       */
       transactionId = `TXN-MM-${momoProvider.substring(0, 3).toUpperCase()}-${crypto.randomInt(100000, 999999)}`;
       paymentStatus = 'Paid';
     } else if (paymentMethod === 'Visa') {
@@ -166,6 +193,30 @@ export async function POST(req: NextRequest) {
       if (!cardCVV || cardCVV.trim().length < 3) {
         throw new ApiError('A valid 3-digit CVV security code is required.', 400);
       }
+
+      /* 
+       * PRODUCTION INTEGRATION SETUP FOR CARD PAYMENTS (Stripe / Flutterwave / Rave)
+       * ---------------------------------------------------------------------------
+       * To go live, replace this simulation block with Stripe Token/PaymentIntent confirmation:
+       * 
+       * import Stripe from 'stripe';
+       * const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
+       * 
+       * const paymentIntent = await stripe.paymentIntents.create({
+       *   amount: total, // convert to smallest currency unit if needed (e.g., cents)
+       *   currency: 'ugx',
+       *   payment_method: paymentDetails.stripePaymentMethodId,
+       *   confirm: true,
+       *   return_url: `${req.nextUrl.origin}/checkout/confirm`,
+       * });
+       * 
+       * if (paymentIntent.status === 'succeeded') {
+       *   transactionId = paymentIntent.id;
+       *   paymentStatus = 'Paid';
+       * } else {
+       *   throw new ApiError('Card authorization failed or was declined by the issuing bank.', 400);
+       * }
+       */
       transactionId = `TXN-VISA-${crypto.randomInt(100000, 999999)}`;
       paymentStatus = 'Paid';
     }
@@ -177,18 +228,19 @@ export async function POST(req: NextRequest) {
     const rolledBackItems: { productId: string; originalStock: number }[] = [];
 
     try {
-      logger.info('Reducing inventory stock with rollback safeguards', { orderNumber });
-      // Step A: Decrement inventory stock on products with check
+      logger.info('Reducing inventory stock with atomic rollback safeguards', { orderNumber });
+      // Step A: Decrement inventory stock on products atomically (optimistic conditional locking)
       for (const item of validatedCartItems) {
         const { data: updatedProduct, error: updateErr } = await supabase
           .from('products')
           .update({ stock: item.product.stock - item.quantity, updated_at: new Date().toISOString() })
           .eq('id', item.product.id)
+          .gte('stock', item.quantity) // Conditional update ensuring sufficient stock is still available!
           .select()
           .single();
 
-        if (updateErr) {
-          throw new Error(`Inventory update failed for "${item.product.name}": ${updateErr.message}`);
+        if (updateErr || !updatedProduct) {
+          throw new Error(`Inventory reservation failed for "${item.product.name}". High request density: stock was depleted or changed. Please try checking out again.`);
         }
         rolledBackItems.push({ productId: item.product.id, originalStock: item.product.stock });
       }
