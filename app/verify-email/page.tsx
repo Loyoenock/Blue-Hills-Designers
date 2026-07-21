@@ -8,6 +8,13 @@ export const metadata: Metadata = {
 };
 
 export default function VerifyEmailPage() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    'name': 'Verify Elite Account',
+    'description': 'Verify and activate your premium account with Blue Hills Designers Uganda.',
+  };
+
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#F7F5F0] flex flex-col items-center justify-center space-y-4 font-sans">
@@ -17,6 +24,10 @@ export default function VerifyEmailPage() {
         </p>
       </div>
     }>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <VerifyEmailClient />
     </Suspense>
   );

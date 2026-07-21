@@ -1,7 +1,17 @@
 export const dynamic = 'force-dynamic';
 
+import type { Metadata } from 'next';
 import { getSupabaseClient } from '../../lib/supabase';
 import ShopClientWrapper from './ShopClientWrapper';
+
+export const metadata: Metadata = {
+  title: 'Premium Corporate Clothing Collection | Blue Hills Designers',
+  description: 'Browse Uganda\'s finest selection of executive menswear including luxury suits, corporate shirts, custom trousers, and high-end shoes imported from Turkey, Egypt, and Italy.',
+  openGraph: {
+    title: 'Corporate Ready-To-Wear Menswear | Blue Hills Designers',
+    description: 'Bespoke corporate fits and luxury ready-to-wear at Lubowa Shopping Mall, Uganda.',
+  }
+};
 
 export default async function ShopPage() {
   let initialProducts: any[] = [];
@@ -88,5 +98,31 @@ export default async function ShopPage() {
     console.error('Error fetching initial products on shop page server:', err);
   }
 
-  return <ShopClientWrapper initialProducts={initialProducts} />;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    'name': 'Premium Menswear Collection',
+    'description': 'Browse our selected range of suits, coats, shirts, and high-fashion items.',
+    'url': 'https://blue-hills-designers.com/shop',
+    'mainEntity': {
+      '@type': 'ItemList',
+      'itemListElement': initialProducts.slice(0, 10).map((p, index) => ({
+        '@type': 'ListItem',
+        'position': index + 1,
+        'url': `https://blue-hills-designers.com/product/${p.id}`,
+        'name': p.name,
+        'image': p.images[0]
+      }))
+    }
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <ShopClientWrapper initialProducts={initialProducts} />
+    </>
+  );
 }

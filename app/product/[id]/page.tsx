@@ -1,10 +1,44 @@
 export const dynamic = 'force-dynamic';
 
+import type { Metadata } from 'next';
 import { getSupabaseClient } from '../../../lib/supabase';
 import ProductClientWrapper from './ProductClientWrapper';
 
 interface ProductPageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data: p } = await supabase
+        .from('products')
+        .select('name, description')
+        .eq('id', id)
+        .single();
+      
+      if (p) {
+        return {
+          title: `${p.name} | Blue Hills Designers`,
+          description: p.description?.substring(0, 160) || 'Premium luxury corporate menswear. Imported corporate shirts, suits, and sartorial options in Kampala, Uganda.',
+          openGraph: {
+            title: p.name,
+            description: p.description || 'Premium luxury corporate menswear.',
+            type: 'video.other', // General dynamic OG format or page
+          }
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[METADATA] Failed to generate dynamic metadata:', err);
+  }
+
+  return {
+    title: 'Luxury Corporate Suit | Blue Hills Designers',
+    description: 'Explore our handpicked collection of executive suits and menswear accessories at Blue Hills Designers.',
+  };
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
@@ -105,5 +139,32 @@ export default async function ProductPage({ params }: ProductPageProps) {
     console.error('Error fetching initial product on server details page:', err);
   }
 
-  return <ProductClientWrapper productId={id} initialProduct={initialProduct} />;
+  const jsonLd = initialProduct ? {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    'name': initialProduct.name,
+    'image': initialProduct.images,
+    'description': initialProduct.description || 'Premium Luxury Menswear Product',
+    'category': initialProduct.category,
+    'offers': {
+      '@type': 'Offer',
+      'priceCurrency': 'UGX',
+      'price': initialProduct.price,
+      'itemCondition': 'https://schema.org/NewCondition',
+      'availability': initialProduct.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      'url': `https://blue-hills-designers.com/product/${id}`
+    }
+  } : null;
+
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <ProductClientWrapper productId={id} initialProduct={initialProduct} />
+    </>
+  );
 }
