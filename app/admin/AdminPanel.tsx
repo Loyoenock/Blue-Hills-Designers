@@ -22,14 +22,14 @@ import { Product, Order, User } from '../../types';
 export default function Admin() {
   const router = useRouter();
   const { 
-    currentUser, login, products, orders, users, auditLogs, payments, settings,
+    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
-    deleteReview, updateProductStockQuick
+    deleteReview, updateProductStockQuick, updateBookingStatus
   } = useStore();
 
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'logs' | 'payments' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
 
   // Form and search/filter states for User Management
   const [userSearch, setUserSearch] = useState('');
@@ -98,6 +98,14 @@ export default function Admin() {
   const [paymentSearch, setPaymentSearch] = useState('');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('All');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('All');
+
+  // Filter bookings state
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('All');
+
+  // Filter logs state
+  const [logSearch, setLogSearch] = useState('');
+  const [logActionFilter, setLogActionFilter] = useState('All');
 
   // Selected Order for detail overlay modal
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
@@ -256,6 +264,26 @@ export default function Admin() {
     const matchStatus = paymentStatusFilter === 'All' || p.status === paymentStatusFilter;
     const matchMethod = paymentMethodFilter === 'All' || p.paymentMethod === paymentMethodFilter;
     return matchSearch && matchStatus && matchMethod;
+  });
+
+  // Filter bookings list
+  const filteredBookings = (bookings || []).filter(b => {
+    const matchSearch = b.clientName.toLowerCase().includes(bookingSearch.toLowerCase()) ||
+                        b.clientEmail.toLowerCase().includes(bookingSearch.toLowerCase()) ||
+                        (b.clientPhone && b.clientPhone.toLowerCase().includes(bookingSearch.toLowerCase())) ||
+                        b.id.toLowerCase().includes(bookingSearch.toLowerCase());
+    const matchStatus = bookingStatusFilter === 'All' || b.status === bookingStatusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  // Filter logs list
+  const filteredLogs = (auditLogs || []).filter(log => {
+    const matchSearch = log.details.toLowerCase().includes(logSearch.toLowerCase()) || 
+                        log.action.toLowerCase().includes(logSearch.toLowerCase()) ||
+                        log.userName.toLowerCase().includes(logSearch.toLowerCase()) ||
+                        log.userRole.toLowerCase().includes(logSearch.toLowerCase());
+    const matchAction = logActionFilter === 'All' || log.action === logActionFilter;
+    return matchSearch && matchAction;
   });
 
   // Handle Save Boutique Settings
@@ -600,6 +628,7 @@ export default function Admin() {
               { id: 'dashboard', name: 'Boutique Pulse', icon: BarChart },
               { id: 'products', name: 'Apparel Registry', icon: Grid },
               { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: orders.length },
+              { id: 'bookings', name: 'Style Bookings', icon: Calendar, count: (bookings || []).length },
               { id: 'payments', name: 'Payment Ledger', icon: CreditCard, count: (payments || []).length },
               { id: 'users', name: 'Authorized Staff', icon: Users },
               { id: 'logs', name: 'Security Audits', icon: FileText, count: auditLogs.length },
@@ -1446,6 +1475,116 @@ export default function Admin() {
               </motion.div>
             )}
 
+            {/* SUB-TAB: STYLE BOOKINGS */}
+            {activeTab === 'bookings' && (
+              <motion.div 
+                key="bookings"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h3 className="font-serif text-xl text-white font-bold">Personal Styling Bookings</h3>
+                  <div className="flex gap-2.5">
+                    <span className="text-[10px] text-[#20D9A1] font-mono uppercase tracking-widest font-bold">Bookings Desk Active</span>
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-2">
+                    <Search className="w-4 h-4 text-white/40" />
+                    <input 
+                      type="text" 
+                      value={bookingSearch}
+                      onChange={(e) => setBookingSearch(e.target.value)}
+                      placeholder="Search Client Name, Email, Phone..."
+                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
+                    />
+                  </div>
+                  <div>
+                    <select 
+                      value={bookingStatusFilter}
+                      onChange={(e) => setBookingStatusFilter(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Confirmed">Confirmed</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Bookings Table */}
+                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse font-sans text-xs">
+                      <thead>
+                        <tr className="border-b border-white/5 text-[9px] uppercase tracking-widest font-mono text-white/40">
+                          <th className="py-3 px-2">BOOKING ID</th>
+                          <th className="py-3 px-2">CLIENT DETAILS</th>
+                          <th className="py-3 px-2 font-mono">DATE / TIME</th>
+                          <th className="py-3 px-2 font-mono">NOTES</th>
+                          <th className="py-3 px-2 font-mono">STATUS STATE</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {filteredBookings.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-12 text-center text-white/30 font-light text-xs">
+                              No styling bookings found matching the parameters.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBookings.map((b) => (
+                            <tr key={b.id} className="hover:bg-white/5 transition-colors">
+                              <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{b.id}</td>
+                              <td className="py-3 px-2 space-y-0.5">
+                                <span className="font-semibold text-white block">{b.clientName}</span>
+                                <span className="text-[10px] text-white/40 block">{b.clientEmail}</span>
+                                {b.clientPhone && (
+                                  <span className="text-[10px] text-white/40 font-mono block">{b.clientPhone}</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-2 font-mono text-white/70 space-y-0.5">
+                                <div className="font-medium text-white">{b.date}</div>
+                                <div className="text-[10px] text-white/40">{b.time}</div>
+                              </td>
+                              <td className="py-3 px-2 text-white/60 max-w-xs truncate" title={b.notes}>
+                                {b.notes || <span className="text-white/20 italic">No notes</span>}
+                              </td>
+                              <td className="py-3 px-2">
+                                <select
+                                  value={b.status}
+                                  onChange={(e) => updateBookingStatus(
+                                    b.id, 
+                                    e.target.value as any,
+                                    currentUser?.name || 'Master Admin',
+                                    currentUser?.role || 'Super Admin'
+                                  )}
+                                  className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
+                                    b.status === 'Completed' ? 'text-green-400' :
+                                    b.status === 'Confirmed' ? 'text-blue-400' :
+                                    'text-yellow-400'
+                                  }`}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="Confirmed">Confirmed</option>
+                                  <option value="Completed">Completed</option>
+                                </select>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* SUB-TAB 5: SECURITY AUDIT LOGS */}
             {activeTab === 'logs' && canSeeLogs && (
               <motion.div 
@@ -1460,17 +1599,52 @@ export default function Admin() {
                   <span className="text-[10px] text-[#20D9A1] font-mono">● ENCRYPTED ACTIVE TRACE</span>
                 </div>
 
-                <div className="bg-black/60 border border-white/10 rounded-2xl p-6 font-mono text-[11px] leading-relaxed space-y-3 max-h-[500px] overflow-y-auto">
-                  {auditLogs.map((log) => (
-                    <div key={log.id} className="border-b border-white/5 pb-2.5 flex items-start gap-3">
-                      <span className="text-white/30 shrink-0">[{log.timestamp}]</span>
-                      <div className="space-y-0.5">
-                        <p className="text-[#20D9A1] font-bold uppercase tracking-wider text-[9px]">Scope: {log.action}</p>
-                        <p className="text-white/70">{log.details}</p>
-                        <p className="text-white/30 text-[9px]">Operator: {log.userName} ({log.userRole})</p>
+                {/* Filters */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-2">
+                    <Search className="w-4 h-4 text-white/40" />
+                    <input 
+                      type="text" 
+                      value={logSearch}
+                      onChange={(e) => setLogSearch(e.target.value)}
+                      placeholder="Search log details, operator, action..."
+                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
+                    />
+                  </div>
+                  <div>
+                    <select 
+                      value={logActionFilter}
+                      onChange={(e) => setLogActionFilter(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
+                    >
+                      <option value="All">All Audit Events</option>
+                      <option value="Product Registered">Product Registered</option>
+                      <option value="Product Updated">Product Updated</option>
+                      <option value="User Registered">User Registered</option>
+                      <option value="User Updated">User Updated</option>
+                      <option value="Order Status Adjusted">Order Status Adjusted</option>
+                      <option value="Payment Status Adjusted">Payment Status Adjusted</option>
+                      <option value="Settings Updated">Settings Updated</option>
+                      <option value="Booking Status Adjusted">Booking Status Adjusted</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 font-mono text-[11px] leading-relaxed space-y-3 max-h-[500px] overflow-y-auto font-sans">
+                  {filteredLogs.length === 0 ? (
+                    <div className="text-center text-white/30 py-8 italic font-sans text-xs">No audit records match the filters.</div>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <div key={log.id} className="border-b border-white/5 pb-2.5 flex items-start gap-3 font-mono text-[11px]">
+                        <span className="text-white/30 shrink-0 font-mono">[{log.timestamp}]</span>
+                        <div className="space-y-0.5">
+                          <p className="text-[#20D9A1] font-bold uppercase tracking-wider text-[9px] font-mono">Scope: {log.action}</p>
+                          <p className="text-white/70 font-sans">{log.details}</p>
+                          <p className="text-white/30 text-[9px] font-sans">Operator: {log.userName} ({log.userRole})</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}

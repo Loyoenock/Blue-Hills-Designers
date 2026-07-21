@@ -67,7 +67,7 @@ interface StoreState {
 
   // Consultation Actions
   bookConsultation: (bookingData: Omit<ConsultationBooking, 'id' | 'status'>) => void;
-  updateBookingStatus: (bookingId: string, status: ConsultationBooking['status']) => void;
+  updateBookingStatus: (bookingId: string, status: ConsultationBooking['status'], modifierName: string, modifierRole: string) => void;
 
   // Newsletter Actions
   subscribeNewsletter: (email: string) => { success: boolean; message: string };
@@ -2499,13 +2499,24 @@ export const useStore = create<StoreState>()(
         safeSupabaseInsert('consultations', newBooking);
       },
 
-      updateBookingStatus: (bookingId, status) => {
+      updateBookingStatus: (bookingId, status, modifierName, modifierRole) => {
         set(state => ({
           bookings: state.bookings.map(b => b.id === bookingId ? { ...b, status } : b)
         }));
 
-        // Sync booking status with Supabase
-        safeSupabaseUpsert('consultations', { id: bookingId, status });
+        const booking = get().bookings?.find(b => b.id === bookingId);
+        const refDetails = booking ? `for Client: ${booking.clientName} on ${booking.date}` : `ID ${bookingId}`;
+
+        get().addAuditLog(
+          'Booking Status Adjusted',
+          `Booking status ${refDetails} adjusted to '${status}' by staff.`,
+          'staff-modifier',
+          modifierName,
+          modifierRole as User['role']
+        );
+
+        // Sync booking status with Supabase (must be lowercase)
+        safeSupabaseUpsert('consultations', { id: bookingId, status: status.toLowerCase() });
       },
 
       subscribeNewsletter: (email) => {
