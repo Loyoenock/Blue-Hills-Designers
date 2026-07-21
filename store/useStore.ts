@@ -910,71 +910,83 @@ export const useStore = create<StoreState>()(
       isSyncing: false,
 
       syncFromSupabase: async () => {
+        if (get().isSyncing) return;
         set({ isSyncing: true });
-        try {
-          const supabase = getSupabaseClient();
-          if (!supabase) {
-            set({ isSyncing: false });
-            return;
-          }
 
-          // Ensure categories are seeded in the database
-          await seedCategories();
-          const { data: dbCats } = await supabase.from('categories').select('*');
+        const maxAttempts = 3;
+        let attempt = 0;
+        let success = false;
+        let lastError: any = null;
 
-          // Sync settings from dbCats if present
-          if (dbCats) {
-            const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
-            if (settingsCat && settingsCat.description) {
-              try {
-                const parsedSettings = JSON.parse(settingsCat.description);
-                if (parsedSettings) {
-                  if (parsedSettings.conciergePhone && !parsedSettings.supportPhone) {
-                    parsedSettings.supportPhone = parsedSettings.conciergePhone;
-                  }
-                  if (!parsedSettings.supportPhone) {
-                    parsedSettings.supportPhone = INITIAL_SETTINGS.supportPhone;
-                  }
-                }
-                set({ settings: parsedSettings });
-              } catch (e) {
-                console.warn('Failed to parse app-settings from categories:', e);
-              }
-            } else if (!settingsCat) {
-              // Seed settings in dbCats so all instances fetch it
-              const settingsPayload = {
-                id: toValidUUID('app-settings'),
-                name: 'App Settings',
-                slug: 'app-settings',
-                description: JSON.stringify(get().settings || INITIAL_SETTINGS)
-              };
-              await safeSupabaseUpsert('categories', settingsPayload);
+        while (attempt < maxAttempts && !success) {
+          attempt++;
+          try {
+            const supabase = getSupabaseClient();
+            if (!supabase) {
+              set({ isSyncing: false });
+              return;
             }
-          }
 
-          // 1. Fetch & Seed Profiles FIRST (so that products/reviews can reference user profiles)
-          const { data: dbProfiles, error: profErr } = await supabase.from('profiles').select('*');
-          if (!profErr && dbProfiles && dbProfiles.length > 0) {
-            const mappedUsers = dbProfiles.map((p: any) => ({
+            // Ensure categories are seeded in the database
+            await seedCategories();
+            const { data: dbCats } = await supabase.from('categories').select('*');
+
+            // Sync settings from dbCats if present
+            if (dbCats) {
+              const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
+              if (settingsCat && settingsCat.description) {
+                try {
+                  const parsedSettings = JSON.parse(settingsCat.description);
+                  if (parsedSettings) {
+                    if (parsedSettings.conciergePhone && !parsedSettings.supportPhone) {
+                      parsedSettings.supportPhone = parsedSettings.conciergePhone;
+                    }
+                    if (!parsedSettings.supportPhone) {
+                      parsedSettings.supportPhone = INITIAL_SETTINGS.supportPhone;
+                    }
+                  }
+                  set({ settings: parsedSettings });
+                } catch (e) {
+                  console.warn('Failed to parse app-settings from categories:', e);
+                }
+              } else if (!settingsCat) {
+                // Seed settings in dbCats so all instances fetch it
+                const settingsPayload = {
+                  id: toValidUUID('app-settings'),
+                  name: 'App Settings',
+                  slug: 'app-settings',
+                  description: JSON.stringify(get().settings || INITIAL_SETTINGS)
+                };
+                await safeSupabaseUpsert('categories', settingsPayload);
+              }
+            }
+
+            // 1. Fetch & Seed Profiles FIRST (so that products/reviews can reference user profiles)
+            const { data: dbProfiles, error: profErr } = await supabase.from('profiles').select('*');
+            if (profErr) throw profErr;
+            
+            const mappedUsers = (dbProfiles || []).map((p: any) => ({
               id: p.id,
-              name: p.full_name,
+              name: p.full_name || p.name || 'Gentleman Customer',
               email: p.email,
               phone: p.phone,
               role: capitalizeRole(p.role),
-              spending: p.lifetime_spending,
-              rewardsPoints: p.reward_points
+              spending: p.lifetime_spending || p.spending || 0,
+              rewardsPoints: p.reward_points || p.rewardsPoints || 0
             }));
-            set({ users: mappedUsers as User[] });
-          } else if (!profErr) {
-            for (const user of INITIAL_USERS) {
+
+            const localUsers = get().users || INITIAL_USERS;
+            const missingUsers = localUsers.filter(lu => !mappedUsers.some(mu => mu.id === lu.id));
+            for (const user of missingUsers) {
               await safeSupabaseUpsert('profiles', user);
             }
-            set({ users: INITIAL_USERS });
-          }
+            const finalUsers = [...mappedUsers, ...missingUsers];
+            set({ users: finalUsers as User[] });
 
-          // 2. Fetch & Seed Products & Reviews
-          const { data: dbProducts, error: prodErr } = await supabase.from('products').select('*');
-          if (!prodErr && dbProducts && dbProducts.length > 0) {
+            // 2. Fetch & Seed Products & Reviews
+            const { data: dbProducts, error: prodErr } = await supabase.from('products').select('*');
+            if (prodErr) throw prodErr;
+
             const { data: dbReviews } = await supabase.from('reviews').select('*');
             const { data: dbProfilesList } = await supabase.from('profiles').select('*');
             let dbImages: any[] | null = null;
@@ -998,7 +1010,7 @@ export const useStore = create<StoreState>()(
               };
             }) : [];
 
-            const mappedProducts = dbProducts.map((p: any) => {
+            const mappedProducts = (dbProducts || []).map((p: any) => {
               const catName = dbCats ? (dbCats.find((c: any) => c.id === p.category_id)?.name || 'Suits') : 'Suits';
               const localProd = INITIAL_PRODUCTS.find(lp => toValidUUID(lp.id) === p.id);
               const prodReviews = reviewsWithProfiles.filter(r => r.productId === p.id);
@@ -1064,9 +1076,43 @@ export const useStore = create<StoreState>()(
               };
             });
 
+            // Bidirectional sync for products: find local products that are not in database and seed/upsert them
+            const localProducts = get().products || INITIAL_PRODUCTS;
+            const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id));
+            for (const prod of missingProducts) {
+              await safeSupabaseUpsert('products', prod);
+              if (prod.images && prod.images.length > 0) {
+                for (let i = 0; i < prod.images.length; i++) {
+                  await safeSupabaseUpsert('product_images', {
+                    productId: prod.id,
+                    imageUrl: prod.images[i],
+                    displayOrder: i + 1
+                  });
+                }
+              }
+              for (const rev of prod.reviews || []) {
+                const matchedUser = get().users.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
+                const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+                
+                await safeSupabaseUpsert('profiles', {
+                  id: reviewerUserId,
+                  name: rev.userName,
+                  email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
+                  phone: matchedUser?.phone || '',
+                  role: matchedUser?.role || 'Customer',
+                  spending: matchedUser?.spending || 0,
+                  rewardsPoints: matchedUser?.rewardsPoints || 0
+                });
+
+                await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
+              }
+            }
+
+            const combinedProducts = [...mappedProducts, ...missingProducts];
+
             // Resolve signed URLs for private storage paths
             const privatePaths: string[] = [];
-            mappedProducts.forEach((p: any) => {
+            combinedProducts.forEach((p: any) => {
               if (p.images) {
                 p.images.forEach((img: string) => {
                   if (isPrivateStoragePath(img)) {
@@ -1099,7 +1145,7 @@ export const useStore = create<StoreState>()(
               }
             }
 
-            const resolvedProducts = mappedProducts.map((p: any) => {
+            const resolvedProducts = combinedProducts.map((p: any) => {
               const resolvedImages = p.images.map((img: string) => {
                 if (isPrivateStoragePath(img)) {
                   return signedUrlsMap[img] || img;
@@ -1110,50 +1156,17 @@ export const useStore = create<StoreState>()(
             });
 
             set({ products: resolvedProducts as Product[] });
-          } else if (!prodErr) {
-            // Seed products
-            for (const prod of INITIAL_PRODUCTS) {
-              await safeSupabaseUpsert('products', prod);
-              if (prod.images && prod.images.length > 0) {
-                for (let i = 0; i < prod.images.length; i++) {
-                  await safeSupabaseUpsert('product_images', {
-                    productId: prod.id,
-                    imageUrl: prod.images[i],
-                    displayOrder: i + 1
-                  });
-                }
-              }
-              for (const rev of prod.reviews) {
-                // Ensure a profile exists for the reviewer so that we don't violate the foreign key constraint
-                const matchedUser = INITIAL_USERS.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
-                const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-                
-                // If reviewer profile doesn't exist in profiles list, seed it as a stub first
-                await safeSupabaseUpsert('profiles', {
-                  id: reviewerUserId,
-                  name: rev.userName,
-                  email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
-                  phone: matchedUser?.phone || '',
-                  role: matchedUser?.role || 'Customer',
-                  spending: matchedUser?.spending || 0,
-                  rewardsPoints: matchedUser?.rewardsPoints || 0
-                });
 
-                await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
-              }
-            }
-            set({ products: INITIAL_PRODUCTS });
-          }
+            // 3. Fetch Orders, Order Items, Addresses
+            const { data: dbOrders, error: ordErr } = await supabase.from('orders').select('*');
+            if (ordErr) throw ordErr;
 
-          // 3. Fetch Orders, Order Items, Addresses
-          const { data: dbOrders, error: ordErr } = await supabase.from('orders').select('*');
-          if (!ordErr && dbOrders && dbOrders.length > 0) {
             const { data: dbItems } = await supabase.from('order_items').select('*');
             const { data: dbAddresses } = await supabase.from('order_addresses').select('*');
-            const { data: dbProfilesList } = await supabase.from('profiles').select('*');
+            const { data: dbProfilesListForOrders } = await supabase.from('profiles').select('*');
             
-            const formattedOrders = dbOrders.map(o => {
-              const profile = dbProfilesList?.find((p: any) => p.id === o.user_id);
+            const formattedOrders = (dbOrders || []).map(o => {
+              const profile = dbProfilesListForOrders?.find((p: any) => p.id === o.user_id);
               const addr = dbAddresses?.find((a: any) => a.order_id === o.id) || {
                 country: 'Uganda', district: 'Kampala', city: 'Lubowa', address: 'Lubowa Shopping Mall'
               };
@@ -1196,133 +1209,159 @@ export const useStore = create<StoreState>()(
                 }
               };
             });
-            set({ orders: formattedOrders as Order[] });
-          } else if (!ordErr) {
-            for (const order of INITIAL_ORDERS) {
+
+            // Bidirectional sync for orders
+            const localOrders = get().orders || INITIAL_ORDERS;
+            const missingOrders = localOrders.filter(lo => !formattedOrders.some(fo => fo.id === lo.id));
+            for (const order of missingOrders) {
               await safeSupabaseUpsert('orders', order);
               for (const item of order.items) {
                 await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
               }
               await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
             }
-            set({ orders: INITIAL_ORDERS });
-          }
 
-          // 4. Fetch Consultations (Try-catch in case table is missing)
-          try {
-            const { data: dbBookings, error: bookErr } = await supabase.from('consultations').select('*');
-            if (!bookErr && dbBookings) {
-              const camelBookings = keysToCamel(dbBookings) as ConsultationBooking[];
-              const localBookings = get().bookings || [];
-              const missingBookings = localBookings.filter(lb => !camelBookings.some(cb => cb.id === lb.id));
-              for (const booking of missingBookings) {
-                await safeSupabaseUpsert('consultations', booking);
-              }
-              set({ bookings: [...camelBookings, ...missingBookings] });
-            }
-          } catch (e) {
-            console.warn('Could not sync consultations table:', e);
-          }
+            set({ orders: [...formattedOrders, ...missingOrders] as Order[] });
 
-          // 5. Fetch Newsletter Subscribers
-          const { data: dbSubs, error: subsErr } = await supabase.from('newsletter_subscribers').select('*');
-          if (!subsErr && dbSubs) {
-            const mappedSubs = dbSubs.map((sub: any) => ({
-              id: sub.id,
-              email: sub.email,
-              date: sub.subscribed_at
-            })) as NewsletterSubscriber[];
-            const localSubs = get().subscribers || [];
-            const missingSubs = localSubs.filter(ls => !mappedSubs.some(cs => cs.email.toLowerCase() === ls.email.toLowerCase()));
-            for (const sub of missingSubs) {
-              await safeSupabaseUpsert('newsletter_subscribers', sub);
-            }
-            set({ subscribers: [...mappedSubs, ...missingSubs] });
-          }
-
-          // 6. Fetch Audit Logs
-          const { data: dbLogs, error: logErr } = await supabase.from('audit_logs').select('*');
-          if (!logErr && dbLogs && dbLogs.length > 0) {
-            const { data: dbProfilesList } = await supabase.from('profiles').select('*');
-            const mappedLogs = dbLogs.map((log: any) => {
-              const profile = dbProfilesList?.find((p: any) => p.id === log.user_id);
-              return {
-                id: log.id,
-                userId: log.user_id || 'guest',
-                userName: profile?.full_name || 'System / Guest',
-                userRole: profile?.role || 'Customer',
-                action: log.action,
-                details: log.details || '',
-                timestamp: log.created_at
-              };
-            }) as AuditLog[];
-            set({ auditLogs: mappedLogs.slice(0, 500) });
-          } else if (!logErr) {
-            for (const log of INITIAL_AUDIT_LOGS) {
-              await safeSupabaseUpsert('audit_logs', log);
-            }
-            set({ auditLogs: INITIAL_AUDIT_LOGS });
-          }
-
-          // Restore currentUser dynamically from active Supabase Auth session or persisted currentUserId
-          try {
-            const { data: authData } = await supabase.auth.getUser();
-            const authUser = authData?.user;
-            const targetUserId = authUser?.id || get().currentUserId;
-
-            if (authUser?.user_metadata?.cart) {
-              const userCart = authUser.user_metadata.cart;
-              if (Array.isArray(userCart) && userCart.length > 0) {
-                set({ cart: userCart });
-              }
-            }
-
-            if (targetUserId) {
-              const { data: p } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', targetUserId)
-                .maybeSingle();
-              
-              const meta = authUser?.user_metadata || {};
-              const userObj: User = {
-                id: targetUserId,
-                name: p?.full_name || p?.name || authUser?.user_metadata?.name || (authUser ? authUser.email?.split('@')[0].toUpperCase() : 'Gentleman Customer'),
-                email: p?.email || authUser?.email || '',
-                phone: p?.phone || authUser?.user_metadata?.phone || '',
-                role: p ? capitalizeRole(p.role) : 'Customer',
-                spending: p ? (p.lifetime_spending || p.spending || 0) : 0,
-                rewardsPoints: p ? (p.reward_points || p.rewardsPoints || 0) : 0,
-                country: meta.country || undefined,
-                district: meta.district || undefined,
-                city: meta.city || undefined,
-                address: meta.address || undefined
-              };
-              set({ currentUser: userObj });
-
-              // Fetch user's wishlist from Supabase
-              try {
-                const { data: dbWishlists, error: wishErr } = await supabase
-                  .from('wishlists')
-                  .select('product_id')
-                  .eq('user_id', targetUserId);
-                if (!wishErr && dbWishlists) {
-                  const productIds = dbWishlists.map((w: any) => w.product_id);
-                  set({ wishlist: productIds });
+            // 4. Fetch Consultations (Try-catch in case table is missing)
+            try {
+              const { data: dbBookings, error: bookErr } = await supabase.from('consultations').select('*');
+              if (!bookErr && dbBookings) {
+                const camelBookings = keysToCamel(dbBookings) as ConsultationBooking[];
+                const localBookings = get().bookings || [];
+                const missingBookings = localBookings.filter(lb => !camelBookings.some(cb => cb.id === lb.id));
+                for (const booking of missingBookings) {
+                  await safeSupabaseUpsert('consultations', booking);
                 }
-              } catch (wishErr) {
-                console.warn('Failed to load wishlist from Supabase:', wishErr);
+                set({ bookings: [...camelBookings, ...missingBookings] });
               }
+            } catch (e) {
+              console.warn('Could not sync consultations table:', e);
             }
-          } catch (authError) {
-            console.warn('Could not restore auth user session:', authError);
-          }
 
-        } catch (err) {
-          console.error('Error in syncFromSupabase:', err);
-        } finally {
-          set({ isSyncing: false });
+            // 5. Fetch Newsletter Subscribers
+            try {
+              const { data: dbSubs, error: subsErr } = await supabase.from('newsletter_subscribers').select('*');
+              if (!subsErr && dbSubs) {
+                const mappedSubs = dbSubs.map((sub: any) => ({
+                  id: sub.id,
+                  email: sub.email,
+                  date: sub.subscribed_at
+                })) as NewsletterSubscriber[];
+                const localSubs = get().subscribers || [];
+                const missingSubs = localSubs.filter(ls => !mappedSubs.some(cs => cs.email.toLowerCase() === ls.email.toLowerCase()));
+                for (const sub of missingSubs) {
+                  await safeSupabaseUpsert('newsletter_subscribers', sub);
+                }
+                set({ subscribers: [...mappedSubs, ...missingSubs] });
+              }
+            } catch (e) {
+              console.warn('Could not sync newsletter_subscribers:', e);
+            }
+
+            // 6. Fetch Audit Logs
+            try {
+              const { data: dbLogs, error: logErr } = await supabase.from('audit_logs').select('*');
+              if (!logErr && dbLogs && dbLogs.length > 0) {
+                const { data: dbProfilesListForLogs } = await supabase.from('profiles').select('*');
+                const mappedLogs = dbLogs.map((log: any) => {
+                  const profile = dbProfilesListForLogs?.find((p: any) => p.id === log.user_id);
+                  return {
+                    id: log.id,
+                    userId: log.user_id || 'guest',
+                    userName: profile?.full_name || 'System / Guest',
+                    userRole: profile?.role || 'Customer',
+                    action: log.action,
+                    details: log.details || '',
+                    timestamp: log.created_at
+                  };
+                }) as AuditLog[];
+                const localLogs = get().auditLogs || INITIAL_AUDIT_LOGS;
+                const missingLogs = localLogs.filter(ll => !mappedLogs.some(ml => ml.id === ll.id));
+                for (const log of missingLogs) {
+                  await safeSupabaseUpsert('audit_logs', log);
+                }
+                set({ auditLogs: [...mappedLogs, ...missingLogs].slice(0, 500) });
+              } else if (!logErr) {
+                for (const log of INITIAL_AUDIT_LOGS) {
+                  await safeSupabaseUpsert('audit_logs', log);
+                }
+                set({ auditLogs: INITIAL_AUDIT_LOGS });
+              }
+            } catch (e) {
+              console.warn('Could not sync audit_logs:', e);
+            }
+
+            // Restore currentUser dynamically from active Supabase Auth session or persisted currentUserId
+            try {
+              const { data: authData } = await supabase.auth.getUser();
+              const authUser = authData?.user;
+              const targetUserId = authUser?.id || get().currentUserId;
+
+              if (authUser?.user_metadata?.cart) {
+                const userCart = authUser.user_metadata.cart;
+                if (Array.isArray(userCart) && userCart.length > 0) {
+                  set({ cart: userCart });
+                }
+              }
+
+              if (targetUserId) {
+                const { data: p } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', targetUserId)
+                  .maybeSingle();
+                
+                const meta = authUser?.user_metadata || {};
+                const userObj: User = {
+                  id: targetUserId,
+                  name: p?.full_name || p?.name || authUser?.user_metadata?.name || (authUser ? authUser.email?.split('@')[0].toUpperCase() : 'Gentleman Customer'),
+                  email: p?.email || authUser?.email || '',
+                  phone: p?.phone || authUser?.user_metadata?.phone || '',
+                  role: p ? capitalizeRole(p.role) : 'Customer',
+                  spending: p ? (p.lifetime_spending || p.spending || 0) : 0,
+                  rewardsPoints: p ? (p.reward_points || p.rewardsPoints || 0) : 0,
+                  country: meta.country || undefined,
+                  district: meta.district || undefined,
+                  city: meta.city || undefined,
+                  address: meta.address || undefined
+                };
+                set({ currentUser: userObj });
+
+                // Fetch user's wishlist from Supabase
+                try {
+                  const { data: dbWishlists, error: wishErr } = await supabase
+                    .from('wishlists')
+                    .select('product_id')
+                    .eq('user_id', targetUserId);
+                  if (!wishErr && dbWishlists) {
+                    const productIds = dbWishlists.map((w: any) => w.product_id);
+                    set({ wishlist: productIds });
+                  }
+                } catch (wishErr) {
+                  console.warn('Failed to load wishlist from Supabase:', wishErr);
+                }
+              }
+            } catch (authError) {
+              console.warn('Could not restore auth user session:', authError);
+            }
+
+            success = true;
+            set({ cartError: null }); // clear any previous sync error upon success
+          } catch (err: any) {
+            console.error(`Sync attempt ${attempt} failed:`, err);
+            lastError = err;
+            if (attempt < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, attempt * 500));
+            }
+          }
         }
+
+        if (!success) {
+          console.error('All syncFromSupabase attempts failed. Activating local mock simulation fallback.');
+          set({ cartError: `Database synchronization failed: ${lastError?.message || lastError || 'Check network connection'}` });
+        }
+        set({ isSyncing: false });
       },
 
       login: async (email, password, role) => {

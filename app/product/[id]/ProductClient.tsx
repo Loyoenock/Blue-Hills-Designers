@@ -17,10 +17,15 @@ import { Product, Review } from '../../../types';
 import { getSafeImageSrc } from '../../../lib/utils';
 import { getSupabaseClient } from '../../../lib/supabase';
 
-export default function ProductClient() {
+interface ProductClientProps {
+  productId?: string;
+  initialProduct?: Product | null;
+}
+
+export default function ProductClient({ productId: propProductId, initialProduct }: ProductClientProps) {
   const params = useParams();
   const router = useRouter();
-  const productId = params?.id as string;
+  const productId = propProductId || (params?.id as string);
 
   const products = useStore((state) => state.products);
   const addToCart = useStore((state) => state.addToCart);
@@ -53,7 +58,7 @@ export default function ProductClient() {
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
 
   // Fallback single product fetch from Supabase
-  const [dbProduct, setDbProduct] = useState<Product | null>(null);
+  const [dbProduct, setDbProduct] = useState<Product | null>(initialProduct || null);
   const [dbLoading, setDbLoading] = useState(false);
 
   // Recently Viewed state

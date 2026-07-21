@@ -17,10 +17,13 @@ import { Product } from '../../types';
 import { getSafeImageSrc } from '../../lib/utils';
 
 
-function ShopContent() {
+function ShopContent({ initialProducts }: { initialProducts?: Product[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const products = useStore((state) => state.products);
+  const storeProducts = useStore((state) => state.products);
+  const products = useMemo(() => {
+    return storeProducts.length > 0 ? storeProducts : (initialProducts || []);
+  }, [storeProducts, initialProducts]);
   const addToCart = useStore((state) => state.addToCart);
   const wishlist = useStore((state) => state.wishlist);
   const toggleWishlist = useStore((state) => state.toggleWishlist);
@@ -44,6 +47,12 @@ function ShopContent() {
   const [sortBy, setSortBy] = useState<string>('featured');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Quick View State
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [quickViewSize, setQuickViewSize] = useState('');
+  const [quickViewColor, setQuickViewColor] = useState('');
+  const [quickViewQty, setQuickViewQty] = useState(1);
 
   // Sync price range once products are fetched or updated
   useEffect(() => {
@@ -226,6 +235,21 @@ function ShopContent() {
     const size = p.sizes[0] || 'One Size';
     const color = p.colors[0] || 'Default';
     addToCart(p, size, color, 1);
+    setAddedAlert(true);
+    setTimeout(() => setAddedAlert(false), 3000);
+  };
+
+  const handleOpenQuickView = (p: Product) => {
+    setQuickViewProduct(p);
+    setQuickViewSize(p.sizes[0] || '');
+    setQuickViewColor(p.colors[0] || '');
+    setQuickViewQty(1);
+  };
+
+  const handleAddFromQuickView = () => {
+    if (!quickViewProduct) return;
+    addToCart(quickViewProduct, quickViewSize, quickViewColor, quickViewQty);
+    setQuickViewProduct(null);
     setAddedAlert(true);
     setTimeout(() => setAddedAlert(false), 3000);
   };
@@ -596,18 +620,20 @@ function ShopContent() {
                         <div className={`relative bg-[#F7F5F0] overflow-hidden ${
                           viewMode === 'list' ? 'h-[240px] sm:w-[240px] shrink-0' : 'h-[320px]'
                         }`}>
-                          <Image 
-                            src={getSafeImageSrc(p.images?.[0])}
-                            alt={p.name}
-                            fill
-                            className="object-cover transition-transform duration-500 group-hover:scale-105"
-                            sizes="(max-width: 768px) 100vw, 30vw"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                          <Link href={`/product/${p.id}`} className="absolute inset-0 block z-0">
+                            <Image 
+                              src={getSafeImageSrc(p.images?.[0])}
+                              alt={p.name}
+                              fill
+                              className="object-cover transition-transform duration-500 group-hover:scale-105"
+                              sizes="(max-width: 768px) 100vw, 30vw"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                          </Link>
                           
                           {/* Badges */}
-                          <div className="absolute top-3.5 left-3.5 flex flex-col gap-1">
+                          <div className="absolute top-3.5 left-3.5 flex flex-col gap-1 z-10 pointer-events-none">
                             <span className="bg-[#1D2B3F]/85 backdrop-blur-md text-[#F7F5F0] border border-[#657892]/20 text-[8px] font-mono font-semibold uppercase px-2 py-0.5 rounded shadow-sm">
                               {p.category}
                             </span>
@@ -620,10 +646,28 @@ function ShopContent() {
 
                           <button 
                             onClick={() => toggleWishlist(p.id)}
-                            className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-[#F7F5F0]/80 backdrop-blur-md border border-[#657892]/20 text-[#1D2B3F]/60 hover:text-red-500 flex items-center justify-center transition-colors shadow-sm"
+                            className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-[#F7F5F0]/80 backdrop-blur-md border border-[#657892]/20 text-[#1D2B3F]/60 hover:text-red-500 flex items-center justify-center transition-colors shadow-sm z-10 cursor-pointer"
                           >
                             <Heart className={`w-4.5 h-4.5 ${isWish ? 'fill-red-500 text-red-500' : ''}`} />
                           </button>
+
+                          {/* Hover controls */}
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3 z-10">
+                            <button 
+                              onClick={() => handleOpenQuickView(p)}
+                              className="w-11 h-11 rounded-full bg-[#1D2B3F]/80 text-[#F7F5F0] hover:bg-[#1C4D8D] transition-all flex items-center justify-center border border-[#657892]/20 shadow-lg cursor-pointer"
+                              title="Quick View"
+                            >
+                              <Eye className="w-4.5 h-4.5" />
+                            </button>
+                            <button 
+                              onClick={() => handleQuickAdd(p)}
+                              className="w-11 h-11 rounded-full bg-[#1D2B3F]/80 text-[#F7F5F0] hover:bg-[#C6A15B] hover:text-[#1D2B3F] transition-all flex items-center justify-center border border-[#657892]/20 shadow-lg cursor-pointer"
+                              title="Add to Wardrobe"
+                            >
+                              <ShoppingCart className="w-4.5 h-4.5" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Details Panel */}
@@ -631,7 +675,9 @@ function ShopContent() {
                           <div className="space-y-2">
                             <div className="flex justify-between items-start gap-2">
                               <h3 className="font-serif text-lg font-bold text-[#1D2B3F] group-hover:text-[#1C4D8D] transition-colors leading-snug">
-                                {p.name}
+                                <Link href={`/product/${p.id}`}>
+                                  {p.name}
+                                </Link>
                               </h3>
                               <span className="font-mono text-base font-bold text-[#1D2B3F]">{currency} {p.price}</span>
                             </div>
@@ -653,6 +699,14 @@ function ShopContent() {
                             </div>
 
                             <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => handleOpenQuickView(p)}
+                                className="border border-[#1C4D8D] text-[#1C4D8D] hover:bg-[#1C4D8D]/10 px-3.5 py-2 rounded text-[10px] font-semibold uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer font-sans"
+                                title="Quick View"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Quick View</span>
+                              </button>
                               <button 
                                 onClick={() => handleQuickAdd(p)}
                                 className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-90 px-4 py-2 rounded text-[10px] font-semibold uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer font-sans"
@@ -828,16 +882,159 @@ function ShopContent() {
         )}
       </AnimatePresence>
 
+      {/* PRODUCT QUICK VIEW MODAL */}
+      <AnimatePresence>
+        {quickViewProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.7 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setQuickViewProduct(null)}
+              className="absolute inset-0 bg-black"
+            />
+            {/* Box */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#F7F5F0] border border-[#657892]/20 rounded-2xl overflow-hidden max-w-3xl w-full max-h-[90vh] overflow-y-auto relative z-10 p-6 md:p-8 text-[#1D2B3F]"
+              id="quickview-modal"
+            >
+              <button 
+                onClick={() => setQuickViewProduct(null)}
+                className="absolute top-4 right-4 text-[#657892] hover:text-[#1D2B3F] p-1 cursor-pointer"
+                id="close-quickview-btn"
+              >
+                ✕
+              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+                {/* Image preview */}
+                <div className="relative h-[300px] md:h-[400px] rounded-xl overflow-hidden border border-[#657892]/10">
+                  <Image 
+                    src={getSafeImageSrc(quickViewProduct.images?.[0])}
+                    alt={quickViewProduct.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 40vw"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+
+                {/* Details purchase panel */}
+                <div className="flex flex-col justify-between space-y-6">
+                  <div className="space-y-3">
+                    <span className="text-[10px] tracking-widest text-[#C6A15B] font-mono uppercase">{quickViewProduct.category}</span>
+                    <h3 className="font-serif text-2xl text-[#1D2B3F] font-bold">
+                      <Link href={`/product/${quickViewProduct.id}`} onClick={() => setQuickViewProduct(null)} className="hover:text-[#1C4D8D] transition-colors">
+                        {quickViewProduct.name}
+                      </Link>
+                    </h3>
+                    <div className="font-mono text-xl text-[#1D2B3F] font-bold">{currency} {quickViewProduct.price}</div>
+                    <p className="text-[#657892] text-xs font-light leading-relaxed">
+                      {quickViewProduct.description}
+                    </p>
+                  </div>
+
+                  {/* Size select */}
+                  {quickViewProduct.sizes.length > 0 && quickViewProduct.sizes[0] !== 'One Size' && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-[#657892]/60 uppercase tracking-widest font-mono font-medium">Select Size (Sizing guidelines apply)</label>
+                      <div className="flex flex-wrap gap-2">
+                        {quickViewProduct.sizes.map((sz) => (
+                          <button
+                            key={sz}
+                            onClick={() => setQuickViewSize(sz)}
+                            className={`px-3 py-1.5 rounded text-xs font-mono font-bold border transition-all cursor-pointer ${
+                              quickViewSize === sz 
+                                ? 'bg-[#1D2B3F] text-[#F7F5F0] border-[#1D2B3F]' 
+                                : 'border-[#657892]/20 text-[#1D2B3F] hover:border-[#1D2B3F]'
+                            }`}
+                          >
+                            {sz}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Color select */}
+                  {quickViewProduct.colors.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-[#657892]/60 uppercase tracking-widest font-mono font-medium">Select Color</label>
+                      <div className="flex flex-wrap gap-2">
+                        {quickViewProduct.colors.map((cl) => (
+                          <button
+                            key={cl}
+                            onClick={() => setQuickViewColor(cl)}
+                            className={`px-3 py-1.5 rounded text-xs border font-mono transition-all cursor-pointer ${
+                              quickViewColor === cl 
+                                ? 'bg-[#1C4D8D] text-[#F7F5F0] border-[#1C4D8D]' 
+                                : 'border-[#657892]/20 text-[#1D2B3F]/80 hover:border-[#1C4D8D]'
+                            }`}
+                          >
+                            {cl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Qty controls & Add to Cart button */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center border border-[#657892]/20 rounded bg-[#B9CDE5]/20">
+                        <button 
+                          onClick={() => setQuickViewQty(Math.max(1, quickViewQty - 1))}
+                          className="px-3 py-1.5 text-[#1D2B3F]/60 hover:text-[#1D2B3F] cursor-pointer"
+                        >
+                          -
+                        </button>
+                        <span className="px-3 py-1 font-mono text-sm text-[#1D2B3F] font-semibold">{quickViewQty}</span>
+                        <button 
+                          onClick={() => setQuickViewQty(quickViewQty + 1)}
+                          className="px-3 py-1.5 text-[#1D2B3F]/60 hover:text-[#1D2B3F] cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <button 
+                        onClick={handleAddFromQuickView}
+                        className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-[#1C4D8D]/90 px-6 py-2.5 rounded font-semibold uppercase tracking-widest text-xs flex-1 text-center transition-all cursor-pointer"
+                        id="add-from-quickview-btn"
+                      >
+                        Add to Wardrobe
+                      </button>
+                    </div>
+
+                    <div className="text-[10px] text-center text-[#657892]/50 font-mono">
+                      Free delivery included. Sizing advice available on demand.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <Footer />
       <MobileNav />
     </div>
   );
 }
 
-export default function Shop() {
+interface ShopProps {
+  initialProducts?: Product[];
+}
+
+export default function Shop({ initialProducts }: ShopProps) {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-[#1D2B3F] font-serif">Loading Boutique Registry...</div>}>
-      <ShopContent />
+      <ShopContent initialProducts={initialProducts} />
     </Suspense>
   );
 }

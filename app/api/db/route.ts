@@ -70,6 +70,21 @@ export async function POST(req: NextRequest) {
             message: `Skipped insert on ${tableName} due to foreign key constraint: ${error.message}`
           });
         }
+        if (error.code === '23505') {
+          logger.warn(`Conflict on insert in ${tableName}: unique violation (23505). Retrying operation as upsert.`);
+          const { data: upsertData, error: upsertErr } = await supabase.from(tableName).upsert(payload).select();
+          if (upsertErr) {
+            if (upsertErr.code === '23503') {
+              logger.warn(`Skipped retry-upsert on ${tableName} due to foreign key constraint: ${upsertErr.message}`);
+              return NextResponse.json({
+                data: null,
+                message: `Skipped retry-upsert on ${tableName} due to foreign key constraint: ${upsertErr.message}`
+              });
+            }
+            throw new ApiError(upsertErr.message, 400);
+          }
+          return NextResponse.json({ data: upsertData, message: 'Resolved unique violation conflict by upserting.' });
+        }
         throw new ApiError(error.message, 400);
       }
       return NextResponse.json({ data });
@@ -86,6 +101,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({
             data: null,
             message: `Skipped upsert on ${tableName} due to foreign key constraint: ${error.message}`
+          });
+        }
+        if (error.code === '23505') {
+          logger.warn(`Conflict on upsert in ${tableName}: unique violation (23505). Returning success and skipping.`);
+          return NextResponse.json({
+            data: null,
+            message: `Skipped upsert on ${tableName} due to unique constraint conflict: ${error.message}`
           });
         }
         throw new ApiError(error.message, 400);

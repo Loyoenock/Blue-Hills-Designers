@@ -2,8 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import ProductClient from './ProductClient';
+import { Product } from '../../../types';
 
-export default function ProductClientWrapper() {
+interface ProductClientWrapperProps {
+  productId: string;
+  initialProduct?: Product | null;
+}
+
+export default function ProductClientWrapper({ productId, initialProduct }: ProductClientWrapperProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -21,5 +27,5 @@ export default function ProductClientWrapper() {
     );
   }
 
-  return <ProductClient />;
+  return <ProductClient productId={productId} initialProduct={initialProduct} />;
 }

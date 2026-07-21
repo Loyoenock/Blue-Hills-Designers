@@ -2,8 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import ShopClient from './ShopClient';
+import { Product } from '../../types';
 
-export default function ShopClientWrapper() {
+interface ShopClientWrapperProps {
+  initialProducts?: Product[];
+}
+
+export default function ShopClientWrapper({ initialProducts }: ShopClientWrapperProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -21,5 +26,5 @@ export default function ShopClientWrapper() {
     );
   }
 
-  return <ShopClient />;
+  return <ShopClient initialProducts={initialProducts} />;
 }
