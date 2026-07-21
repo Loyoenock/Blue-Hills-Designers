@@ -1369,23 +1369,6 @@ export const useStore = create<StoreState>()(
           const supabase = getSupabaseClient();
           const users = get().users;
 
-          // Check if this is a fast-track bypass OR a pre-defined persona login with the special password
-          const isPredefined = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-          
-          if (isPredefined && (password === 'securityKeysApproved' || !password)) {
-            // Log in the pre-defined persona immediately
-            set({ currentUser: isPredefined });
-            get().addAuditLog(
-              'User Login',
-              `User logged in securely via fast-track. Session initiated.`,
-              isPredefined.id,
-              isPredefined.name,
-              isPredefined.role
-            );
-            safeSupabaseUpsert('profiles', isPredefined);
-            return { success: true };
-          }
-
           if (!password) {
             return { success: false, error: 'Password is required for standard authentication.' };
           }

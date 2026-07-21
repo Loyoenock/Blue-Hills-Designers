@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  ShieldCheck, HelpCircle, ArrowRight, Check, AlertTriangle, Key, ChevronRight
+  ShieldCheck, HelpCircle, ArrowRight, Check, AlertTriangle, Key
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import Header from '../../components/Header';
@@ -18,7 +18,6 @@ export default function LoginClient() {
   const login = useStore((state) => state.login);
   const forgotPassword = useStore((state) => state.forgotPassword);
   const currentUser = useStore((state) => state.currentUser);
-  const users = useStore((state) => state.users);
   const [mounted, setMounted] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -232,41 +231,6 @@ export default function LoginClient() {
             <div className="text-center text-xs text-[#657892] pt-2 font-mono">
               Don&apos;t have an elite profile?{' '}
               <Link href="/register" className="text-[#1C4D8D] hover:underline">Register Here</Link>
-            </div>
-
-            {/* PRE-DEFINED QUICK LOGIN PERSONAS */}
-            <div className="border-t border-[#657892]/20 pt-6 space-y-3">
-              <h4 className="text-[10px] uppercase tracking-widest text-[#C6A15B] font-mono font-bold">Fast-Track Validation Personas</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {users.map((u) => (
-                  <button
-                    key={u.id}
-                    disabled={isLoading}
-                    onClick={async () => {
-                      setEmail(u.email);
-                      setPassword('securityKeysApproved');
-                      setIsLoading(true);
-                      const res = await login(u.email, 'securityKeysApproved');
-                      setIsLoading(false);
-                      if (res.success) {
-                        setSuccess(true);
-                        setTimeout(() => {
-                          router.push(u.role === 'Customer' ? '/account' : '/admin');
-                        }, 1000);
-                      } else {
-                        setErrorMsg(res.error || 'Quick login failed.');
-                      }
-                    }}
-                    className="bg-[#B9CDE5]/10 hover:bg-[#B9CDE5]/20 border border-[#657892]/25 p-2.5 rounded-lg text-left transition-all flex justify-between items-center cursor-pointer shadow-sm disabled:opacity-55"
-                  >
-                    <div>
-                      <span className="text-xs font-bold text-[#1D2B3F] block">{u.name}</span>
-                      <span className="text-[9px] text-[#1C4D8D] font-mono uppercase">{u.role}</span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-[#657892]/60" />
-                  </button>
-                ))}
-              </div>
             </div>
 
           </div>
