@@ -927,8 +927,26 @@ export const useStore = create<StoreState>()(
               return;
             }
 
-            // Ensure categories are seeded in the database
-            await seedCategories();
+            // 0. Resolve the logged-in user's role from the active session (to determine if we can perform writes)
+            const { data: { session } } = await supabase.auth.getSession();
+            const activeUserId = session?.user?.id;
+            let loggedInUserRole = 'Guest';
+            if (activeUserId) {
+              const { data: myProfile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', activeUserId)
+                .single();
+              if (myProfile) {
+                loggedInUserRole = myProfile.role?.toLowerCase() || 'customer';
+              }
+            }
+            const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(loggedInUserRole);
+
+            // Ensure categories are seeded in the database (Only if administrator)
+            if (isAdminOrStaff) {
+              await seedCategories();
+            }
             const { data: dbCats } = await supabase.from('categories').select('*');
 
             // Sync settings from dbCats if present
@@ -949,7 +967,7 @@ export const useStore = create<StoreState>()(
                 } catch (e) {
                   console.warn('Failed to parse app-settings from categories:', e);
                 }
-              } else if (!settingsCat) {
+              } else if (!settingsCat && isAdminOrStaff) {
                 // Seed settings in dbCats so all instances fetch it
                 const settingsPayload = {
                   id: toValidUUID('app-settings'),
@@ -977,8 +995,10 @@ export const useStore = create<StoreState>()(
 
             const localUsers = get().users || INITIAL_USERS;
             const missingUsers = localUsers.filter(lu => !mappedUsers.some(mu => mu.id === lu.id));
-            for (const user of missingUsers) {
-              await safeSupabaseUpsert('profiles', user);
+            if (isAdminOrStaff) {
+              for (const user of missingUsers) {
+                await safeSupabaseUpsert('profiles', user);
+              }
             }
             const finalUsers = [...mappedUsers, ...missingUsers];
             set({ users: finalUsers as User[] });
@@ -1079,32 +1099,34 @@ export const useStore = create<StoreState>()(
             // Bidirectional sync for products: find local products that are not in database and seed/upsert them
             const localProducts = get().products || INITIAL_PRODUCTS;
             const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id));
-            for (const prod of missingProducts) {
-              await safeSupabaseUpsert('products', prod);
-              if (prod.images && prod.images.length > 0) {
-                for (let i = 0; i < prod.images.length; i++) {
-                  await safeSupabaseUpsert('product_images', {
-                    productId: prod.id,
-                    imageUrl: prod.images[i],
-                    displayOrder: i + 1
-                  });
+            if (isAdminOrStaff) {
+              for (const prod of missingProducts) {
+                await safeSupabaseUpsert('products', prod);
+                if (prod.images && prod.images.length > 0) {
+                  for (let i = 0; i < prod.images.length; i++) {
+                    await safeSupabaseUpsert('product_images', {
+                      productId: prod.id,
+                      imageUrl: prod.images[i],
+                      displayOrder: i + 1
+                    });
+                  }
                 }
-              }
-              for (const rev of prod.reviews || []) {
-                const matchedUser = get().users.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
-                const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-                
-                await safeSupabaseUpsert('profiles', {
-                  id: reviewerUserId,
-                  name: rev.userName,
-                  email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
-                  phone: matchedUser?.phone || '',
-                  role: matchedUser?.role || 'Customer',
-                  spending: matchedUser?.spending || 0,
-                  rewardsPoints: matchedUser?.rewardsPoints || 0
-                });
+                for (const rev of prod.reviews || []) {
+                  const matchedUser = get().users.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
+                  const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+                  
+                  await safeSupabaseUpsert('profiles', {
+                    id: reviewerUserId,
+                    name: rev.userName,
+                    email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
+                    phone: matchedUser?.phone || '',
+                    role: matchedUser?.role || 'Customer',
+                    spending: matchedUser?.spending || 0,
+                    rewardsPoints: matchedUser?.rewardsPoints || 0
+                  });
 
-                await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
+                  await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
+                }
               }
             }
 

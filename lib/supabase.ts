@@ -112,3 +112,43 @@ export function getSupabaseAdmin(): SupabaseClient {
   }
   return supabaseAdminInstance;
 }
+
+/**
+ * Returns a request-scoped Supabase client utilizing the anonymous key,
+ * forwarding the request's access token inside the Authorization header.
+ * This guarantees operations are run in PostgreSQL under the user's role and sub policies.
+ */
+export function getSupabaseForRequest(accessToken: string | null): SupabaseClient {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase configuration is incomplete. Please ensure both SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured.'
+    );
+  }
+
+  const options: any = {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: {},
+      fetch: (url: string, fetchOptions: any) => {
+        const isGet = !fetchOptions || !fetchOptions.method || fetchOptions.method.toUpperCase() === 'GET';
+        const updatedOptions: RequestInit = { ...fetchOptions };
+        if (isGet) {
+          updatedOptions.cache = 'no-store';
+        }
+        return retryableFetch(url as string, updatedOptions);
+      }
+    }
+  };
+
+  if (accessToken) {
+    options.global.headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, options);
+}

@@ -122,7 +122,11 @@ export function createErrorResponse(req: NextRequest, error: any): NextResponse 
     status = 400; // Client-side logic/validation errors default to 400
   }
 
-  logger.error(`API Error in ${path}`, error, { path, status });
+  if (status >= 500) {
+    logger.error(`API Error in ${path}`, error, { path, status });
+  } else {
+    logger.warn(`API Client Error/Warning in ${path}: ${message}`, { path, status });
+  }
 
   if (path.includes('/api/auth/register')) {
     return NextResponse.json({ success: false, error: message }, { status, headers });

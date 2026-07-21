@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { getSupabaseForRequest } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { isNetworkOrConnectionError } from '@/lib/utils';
 
@@ -19,6 +19,14 @@ const ALLOWED_TABLES = [
   'audit_logs',
   'newsletter_subscribers'
 ];
+
+function checkRlsAndThrow(message: string): never {
+  const lowerMsg = message.toLowerCase();
+  if (lowerMsg.includes('row-level security') || lowerMsg.includes('security policy')) {
+    throw new ApiError(`Security Rejection: ${message}`, 403);
+  }
+  throw new ApiError(message, 400);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,9 +53,16 @@ export async function POST(req: NextRequest) {
       throw new ApiError(`Access Denied: Table "${tableName}" is not authorized for operations.`, 403);
     }
 
-    const supabase = getSupabaseAdmin();
+    // Extract access token for request-scoped database client (Postgres RLS enforcement)
+    const authHeader = req.headers.get('Authorization');
+    let token: string | null = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+
+    const supabase = getSupabaseForRequest(token);
     if (!supabase) {
-      throw new ApiError('Supabase admin client could not be initialized.', 500);
+      throw new ApiError('Supabase client could not be initialized.', 500);
     }
 
     // 3. User Authorization Check (JWT Verification via centralized authentication helper)
@@ -81,11 +96,11 @@ export async function POST(req: NextRequest) {
                 message: `Skipped retry-upsert on ${tableName} due to foreign key constraint: ${upsertErr.message}`
               });
             }
-            throw new ApiError(upsertErr.message, 400);
+            checkRlsAndThrow(upsertErr.message);
           }
           return NextResponse.json({ data: upsertData, message: 'Resolved unique violation conflict by upserting.' });
         }
-        throw new ApiError(error.message, 400);
+        checkRlsAndThrow(error.message);
       }
       return NextResponse.json({ data });
 
@@ -110,7 +125,7 @@ export async function POST(req: NextRequest) {
             message: `Skipped upsert on ${tableName} due to unique constraint conflict: ${error.message}`
           });
         }
-        throw new ApiError(error.message, 400);
+        checkRlsAndThrow(error.message);
       }
       return NextResponse.json({ data });
 
@@ -132,7 +147,7 @@ export async function POST(req: NextRequest) {
 
       const { error } = await query;
       if (error) {
-        throw new ApiError(error.message, 400);
+        checkRlsAndThrow(error.message);
       }
       return NextResponse.json({ success: true });
     }
