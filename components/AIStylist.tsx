@@ -14,16 +14,42 @@ interface ChatMessage {
 export default function AIStylist() {
   const currentUser = useStore((state) => state.currentUser);
   const settings = useStore((state) => state.settings);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      content: 'WELCOME_PLACEHOLDER'
-    }
-  ]);
+  const products = useStore((state) => state.products);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load chat history on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('blue_hills_styling_chat');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved chat history:', e);
+      }
+    }
+    // Fallback default message
+    setMessages([
+      {
+        id: 'welcome',
+        role: 'model',
+        content: 'WELCOME_PLACEHOLDER'
+      }
+    ]);
+  }, []);
+
+  // Save chat history to localStorage on changes
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('blue_hills_styling_chat', JSON.stringify(messages));
+    }
+  }, [messages]);
 
   const quickPrompts = [
     { label: 'Office Outfits', text: 'Recommend a ready-made corporate outfit for a busy work day.' },
@@ -81,14 +107,23 @@ export default function AIStylist() {
         body: JSON.stringify({
           messages: updatedMessages.map(m => ({
             role: m.role,
-            content: getFormattedContent(m)
+            content: m.id === 'welcome' ? getFormattedContent(m) : m.content
           })),
-          userName: currentUser ? currentUser.name : undefined
+          userName: currentUser ? currentUser.name : undefined,
+          products: products,
+          settings: settings
         })
       });
 
+      let errorMessage = '';
       if (!response.ok) {
-        throw new Error('API line disconnected');
+        try {
+          const errData = await response.json();
+          errorMessage = errData.error || errData.message || 'API line disconnected';
+        } catch {
+          errorMessage = 'API line disconnected';
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -97,13 +132,22 @@ export default function AIStylist() {
         role: 'model',
         content: data.text
       }]);
-    } catch {
+    } catch (err: any) {
       const greeting = currentUser ? `Mr. ${currentUser.name}` : 'Sir';
       const supportNo = settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456';
+      
+      let errorText = `I apologize, ${greeting}. A brief connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our support directly at ${supportNo}.`;
+      
+      if (err.message && err.message.toLowerCase().includes('rate limit')) {
+        errorText = `I apologize, ${greeting}. To preserve elite quality, our styling desk is receiving a high volume of requests at this moment. Please wait a moment before sending another style inquiry.`;
+      } else if (err.message && err.message.toLowerCase().includes('limit exceeded')) {
+        errorText = `I apologize, ${greeting}. We have reached the session styling depth limit. Kindly use the "Reset Dialog" option above to start a fresh styling register.`;
+      }
+
       setMessages(curr => [...curr, {
         id: `error-msg-${curr.length + 1}`,
         role: 'model',
-        content: `I apologize, ${greeting}. A brief connection issue occurred. We recommend reviewing our exquisite Monaco Navy Suits or Imperial Cognac Oxfords in stock today, or contacting our support directly at ${supportNo}.`
+        content: errorText
       }]);
     } finally {
       setIsLoading(false);
@@ -150,13 +194,15 @@ export default function AIStylist() {
             
             <button
               onClick={() => {
-                setMessages([
+                const resetMsg: ChatMessage[] = [
                   {
                     id: 'welcome',
                     role: 'model',
                     content: 'Good day, Executive. I am your Blue Hills Designers Personal Styling Support. How can I help orchestrate your visual presence today?'
                   }
-                ]);
+                ];
+                setMessages(resetMsg);
+                localStorage.setItem('blue_hills_styling_chat', JSON.stringify(resetMsg));
               }}
               className="text-[#657892] hover:text-[#1C4D8D] flex items-center gap-1.5 text-xs transition-colors p-1"
               title="Reset conversation"
