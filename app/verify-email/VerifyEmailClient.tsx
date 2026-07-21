@@ -30,7 +30,59 @@ export default function VerifyEmailClient() {
     if (emailParam) {
       setEmail(emailParam);
     }
-  }, [searchParams]);
+
+    const tokenHash = searchParams.get('token_hash');
+    const typeParam = searchParams.get('type') || 'signup';
+    const code = searchParams.get('code');
+
+    const autoVerify = async () => {
+      const supabase = getSupabaseClient();
+      if (!supabase) return;
+
+      if (tokenHash) {
+        setIsLoading(true);
+        setErrorMsg('');
+        try {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: typeParam as any
+          });
+          if (error) {
+            setErrorMsg(`Verification link validation failed: ${error.message}`);
+          } else {
+            setSuccess(true);
+            setTimeout(() => {
+              router.push('/login?verified=true');
+            }, 2000);
+          }
+        } catch (err: any) {
+          setErrorMsg(err.message || 'Auto-verification failed.');
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (code) {
+        setIsLoading(true);
+        setErrorMsg('');
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            setErrorMsg(`Verification link exchange failed: ${error.message}`);
+          } else {
+            setSuccess(true);
+            setTimeout(() => {
+              router.push('/login?verified=true');
+            }, 2000);
+          }
+        } catch (err: any) {
+          setErrorMsg(err.message || 'Verification link failed to exchange.');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    autoVerify();
+  }, [searchParams, router]);
 
   if (!mounted) return null;
 
@@ -42,20 +94,27 @@ export default function VerifyEmailClient() {
     setIsLoading(true);
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Database service is currently offline.');
-      }
-
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'signup'
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, token })
       });
 
-      if (error) {
-        setErrorMsg(error.message);
+      const res = await response.json();
+      if (!response.ok || !res.success) {
+        setErrorMsg(res.error || 'Verification failed. Please check your credentials.');
       } else {
+        // Sync client-side session if available
+        if (res.session) {
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            await supabase.auth.setSession({
+              access_token: res.session.access_token,
+              refresh_token: res.session.refresh_token
+            });
+          }
+        }
+        
         setSuccess(true);
         setTimeout(() => {
           router.push('/login?verified=true');

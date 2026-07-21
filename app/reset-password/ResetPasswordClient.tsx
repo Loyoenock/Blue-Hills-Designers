@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldCheck, ArrowRight, Check, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { getSupabaseClient } from '../../lib/supabase';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import MobileNav from '../../components/MobileNav';
 
 export default function ResetPasswordClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const resetPasswordRecovery = useStore((state) => state.resetPasswordRecovery);
   
   const [mounted, setMounted] = useState(false);
@@ -20,10 +22,56 @@ export default function ResetPasswordClient() {
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    
+    const code = searchParams.get('code');
+    const tokenHash = searchParams.get('token_hash');
+
+    const handleAutoAuth = async () => {
+      const supabase = getSupabaseClient();
+      if (!supabase) return;
+
+      if (code) {
+        setIsVerifying(true);
+        setErrorMsg('');
+        try {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            setErrorMsg(`Recovery token exchange failed: ${error.message}`);
+          } else {
+            console.log('[RESET] Recovery session authenticated successfully via code exchange.');
+          }
+        } catch (err: any) {
+          setErrorMsg(err.message || 'Recovery link failed to exchange.');
+        } finally {
+          setIsVerifying(false);
+        }
+      } else if (tokenHash) {
+        setIsVerifying(true);
+        setErrorMsg('');
+        try {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'recovery'
+          });
+          if (error) {
+            setErrorMsg(`Recovery OTP verification failed: ${error.message}`);
+          } else {
+            console.log('[RESET] Recovery session authenticated successfully via token hash verification.');
+          }
+        } catch (err: any) {
+          setErrorMsg(err.message || 'Recovery token verification failed.');
+        } finally {
+          setIsVerifying(false);
+        }
+      }
+    };
+
+    handleAutoAuth();
+  }, [searchParams]);
 
   if (!mounted) return null;
 

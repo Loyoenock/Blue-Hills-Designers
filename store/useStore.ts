@@ -1390,8 +1390,37 @@ export const useStore = create<StoreState>()(
             return { success: false, error: 'Password is required for standard authentication.' };
           }
 
-          if (!supabase) {
-            // If Supabase is unconfigured, fallback to local users lookup
+          let resUser = null;
+          let resSession = null;
+          let fallbackToLocal = false;
+
+          try {
+            // Call rate-limited, secure server-side login endpoint
+            const response = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+            });
+
+            const res = await response.json();
+            if (!response.ok || !res.success) {
+              // Check if it's a structural or connection/network error
+              if (response.status === 502 || response.status === 503 || response.status === 504) {
+                fallbackToLocal = true;
+              } else {
+                return { success: false, error: res.error || 'Authentication failed.' };
+              }
+            } else {
+              resUser = res.user;
+              resSession = res.session;
+            }
+          } catch (fetchErr) {
+            console.warn('[STORE] Server login fetch failed, trying local fallback:', fetchErr);
+            fallbackToLocal = true;
+          }
+
+          if (fallbackToLocal || !resUser) {
+            // Local fallback logic
             const localUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
             if (localUser) {
               set({ currentUser: localUser });
@@ -1404,107 +1433,68 @@ export const useStore = create<StoreState>()(
               );
               return { success: true };
             }
-            return { success: false, error: 'Database service is offline or unconfigured, and requested user profile is missing.' };
+            return { success: false, error: 'Database service is currently offline and requested profile is missing.' };
           }
 
-          // Real Supabase Auth login
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          });
+          // Sync local Supabase client state if present
+          if (supabase && resSession) {
+            try {
+              await supabase.auth.setSession({
+                access_token: resSession.access_token,
+                refresh_token: resSession.refresh_token
+              });
+            } catch (sessionErr) {
+              console.warn('[STORE] Failed to sync client-side Supabase session:', sessionErr);
+            }
+          }
 
-          if (error) {
-            // Check if this error looks like a network or connection/offline issue (like AuthRetryableFetchError or network fetch failure)
-            const isConnError = isNetworkOrConnectionError(error);
+          // Load profile details from database if possible
+          let user: User = {
+            id: resUser.id,
+            name: resUser.name,
+            email: resUser.email,
+            phone: resUser.phone,
+            role: capitalizeRole(resUser.role) as User['role'],
+            spending: 0,
+            rewardsPoints: 0
+          };
 
-            if (isConnError) {
-              const localUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-              if (localUser) {
-                set({ currentUser: localUser });
-                get().addAuditLog(
-                  'User Login',
-                  `Offline local fallback login successful for ${localUser.name}.`,
-                  localUser.id,
-                  localUser.name,
-                  localUser.role
-                );
-                return { success: true };
+          if (supabase) {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .maybeSingle();
+
+              if (profile) {
+                user = {
+                  ...user,
+                  spending: profile.spending || profile.lifetime_spending || 0,
+                  rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0,
+                  country: profile.country || undefined,
+                  district: profile.district || undefined,
+                  city: profile.city || undefined,
+                  address: profile.address || undefined
+                };
               }
+            } catch (dbErr) {
+              console.warn('[STORE] Failed to retrieve DB profile details on login:', dbErr);
             }
-            return { success: false, error: error.message };
-          }
 
-          const authUser = data.user;
-          if (!authUser) {
-            return { success: false, error: 'Authentication failed. No user object returned.' };
-          }
-
-          if (authUser.user_metadata?.cart) {
-            const userCart = authUser.user_metadata.cart;
-            if (Array.isArray(userCart) && userCart.length > 0) {
-              set({ cart: userCart });
+            // Fetch user's wishlist from Supabase
+            try {
+              const { data: dbWishlists, error: wishErr } = await supabase
+                .from('wishlists')
+                .select('product_id')
+                .eq('user_id', user.id);
+              if (!wishErr && dbWishlists) {
+                const productIds = dbWishlists.map((w: any) => w.product_id);
+                set({ wishlist: productIds });
+              }
+            } catch (wishErr) {
+              console.warn('Failed to load wishlist from Supabase on login:', wishErr);
             }
-          }
-
-          // Try to fetch profile from profiles table
-          const { data: profile, error: profileErr } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authUser.id)
-            .maybeSingle();
-
-          let user: User;
-          const meta = authUser.user_metadata || {};
-
-          if (profile) {
-            user = {
-              id: profile.id,
-              name: profile.full_name || profile.name || authUser.user_metadata?.name || email.split('@')[0].toUpperCase(),
-              email: profile.email || authUser.email || email,
-              phone: profile.phone || authUser.user_metadata?.phone || '',
-              role: capitalizeRole(profile.role),
-              spending: profile.spending || profile.lifetime_spending || 0,
-              rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0,
-              country: meta.country || undefined,
-              district: meta.district || undefined,
-              city: meta.city || undefined,
-              address: meta.address || undefined
-            };
-          } else {
-            // Profile doesn't exist yet, auto-create one
-            user = {
-              id: authUser.id,
-              name: authUser.user_metadata?.name || email.split('@')[0].toUpperCase(),
-              email: authUser.email || email,
-              phone: authUser.user_metadata?.phone || '',
-              role: 'Customer',
-              spending: 0,
-              rewardsPoints: 0,
-              country: meta.country || undefined,
-              district: meta.district || undefined,
-              city: meta.city || undefined,
-              address: meta.address || undefined
-            };
-            await safeSupabaseUpsert('profiles', user);
-          }
-
-          if (user.email && user.email.toLowerCase() === 'loyohenoch@gmail.com') {
-            user.role = 'Super Admin';
-            await safeSupabaseUpsert('profiles', user);
-          }
-
-          // Fetch user's wishlist from Supabase
-          try {
-            const { data: dbWishlists, error: wishErr } = await supabase
-              .from('wishlists')
-              .select('product_id')
-              .eq('user_id', user.id);
-            if (!wishErr && dbWishlists) {
-              const productIds = dbWishlists.map((w: any) => w.product_id);
-              set({ wishlist: productIds });
-            }
-          } catch (wishErr) {
-            console.warn('Failed to load wishlist from Supabase on login:', wishErr);
           }
 
           // Update store currentUser and users list
@@ -1518,7 +1508,7 @@ export const useStore = create<StoreState>()(
 
           get().addAuditLog(
             'User Login',
-            `User logged in securely via Supabase Auth. Session initiated.`,
+            `User logged in securely via Supabase Auth and server-side rate limits.`,
             user.id,
             user.name,
             user.role
@@ -1727,15 +1717,15 @@ export const useStore = create<StoreState>()(
 
       forgotPassword: async (email) => {
         try {
-          const supabase = getSupabaseClient();
-          if (!supabase) {
-            return { success: false, error: 'Cannot issue password reset while database is offline or unconfigured.' };
-          }
-          const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/reset-password`
+          const response = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
           });
-          if (error) {
-            return { success: false, error: error.message };
+
+          const res = await response.json();
+          if (!response.ok || !res.success) {
+            return { success: false, error: res.error || 'Failed to dispatch password recovery link.' };
           }
           return { success: true };
         } catch (err: any) {
@@ -1747,47 +1737,59 @@ export const useStore = create<StoreState>()(
       resetPasswordRecovery: async (password) => {
         try {
           const supabase = getSupabaseClient();
-          if (!supabase) {
-            return { success: false, error: 'Cannot complete password reset while database is offline or unconfigured.' };
-          }
-          const { error, data } = await supabase.auth.updateUser({
-            password
+          
+          // Call rate-limited, secure server-side update password API
+          const response = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
           });
-          if (error) {
-            return { success: false, error: error.message };
+
+          const res = await response.json();
+          if (!response.ok || !res.success) {
+            return { success: false, error: res.error || 'Failed to apply new security credentials.' };
           }
 
-          const authUser = data?.user;
-          if (authUser) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', authUser.id)
-              .maybeSingle();
-
-            let user: User;
-            if (profile) {
-              user = {
-                id: profile.id,
-                name: profile.name || profile.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
-                email: profile.email || authUser.email || '',
-                phone: profile.phone || authUser.user_metadata?.phone || '',
-                role: capitalizeRole(profile.role),
-                spending: profile.spending || profile.lifetime_spending || 0,
-                rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0
-              };
-            } else {
-              user = {
-                id: authUser.id,
-                name: authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
-                email: authUser.email || '',
-                phone: authUser.user_metadata?.phone || '',
-                role: 'Customer',
-                spending: 0,
-                rewardsPoints: 0
-              };
+          if (supabase) {
+            const { error, data } = await supabase.auth.updateUser({
+              password
+            });
+            if (error) {
+              console.warn('Client session password sync warning:', error.message);
             }
-            set({ currentUser: user });
+
+            const authUser = data?.user || (await supabase.auth.getUser()).data.user;
+            if (authUser) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', authUser.id)
+                .maybeSingle();
+
+              let user: User;
+              if (profile) {
+                user = {
+                  id: profile.id,
+                  name: profile.name || profile.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
+                  email: profile.email || authUser.email || '',
+                  phone: profile.phone || authUser.user_metadata?.phone || '',
+                  role: capitalizeRole(profile.role),
+                  spending: profile.spending || profile.lifetime_spending || 0,
+                  rewardsPoints: profile.rewardsPoints || profile.rewards_points || 0
+                };
+              } else {
+                user = {
+                  id: authUser.id,
+                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
+                  email: authUser.email || '',
+                  phone: authUser.user_metadata?.phone || '',
+                  role: 'Customer',
+                  spending: 0,
+                  rewardsPoints: 0
+                };
+              }
+              set({ currentUser: user });
+            }
           }
           return { success: true };
         } catch (err: any) {
