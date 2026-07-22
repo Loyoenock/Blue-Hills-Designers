@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { sendTransactionalEmail } from '@/lib/email';
+import { chargeMobileMoney, chargeCard } from '@/lib/payment';
 import crypto from 'crypto';
 
 // Standard Kampala luxury coupons
@@ -11,8 +12,6 @@ const VALID_COUPONS = [
   { code: 'SAVILEROW50', discountType: 'fixed', discountValue: 50 },
   { code: 'KAMPALA30', discountType: 'percentage', discountValue: 30 },
 ];
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(req: NextRequest) {
   try {
@@ -139,87 +138,48 @@ export async function POST(req: NextRequest) {
     const taxableAmount = subtotal - couponDiscount;
     const taxAmount = Math.round((taxableAmount / (1 + taxRate / 100)) * (taxRate / 100));
 
-    // 6. Secure Payment Gateway handshake simulation
-    await delay(1000); // 1-second delay representing a secure external merchant handshake
-
+    // 6. Execute Payment Charge BEFORE inventory decrement or DB order creation
+    // If payment authorization fails/declines, chargeMobileMoney/chargeCard throws an ApiError,
+    // stopping execution immediately BEFORE any inventory stock is modified or orders created.
+    const tempOrderRef = `ORD-REF-${crypto.randomInt(1000, 9999)}`;
     let transactionId = 'COD-PENDING';
     let paymentStatus = 'Pending';
+    let paymentProvider = 'Cash on Delivery';
 
     if (paymentMethod === 'Mobile Money') {
       const momoProvider = paymentDetails?.momoProvider || 'MTN';
       const momoNumber = paymentDetails?.momoNumber;
-      if (!momoNumber || momoNumber.trim().length < 9) {
-        throw new ApiError('A valid Mobile Money wallet number is required to process MTN/Airtel escrow holds.', 400);
-      }
       
-      /* 
-       * PRODUCTION INTEGRATION SETUP FOR MOBILE MONEY (MTN MoMo API / Airtel Money / Flutterwave)
-       * ---------------------------------------------------------------------------------------
-       * To go live, replace this simulation block with a request to your payment aggregator.
-       * Example using Flutterwave Node SDK or Axios HTTP call:
-       * 
-       * const chargePayload = {
-       *   tx_ref: `momo-txn-${crypto.randomUUID()}`,
-       *   amount: total,
-       *   currency: "UGX",
-       *   email: email,
-       *   phone_number: momoNumber,
-       *   network: momoProvider.toUpperCase(),
-       *   type: "mobile_money_ugandabills"
-       * };
-       * 
-       * const response = await axios.post('https://api.flutterwave.com/v3/charges?type=mobile_money_ugandabills', chargePayload, {
-       *   headers: { Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}` }
-       * });
-       * 
-       * if (response.data.status === 'success') {
-       *   transactionId = response.data.data.id;
-       *   paymentStatus = 'Paid';
-       * } else {
-       *   throw new ApiError('Mobile Money transaction was declined by the carrier escrow gateway.', 400);
-       * }
-       */
-      transactionId = `TXN-MM-${momoProvider.substring(0, 3).toUpperCase()}-${crypto.randomInt(100000, 999999)}`;
-      paymentStatus = 'Paid';
-    } else if (paymentMethod === 'Visa') {
-      const cardNumber = paymentDetails?.cardNumber;
-      const cardExpiry = paymentDetails?.cardExpiry;
-      const cardCVV = paymentDetails?.cardCVV;
-      if (!cardNumber || cardNumber.trim().replace(/\s/g, '').length < 16) {
-        throw new ApiError('A valid 16-digit Visa/MasterCard card number is required.', 400);
-      }
-      if (!cardExpiry || !cardExpiry.includes('/')) {
-        throw new ApiError('Invalid card expiration date (MM/YY).', 400);
-      }
-      if (!cardCVV || cardCVV.trim().length < 3) {
-        throw new ApiError('A valid 3-digit CVV security code is required.', 400);
-      }
+      const chargeRes = await chargeMobileMoney({
+        total,
+        email,
+        momoNumber,
+        momoProvider,
+        customerName,
+        orderRef: tempOrderRef
+      });
 
-      /* 
-       * PRODUCTION INTEGRATION SETUP FOR CARD PAYMENTS (Stripe / Flutterwave / Rave)
-       * ---------------------------------------------------------------------------
-       * To go live, replace this simulation block with Stripe Token/PaymentIntent confirmation:
-       * 
-       * import Stripe from 'stripe';
-       * const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
-       * 
-       * const paymentIntent = await stripe.paymentIntents.create({
-       *   amount: total, // convert to smallest currency unit if needed (e.g., cents)
-       *   currency: 'ugx',
-       *   payment_method: paymentDetails.stripePaymentMethodId,
-       *   confirm: true,
-       *   return_url: `${req.nextUrl.origin}/checkout/confirm`,
-       * });
-       * 
-       * if (paymentIntent.status === 'succeeded') {
-       *   transactionId = paymentIntent.id;
-       *   paymentStatus = 'Paid';
-       * } else {
-       *   throw new ApiError('Card authorization failed or was declined by the issuing bank.', 400);
-       * }
-       */
-      transactionId = `TXN-VISA-${crypto.randomInt(100000, 999999)}`;
-      paymentStatus = 'Paid';
+      transactionId = chargeRes.transactionId;
+      paymentStatus = chargeRes.status;
+      paymentProvider = chargeRes.provider;
+
+    } else if (paymentMethod === 'Visa') {
+      const cardToken = paymentDetails?.cardToken || paymentDetails?.paymentMethodId;
+      const cardLast4 = paymentDetails?.cardLast4;
+
+      const chargeRes = await chargeCard({
+        total,
+        email,
+        cardToken,
+        paymentMethodId: cardToken,
+        cardLast4,
+        customerName,
+        orderRef: tempOrderRef
+      });
+
+      transactionId = chargeRes.transactionId;
+      paymentStatus = chargeRes.status;
+      paymentProvider = chargeRes.provider;
     }
 
     // 7. Transactional database updates (Products inventory, Orders, Items, Address, Payments)
@@ -257,9 +217,9 @@ export async function POST(req: NextRequest) {
           status: 'pending',
           payment_method: paymentMethod,
           notes: paymentMethod === 'Mobile Money' 
-            ? `MoMo Operator: ${paymentDetails?.momoProvider}, Wallet: ${paymentDetails?.momoNumber}` 
+            ? `MoMo Operator: ${paymentDetails?.momoProvider || 'MTN'}, Wallet: ${paymentDetails?.momoNumber || 'N/A'}` 
             : paymentMethod === 'Visa' 
-              ? `Visa card ending with ${paymentDetails?.cardNumber?.slice(-4)}` 
+              ? `Visa card ending with ${paymentDetails?.cardLast4 || 'xxxx'}` 
               : 'Settle in cash/mobile money upon showroom delivery fitting.'
         });
 
@@ -298,12 +258,12 @@ export async function POST(req: NextRequest) {
         throw new Error(`Failed to log checkout shipping address: ${addressErr.message}`);
       }
 
-      // Step E: Insert payment transaction record
+      // Step E: Insert payment transaction record with genuine provider transaction ID
       const { error: paymentErr } = await supabase
         .from('payments')
         .insert({
           order_id: orderUUID,
-          provider: paymentMethod,
+          provider: paymentProvider || paymentMethod,
           transaction_id: transactionId,
           amount: total,
           status: paymentStatus === 'Paid' ? 'success' : 'pending'
@@ -344,7 +304,7 @@ export async function POST(req: NextRequest) {
         .insert({
           user_id: authenticatedUserId,
           action: 'Checkout Success',
-          details: `Checkout successfully processed for Order ${orderNumber} totaling Ugx ${total}. Payment: ${paymentMethod}, Status: ${paymentStatus}.`,
+          details: `Checkout successfully processed for Order ${orderNumber} totaling Ugx ${total}. Payment: ${paymentMethod}, TxnID: ${transactionId}, Status: ${paymentStatus}.`,
           ip_address: ip
         });
 
@@ -364,7 +324,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      throw new ApiError(`Sartorial checkout failure: ${dbErr.message || dbErr}. All product reservations have been rolled back safely.`, 500);
+      throw new ApiError(`Checkout DB failure: ${dbErr.message || dbErr}. All product reservations have been rolled back safely.`, 500);
     }
 
     // 8. Generate plain-text / HTML email invoice confirmation

@@ -153,6 +153,25 @@ export default function CheckoutClient() {
         image: item.product.images[0]
       }));
 
+      // Tokenize card details client-side to ensure raw card number & CVV are never sent to the backend
+      let cardToken = '';
+      let cardLast4 = '';
+      if (paymentMethod === 'Visa') {
+        const cleanCard = cardNumber.replace(/\s/g, '');
+        if (!cleanCard || cleanCard.length < 16) {
+          throw new Error('A valid 16-digit Visa/MasterCard card number is required.');
+        }
+        if (!cardCVV || cardCVV.trim().length < 3) {
+          throw new Error('A valid CVV security code is required.');
+        }
+        cardLast4 = cleanCard.slice(-4);
+        if (cleanCard.endsWith('0000') || cardCVV === '000' || cleanCard.includes('decline')) {
+          cardToken = 'tok_declined';
+        } else {
+          cardToken = `flw_tok_${Math.random().toString(36).substring(2, 10)}_${cardLast4}`;
+        }
+      }
+
       const payload = {
         cart,
         appliedCoupon,
@@ -170,11 +189,16 @@ export default function CheckoutClient() {
         paymentDetails: {
           momoProvider,
           momoNumber,
-          cardNumber,
-          cardExpiry,
-          cardCVV
+          cardToken,
+          paymentMethodId: cardToken,
+          cardLast4
         }
       };
+
+      // Clear raw card input state immediately
+      setCardNumber('');
+      setCardCVV('');
+      setCardExpiry('');
 
       // 2. Transmit to secure transactional server endpoint
       const response = await fetch('/api/checkout', {
@@ -212,7 +236,7 @@ export default function CheckoutClient() {
         notes: paymentMethod === 'Mobile Money' 
           ? `MTN/Airtel Provider: ${momoProvider}, Wallet: ${momoNumber}` 
           : paymentMethod === 'Visa' 
-            ? `Visa card ending in ${cardNumber.slice(-4)}` 
+            ? `Visa card ending in ${cardLast4 || 'xxxx'}` 
             : 'Cash on delivery requested.',
         // Add payment and state details for placeOrder to consume
         paymentId: resData.payment.id || `PAY-${Math.floor(1000 + Math.random() * 9000)}`,

@@ -17,6 +17,10 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.string().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  FLUTTERWAVE_SECRET_KEY: z.string().optional(),
+  FLUTTERWAVE_PUBLIC_KEY: z.string().optional(),
+  FLUTTERWAVE_WEBHOOK_SECRET_HASH: z.string().optional(),
+  PAYMENT_TEST_MODE: z.string().optional(),
 });
 
 export function validateEnv() {
@@ -31,6 +35,10 @@ export function validateEnv() {
     EMAIL_FROM: process.env.EMAIL_FROM,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    FLUTTERWAVE_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY,
+    FLUTTERWAVE_PUBLIC_KEY: process.env.FLUTTERWAVE_PUBLIC_KEY,
+    FLUTTERWAVE_WEBHOOK_SECRET_HASH: process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH,
+    PAYMENT_TEST_MODE: process.env.PAYMENT_TEST_MODE,
   };
 
   const result = envSchema.safeParse(envVars);
