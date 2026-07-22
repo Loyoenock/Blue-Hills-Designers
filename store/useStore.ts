@@ -492,30 +492,36 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
 
   switch (tableName) {
     case 'products': {
-      const catName = payload.category || 'Suits';
+      const existingProd = state.products?.find((p: any) => p.id === payload.id || toValidUUID(p.id) === toValidUUID(payload.id));
+      const fullProd = existingProd ? { ...existingProd, ...payload } : payload;
+
+      const catName = fullProd.category || 'Suits';
       const catKey = catName.toLowerCase();
       const catId = toValidUUID('cat-' + catKey);
+      const prodName = fullProd.name || 'Luxury Product';
+      const slug = fullProd.slug || (prodName ? prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'product');
+
       return {
-        id: toValidUUID(payload.id),
+        id: toValidUUID(fullProd.id),
         category_id: catId,
-        name: payload.name,
-        slug: payload.slug || payload.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-        description: payload.description || '',
+        name: prodName,
+        slug,
+        description: fullProd.description || '',
         short_description: JSON.stringify({
-          sizes: payload.sizes || [],
-          colors: payload.colors || [],
-          original_short: payload.shortDescription || payload.description?.slice(0, 150) || '',
-          dealHours: payload.dealHours !== undefined ? payload.dealHours : undefined,
-          dealMins: payload.dealMins !== undefined ? payload.dealMins : undefined,
-          dealSecs: payload.dealSecs !== undefined ? payload.dealSecs : undefined
+          sizes: fullProd.sizes || [],
+          colors: fullProd.colors || [],
+          original_short: fullProd.shortDescription || fullProd.description?.slice(0, 150) || '',
+          dealHours: fullProd.dealHours !== undefined ? fullProd.dealHours : undefined,
+          dealMins: fullProd.dealMins !== undefined ? fullProd.dealMins : undefined,
+          dealSecs: fullProd.dealSecs !== undefined ? fullProd.dealSecs : undefined
         }),
-        price: Number(payload.price) || 0,
-        discount_percentage: Number(payload.discountPercentage) || 0,
-        is_featured: !!payload.isFeatured,
-        is_new: !!payload.isNew,
-        is_deal: !!payload.isDealOfTheDay,
-        rating: Number(payload.rating) || 0,
-        stock: Number(payload.stock) || 0,
+        price: fullProd.price !== undefined && fullProd.price !== null ? Number(fullProd.price) : 0,
+        discount_percentage: Number(fullProd.discountPercentage) || 0,
+        is_featured: !!fullProd.isFeatured,
+        is_new: !!fullProd.isNew,
+        is_deal: !!fullProd.isDealOfTheDay,
+        rating: Number(fullProd.rating) || 0,
+        stock: Number(fullProd.stock) || 0,
         status: 'Active'
       };
     }
@@ -1070,8 +1076,8 @@ export const useStore = create<StoreState>()(
 
         const mappedProducts = (dbProducts || []).map((p: any) => {
           const catName = dbCats ? (dbCats.find((c: any) => c.id === p.category_id)?.name || 'Suits') : 'Suits';
-          const localProd = INITIAL_PRODUCTS.find(lp => toValidUUID(lp.id) === p.id);
-          const prodReviews = reviewsWithProfiles.filter(r => r.productId === p.id);
+          const localProd = INITIAL_PRODUCTS.find(lp => toValidUUID(lp.id) === p.id || lp.id === p.id);
+          const prodReviews = reviewsWithProfiles.filter(r => r.productId === p.id || toValidUUID(r.productId) === p.id);
 
           const productImages = dbImages
             ? dbImages
@@ -1100,10 +1106,12 @@ export const useStore = create<StoreState>()(
             } catch {}
           }
 
+          const targetId = localProd?.id || p.id;
+
           return {
-            id: p.id,
-            name: p.name,
-            description: p.description,
+            id: targetId,
+            name: p.name || localProd?.name || 'Luxury Product',
+            description: p.description || localProd?.description || '',
             category: catName,
             price: Number(p.price) || 0,
             images: finalImages,
@@ -1123,7 +1131,7 @@ export const useStore = create<StoreState>()(
         });
 
         const localProducts = get().products.length > 0 ? get().products : INITIAL_PRODUCTS;
-        const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id));
+        const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id || toValidUUID(mp.id) === toValidUUID(lp.id)));
         const combinedProducts = [...mappedProducts, ...missingProducts];
 
         // Signed URLs resolution
@@ -1344,7 +1352,7 @@ export const useStore = create<StoreState>()(
         if (eventType === 'INSERT' || eventType === 'UPDATE') {
           if (!newRow) return;
           const prodId = newRow.id;
-          const existingIndex = products.findIndex(p => p.id === prodId);
+          const existingIndex = products.findIndex(p => p.id === prodId || toValidUUID(p.id) === prodId);
           const existing = existingIndex !== -1 ? products[existingIndex] : null;
 
           let parsedSizes = existing?.sizes || ['M', 'L', 'XL'];
@@ -2359,7 +2367,7 @@ export const useStore = create<StoreState>()(
           : updatedFields;
 
         // Check for deleted images to remove from Supabase Storage
-        const originalProduct = get().products.find(p => p.id === id);
+        const originalProduct = get().products.find(p => p.id === id || toValidUUID(p.id) === toValidUUID(id));
         if (originalProduct && originalProduct.images && updatedFields.images) {
           const removedImages = originalProduct.images.filter(
             (img: string) => isPrivateStoragePath(img) && !finalImages.includes(img)
@@ -2380,8 +2388,12 @@ export const useStore = create<StoreState>()(
           }
         }
 
+        const fullUpdatedProduct = originalProduct 
+          ? { ...originalProduct, ...finalFields }
+          : { id, ...finalFields };
+
         set(state => ({
-          products: state.products.map(p => p.id === id ? { ...p, ...finalFields } : p)
+          products: state.products.map(p => (p.id === id || toValidUUID(p.id) === toValidUUID(id)) ? (fullUpdatedProduct as Product) : p)
         }));
 
         get().addAuditLog(
@@ -2393,7 +2405,7 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync updated fields with Supabase
-        await safeSupabaseUpsert('products', { id, ...finalFields });
+        await safeSupabaseUpsert('products', fullUpdatedProduct);
 
         // Update product_images table
         if (updatedFields.images) {
