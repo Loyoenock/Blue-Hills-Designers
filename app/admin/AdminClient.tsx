@@ -91,7 +91,7 @@ const AdminPanel = dynamic<{}>(
       <div className="min-h-screen bg-black text-[#F7F5F0] flex flex-col items-center justify-center space-y-4 font-sans" id="admin-loading-screen">
         <div className="w-8 h-8 border-2 border-[#C6A15B] border-t-transparent rounded-full animate-spin"></div>
         <p className="text-[10px] uppercase tracking-[0.3em] text-[#657892] font-mono animate-pulse">
-          Securing Boutique Connection...
+          Securing BHD Connection...
         </p>
       </div>
     ),
