@@ -10,7 +10,6 @@ import {
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { getSupabaseClient } from '../lib/supabase';
-import { setAuthCookies, clearAuthCookies } from '../lib/auth-cookies';
 
 export default function Header() {
   const pathname = usePathname();
@@ -51,15 +50,10 @@ export default function Header() {
           console.log('Supabase Realtime subscription status:', status);
         });
 
-      // Set up onAuthStateChange listener for session synchronization and token refreshes
+      // Set up onAuthStateChange listener for session synchronization
       const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Header Supabase Auth Change:', event, !!session);
-        if (session) {
-          setAuthCookies(session.access_token, session.refresh_token, session.expires_in || 3600);
-          syncFromSupabase();
-        } else {
-          clearAuthCookies();
-        }
+        syncFromSupabase();
       });
       authSubscription = authSub;
     }

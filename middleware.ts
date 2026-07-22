@@ -148,7 +148,8 @@ export async function middleware(request: NextRequest) {
         path: '/',
         maxAge: expiresIn,
         sameSite: 'lax' as const,
-        secure: isSecure
+        secure: isSecure,
+        httpOnly: true
       };
       response.cookies.set('sb-access-token', newAccessToken, cookieOptions);
       if (newRefreshToken) {

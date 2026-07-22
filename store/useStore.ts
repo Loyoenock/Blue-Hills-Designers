@@ -1617,6 +1617,7 @@ export const useStore = create<StoreState>()(
           if (supabase) {
             await supabase.auth.signOut();
           }
+          await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         } catch (err) {
           console.error('Logout error:', err);
         } finally {
