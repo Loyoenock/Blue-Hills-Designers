@@ -681,9 +681,14 @@ async function uploadProductImage(userId: string, productId: string, imageBase64
   }
 
   try {
+    const headers = await getAuthHeaders();
+    if (!headers.Authorization && !headers['Authorization']) {
+      console.warn('Cannot upload image to storage: User is not authenticated.');
+      return imageBase64;
+    }
     const response = await fetchWithRetry('/api/storage', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action: 'upload',
         userId,
@@ -1147,19 +1152,22 @@ export const useStore = create<StoreState>()(
             let signedUrlsMap: Record<string, string> = {};
             if (privatePaths.length > 0) {
               try {
-                const response = await fetchWithRetry('/api/storage', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
-                });
-                if (response.ok) {
-                  const data = await response.json();
-                  if (data.signedUrls) {
-                    data.signedUrls.forEach((item: any) => {
-                      if (item.signedUrl) {
-                        signedUrlsMap[item.path] = item.signedUrl;
-                      }
-                    });
+                const headers = await getAuthHeaders();
+                if (headers.Authorization || headers['Authorization']) {
+                  const response = await fetchWithRetry('/api/storage', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
+                  });
+                  if (response.ok) {
+                    const data = await response.json();
+                    if (data.signedUrls) {
+                      data.signedUrls.forEach((item: any) => {
+                        if (item.signedUrl) {
+                          signedUrlsMap[item.path] = item.signedUrl;
+                        }
+                      });
+                    }
                   }
                 }
               } catch (e) {
@@ -1235,12 +1243,14 @@ export const useStore = create<StoreState>()(
             // Bidirectional sync for orders
             const localOrders = get().orders || INITIAL_ORDERS;
             const missingOrders = localOrders.filter(lo => !formattedOrders.some(fo => fo.id === lo.id));
-            for (const order of missingOrders) {
-              await safeSupabaseUpsert('orders', order);
-              for (const item of order.items) {
-                await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
+            if (isAdminOrStaff) {
+              for (const order of missingOrders) {
+                await safeSupabaseUpsert('orders', order);
+                for (const item of order.items) {
+                  await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
+                }
+                await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
               }
-              await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
             }
 
             set({ orders: [...formattedOrders, ...missingOrders] as Order[] });
@@ -1252,8 +1262,10 @@ export const useStore = create<StoreState>()(
                 const camelBookings = keysToCamel(dbBookings) as ConsultationBooking[];
                 const localBookings = get().bookings || [];
                 const missingBookings = localBookings.filter(lb => !camelBookings.some(cb => cb.id === lb.id));
-                for (const booking of missingBookings) {
-                  await safeSupabaseUpsert('consultations', booking);
+                if (isAdminOrStaff) {
+                  for (const booking of missingBookings) {
+                    await safeSupabaseUpsert('consultations', booking);
+                  }
                 }
                 set({ bookings: [...camelBookings, ...missingBookings] });
               }
@@ -1272,8 +1284,10 @@ export const useStore = create<StoreState>()(
                 })) as NewsletterSubscriber[];
                 const localSubs = get().subscribers || [];
                 const missingSubs = localSubs.filter(ls => !mappedSubs.some(cs => cs.email.toLowerCase() === ls.email.toLowerCase()));
-                for (const sub of missingSubs) {
-                  await safeSupabaseUpsert('newsletter_subscribers', sub);
+                if (isAdminOrStaff) {
+                  for (const sub of missingSubs) {
+                    await safeSupabaseUpsert('newsletter_subscribers', sub);
+                  }
                 }
                 set({ subscribers: [...mappedSubs, ...missingSubs] });
               }
@@ -1300,13 +1314,17 @@ export const useStore = create<StoreState>()(
                 }) as AuditLog[];
                 const localLogs = get().auditLogs || INITIAL_AUDIT_LOGS;
                 const missingLogs = localLogs.filter(ll => !mappedLogs.some(ml => ml.id === ll.id));
-                for (const log of missingLogs) {
-                  await safeSupabaseUpsert('audit_logs', log);
+                if (isAdminOrStaff) {
+                  for (const log of missingLogs) {
+                    await safeSupabaseUpsert('audit_logs', log);
+                  }
                 }
                 set({ auditLogs: [...mappedLogs, ...missingLogs].slice(0, 500) });
               } else if (!logErr) {
-                for (const log of INITIAL_AUDIT_LOGS) {
-                  await safeSupabaseUpsert('audit_logs', log);
+                if (isAdminOrStaff) {
+                  for (const log of INITIAL_AUDIT_LOGS) {
+                    await safeSupabaseUpsert('audit_logs', log);
+                  }
                 }
                 set({ auditLogs: INITIAL_AUDIT_LOGS });
               }
@@ -2226,11 +2244,14 @@ export const useStore = create<StoreState>()(
           );
           for (const imgToDelete of removedImages) {
             try {
-              await fetchWithRetry('/api/storage', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'delete', path: imgToDelete })
-              });
+              const headers = await getAuthHeaders();
+              if (headers.Authorization || headers['Authorization']) {
+                await fetchWithRetry('/api/storage', {
+                  method: 'POST',
+                  headers,
+                  body: JSON.stringify({ action: 'delete', path: imgToDelete })
+                });
+              }
             } catch (err) {
               console.warn('Failed to delete removed image from storage:', imgToDelete, err);
             }
@@ -2279,11 +2300,14 @@ export const useStore = create<StoreState>()(
           for (const img of productToDelete.images) {
             if (isPrivateStoragePath(img)) {
               try {
-                await fetchWithRetry('/api/storage', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'delete', path: img })
-                });
+                const headers = await getAuthHeaders();
+                if (headers.Authorization || headers['Authorization']) {
+                  await fetchWithRetry('/api/storage', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ action: 'delete', path: img })
+                  });
+                }
               } catch (err) {
                 console.warn('Failed to delete image from storage during product deletion:', img, err);
               }
@@ -2606,8 +2630,15 @@ export const useStore = create<StoreState>()(
           auditLogs: [newLog, ...state.auditLogs].slice(0, 500) // Keep last 500 logs
         }));
 
-        // Sync audit log with Supabase
-        safeSupabaseInsert('audit_logs', newLog);
+        // Sync audit log with Supabase if actor is authorized (admin/staff or authenticated valid user UUID)
+        const currentUser = get().currentUser;
+        const currentUserRole = (currentUser?.role || '').toLowerCase();
+        const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(currentUserRole);
+        const isValidUserUuid = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+        if (isAdminOrStaff || (currentUser?.id && currentUser.id === userId && isValidUserUuid)) {
+          safeSupabaseInsert('audit_logs', newLog);
+        }
       }
     }),
     {

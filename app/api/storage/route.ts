@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, requireAuth } from '@/lib/apiUtils';
 import crypto from 'crypto';
 
 // Whitelist of allowed extensions for media storage uploads to prevent malicious scripts
@@ -47,9 +47,15 @@ export async function POST(req: NextRequest) {
     // 1. Rate Limiting Check (Max 150 storage requests per minute per IP to prevent exhaustion attacks while enabling batch uploads)
     enforceRateLimit(req, 150, 60000);
 
+    // 2. Authentication Check
+    const authUser = await requireAuth(req);
+    const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(
+      (authUser.role || '').toLowerCase().trim()
+    );
+
     const body = await req.json().catch(() => ({}));
     
-    // 2. Base Input Validation
+    // 3. Base Input Validation
     validateFields(body, {
       action: 'string'
     });
@@ -71,6 +77,11 @@ export async function POST(req: NextRequest) {
     if (actionLower === 'upload') {
       if (!userId || !featureName || !itemId || !fileBase64 || !extension) {
         throw new ApiError('Missing required upload parameters.', 400);
+      }
+
+      // Check ownership or admin/staff privileges
+      if (!isAdminOrStaff && String(userId) !== authUser.id) {
+        throw new ApiError('Forbidden: You can only upload files for your own account.', 403);
       }
 
       // Path Sanitization & Directory Traversal Protection
@@ -161,6 +172,12 @@ export async function POST(req: NextRequest) {
         throw new ApiError('Malicious path traversal block activated.', 400);
       }
 
+      // Check ownership or admin/staff privileges
+      const pathUserId = path.split('/')[0];
+      if (!isAdminOrStaff && pathUserId !== authUser.id) {
+        throw new ApiError('Forbidden: You do not have permission to access this storage object.', 403);
+      }
+
       logger.info('Creating single signed URL for storage object', { path });
 
       const { data, error } = await supabase.storage
@@ -186,6 +203,16 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Check ownership or admin/staff privileges
+      if (!isAdminOrStaff) {
+        for (const p of paths) {
+          const pathUserId = p.split('/')[0];
+          if (pathUserId !== authUser.id) {
+            throw new ApiError('Forbidden: You do not have permission to access one or more requested storage objects.', 403);
+          }
+        }
+      }
+
       logger.info('Creating multiple signed URLs for storage objects', { pathsCount: paths.length });
 
       const { data, error } = await supabase.storage
@@ -207,6 +234,12 @@ export async function POST(req: NextRequest) {
       // Block Directory Traversal
       if (path.includes('..') || path.startsWith('/')) {
         throw new ApiError('Malicious path traversal block activated.', 400);
+      }
+
+      // Check ownership or admin/staff privileges
+      const pathUserId = path.split('/')[0];
+      if (!isAdminOrStaff && pathUserId !== authUser.id) {
+        throw new ApiError('Forbidden: You do not have permission to delete this storage object.', 403);
       }
 
       logger.info('Removing storage file', { path });
