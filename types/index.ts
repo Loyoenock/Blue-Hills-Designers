@@ -1,5 +1,6 @@
 export interface Review {
   id: string;
+  productId?: string;
   userName: string;
   userRole?: string;
   userCompany?: string;

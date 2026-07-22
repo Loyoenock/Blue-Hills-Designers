@@ -5,7 +5,7 @@ import { enforceRateLimit, createErrorResponse, validateFields, ApiError, logger
 export async function POST(req: NextRequest) {
   try {
     // Enforce rate limit (max 5 reset email dispatches per minute per IP)
-    enforceRateLimit(req, 5, 60000);
+    await enforceRateLimit(req, 5, 60000);
 
     const body = await req.json().catch(() => ({}));
     validateFields(body, {

@@ -232,11 +232,11 @@ export async function requireAuth(req: NextRequest): Promise<AuthenticatedUser> 
 // 6. RATE LIMITING HELPERS
 // ==========================================
 
-export function enforceRateLimit(req: NextRequest, limit = 60, windowMs = 60000): RateLimitResult {
+export async function enforceRateLimit(req: NextRequest, limit = 60, windowMs = 60000): Promise<RateLimitResult> {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
   const path = req.nextUrl.pathname;
   const rateLimitKey = `${ip}:${path}`;
-  const result = checkRateLimit(rateLimitKey, limit, windowMs);
+  const result = await checkRateLimit(rateLimitKey, limit, windowMs);
   if (!result.success) {
     throw new ApiError(`Too many requests. Please try again in ${result.reset} seconds.`, 429, result);
   }

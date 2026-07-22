@@ -78,8 +78,14 @@ interface StoreState {
   // Log Actions
   addAuditLog: (action: string, details: string, userId: string, userName: string, userRole: string) => void;
 
-  // Supabase Sync Actions
+  // Supabase Sync & Realtime Patch Actions
   syncFromSupabase: () => Promise<void>;
+  fetchLatestState: () => Promise<void>;
+  seedIfEmpty: () => Promise<void>;
+  applyProductChange: (payload: any) => void;
+  applyReviewChange: (payload: any) => void;
+  applyOrderChange: (payload: any) => void;
+  applyProfileChange: (payload: any) => void;
   isSyncing: boolean;
 }
 
@@ -252,9 +258,9 @@ const INITIAL_PRODUCTS: Product[] = [
 
 const INITIAL_USERS: User[] = [
   {
-    id: 'usr-super-admin-loyohenoch',
-    name: 'Loyo Henoch',
-    email: 'loyohenoch@gmail.com',
+    id: 'usr-super-admin',
+    name: 'Super Admin',
+    email: 'admin@bluehillsdesigners.com',
     phone: '+256 700 000000',
     role: 'Super Admin',
     spending: 0,
@@ -914,500 +920,634 @@ export const useStore = create<StoreState>()(
       wishlist: [],
       isSyncing: false,
 
-      syncFromSupabase: async () => {
-        if (get().isSyncing) return;
-        set({ isSyncing: true });
+      seedIfEmpty: async () => {
+        const supabase = getSupabaseClient();
+        if (!supabase) return;
 
-        const maxAttempts = 3;
-        let attempt = 0;
-        let success = false;
-        let lastError: any = null;
-
-        while (attempt < maxAttempts && !success) {
-          attempt++;
-          try {
-            const supabase = getSupabaseClient();
-            if (!supabase) {
-              set({ isSyncing: false });
-              return;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const activeUserId = session?.user?.id;
+          let loggedInUserRole = 'Guest';
+          if (activeUserId) {
+            const { data: myProfile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', activeUserId)
+              .maybeSingle();
+            if (myProfile) {
+              loggedInUserRole = myProfile.role?.toLowerCase() || 'customer';
             }
+          }
+          const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(loggedInUserRole);
+          if (!isAdminOrStaff) return;
 
-            // 0. Resolve the logged-in user's role from the active session (to determine if we can perform writes)
-            const { data: { session } } = await supabase.auth.getSession();
-            const activeUserId = session?.user?.id;
-            let loggedInUserRole = 'Guest';
-            if (activeUserId) {
-              const { data: myProfile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', activeUserId)
-                .single();
-              if (myProfile) {
-                loggedInUserRole = myProfile.role?.toLowerCase() || 'customer';
-              }
+          // Check categories
+          const { data: dbCats } = await supabase.from('categories').select('id, slug').limit(5);
+          if (!dbCats || dbCats.length === 0) {
+            await seedCategories();
+          }
+
+          // Check profiles
+          const { data: dbProfiles } = await supabase.from('profiles').select('id').limit(1);
+          if (!dbProfiles || dbProfiles.length === 0) {
+            for (const user of INITIAL_USERS) {
+              await safeSupabaseUpsert('profiles', user);
             }
-            const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(loggedInUserRole);
+          }
 
-            // Ensure categories are seeded in the database (Only if administrator)
-            if (isAdminOrStaff) {
-              await seedCategories();
-            }
-            const { data: dbCats } = await supabase.from('categories').select('*');
-
-            // Sync settings from dbCats if present
-            if (dbCats) {
-              const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
-              if (settingsCat && settingsCat.description) {
-                try {
-                  const parsedSettings = JSON.parse(settingsCat.description);
-                  if (parsedSettings) {
-                    if (parsedSettings.conciergePhone && !parsedSettings.supportPhone) {
-                      parsedSettings.supportPhone = parsedSettings.conciergePhone;
-                    }
-                    if (!parsedSettings.supportPhone) {
-                      parsedSettings.supportPhone = INITIAL_SETTINGS.supportPhone;
-                    }
-                  }
-                  set({ settings: parsedSettings });
-                } catch (e) {
-                  console.warn('Failed to parse app-settings from categories:', e);
-                }
-              } else if (!settingsCat && isAdminOrStaff) {
-                // Seed settings in dbCats so all instances fetch it
-                const settingsPayload = {
-                  id: toValidUUID('app-settings'),
-                  name: 'App Settings',
-                  slug: 'app-settings',
-                  description: JSON.stringify(get().settings || INITIAL_SETTINGS)
-                };
-                await safeSupabaseUpsert('categories', settingsPayload);
-              }
-            }
-
-            // 1. Fetch & Seed Profiles FIRST (so that products/reviews can reference user profiles)
-            const { data: dbProfiles, error: profErr } = await supabase.from('profiles').select('*');
-            if (profErr) throw profErr;
-            
-            const mappedUsers = (dbProfiles || []).map((p: any) => ({
-              id: p.id,
-              name: p.full_name || p.name || 'Gentleman Customer',
-              email: p.email,
-              phone: p.phone,
-              role: capitalizeRole(p.role),
-              spending: p.lifetime_spending || p.spending || 0,
-              rewardsPoints: p.reward_points || p.rewardsPoints || 0
-            }));
-
-            const localUsers = get().users || INITIAL_USERS;
-            const missingUsers = localUsers.filter(lu => !mappedUsers.some(mu => mu.id === lu.id));
-            if (isAdminOrStaff) {
-              for (const user of missingUsers) {
-                await safeSupabaseUpsert('profiles', user);
-              }
-            }
-            const finalUsers = [...mappedUsers, ...missingUsers];
-            set({ users: finalUsers as User[] });
-
-            // 2. Fetch & Seed Products & Reviews
-            const { data: dbProducts, error: prodErr } = await supabase.from('products').select('*');
-            if (prodErr) throw prodErr;
-
-            const { data: dbReviews } = await supabase.from('reviews').select('*');
-            const { data: dbProfilesList } = await supabase.from('profiles').select('*');
-            let dbImages: any[] | null = null;
-            try {
-              const { data: imgData } = await supabase.from('product_images').select('*');
-              dbImages = imgData;
-            } catch (e) {
-              console.warn('Could not query product_images:', e);
-            }
-
-            const reviewsWithProfiles = dbReviews ? dbReviews.map((r: any) => {
-              const profile = dbProfilesList?.find((prof: any) => prof.id === r.user_id);
-              return {
-                id: r.id,
-                productId: r.product_id,
-                userName: profile?.full_name || 'Gentleman Customer',
-                userRole: profile?.role || 'Customer',
-                rating: r.rating,
-                comment: r.comment,
-                date: r.created_at
-              };
-            }) : [];
-
-            const mappedProducts = (dbProducts || []).map((p: any) => {
-              const catName = dbCats ? (dbCats.find((c: any) => c.id === p.category_id)?.name || 'Suits') : 'Suits';
-              const localProd = INITIAL_PRODUCTS.find(lp => toValidUUID(lp.id) === p.id);
-              const prodReviews = reviewsWithProfiles.filter(r => r.productId === p.id);
-
-              const productImages = dbImages
-                ? dbImages
-                    .filter((img: any) => img.product_id === p.id)
-                    .sort((a: any, b: any) => (a.display_order || 1) - (b.display_order || 1))
-                    .map((img: any) => img.image_url)
-                : [];
-              const finalImages = productImages.length > 0 ? productImages : (localProd?.images || [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
-
-              let parsedSizes = localProd?.sizes || ['M', 'L', 'XL'];
-              let parsedColors = localProd?.colors || ['Classic Black'];
-              let dealHours = localProd?.dealHours !== undefined ? localProd.dealHours : 14;
-              let dealMins = localProd?.dealMins !== undefined ? localProd.dealMins : 42;
-              let dealSecs = localProd?.dealSecs !== undefined ? localProd.dealSecs : 19;
-
-              if (p.short_description) {
-                try {
-                  const parsed = JSON.parse(p.short_description);
-                  if (parsed && typeof parsed === 'object') {
-                    if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) {
-                      parsedSizes = parsed.sizes;
-                    }
-                    if (Array.isArray(parsed.colors) && parsed.colors.length > 0) {
-                      parsedColors = parsed.colors;
-                    }
-                    if (parsed.dealHours !== undefined && parsed.dealHours !== null) {
-                      dealHours = Number(parsed.dealHours);
-                    }
-                    if (parsed.dealMins !== undefined && parsed.dealMins !== null) {
-                      dealMins = Number(parsed.dealMins);
-                    }
-                    if (parsed.dealSecs !== undefined && parsed.dealSecs !== null) {
-                      dealSecs = Number(parsed.dealSecs);
-                    }
-                  }
-                } catch {
-                  // Not JSON, just standard short description
-                }
-              }
-
-              return {
-                id: p.id,
-                name: p.name,
-                description: p.description,
-                category: catName,
-                price: Number(p.price) || 0,
-                images: finalImages,
-                sizes: parsedSizes,
-                colors: parsedColors,
-                stock: Number(p.stock) || 0,
-                rating: Number(p.rating) || 0,
-                isNew: p.is_new,
-                isFeatured: p.is_featured,
-                isDealOfTheDay: p.is_deal,
-                discountPercentage: Number(p.discount_percentage) || 0,
-                dealHours,
-                dealMins,
-                dealSecs,
-                reviews: prodReviews
-              };
-            });
-
-            // Bidirectional sync for products: find local products that are not in database and seed/upsert them
-            const localProducts = get().products || INITIAL_PRODUCTS;
-            const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id));
-            if (isAdminOrStaff) {
-              for (const prod of missingProducts) {
-                await safeSupabaseUpsert('products', prod);
-                if (prod.images && prod.images.length > 0) {
-                  for (let i = 0; i < prod.images.length; i++) {
-                    await safeSupabaseUpsert('product_images', {
-                      productId: prod.id,
-                      imageUrl: prod.images[i],
-                      displayOrder: i + 1
-                    });
-                  }
-                }
-                for (const rev of prod.reviews || []) {
-                  const matchedUser = get().users.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
-                  const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-                  
-                  await safeSupabaseUpsert('profiles', {
-                    id: reviewerUserId,
-                    name: rev.userName,
-                    email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
-                    phone: matchedUser?.phone || '',
-                    role: matchedUser?.role || 'Customer',
-                    spending: matchedUser?.spending || 0,
-                    rewardsPoints: matchedUser?.rewardsPoints || 0
+          // Check products
+          const { data: dbProducts } = await supabase.from('products').select('id').limit(1);
+          if (!dbProducts || dbProducts.length === 0) {
+            for (const prod of INITIAL_PRODUCTS) {
+              await safeSupabaseUpsert('products', prod);
+              if (prod.images && prod.images.length > 0) {
+                for (let i = 0; i < prod.images.length; i++) {
+                  await safeSupabaseUpsert('product_images', {
+                    productId: prod.id,
+                    imageUrl: prod.images[i],
+                    displayOrder: i + 1
                   });
-
-                  await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
                 }
               }
-            }
-
-            const combinedProducts = [...mappedProducts, ...missingProducts];
-
-            // Resolve signed URLs for private storage paths
-            const privatePaths: string[] = [];
-            combinedProducts.forEach((p: any) => {
-              if (p.images) {
-                p.images.forEach((img: string) => {
-                  if (isPrivateStoragePath(img)) {
-                    privatePaths.push(img);
-                  }
+              for (const rev of prod.reviews || []) {
+                const matchedUser = INITIAL_USERS.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
+                const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+                await safeSupabaseUpsert('profiles', {
+                  id: reviewerUserId,
+                  name: rev.userName,
+                  email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
+                  phone: matchedUser?.phone || '',
+                  role: matchedUser?.role || 'Customer',
+                  spending: matchedUser?.spending || 0,
+                  rewardsPoints: matchedUser?.rewardsPoints || 0
                 });
-              }
-            });
-
-            let signedUrlsMap: Record<string, string> = {};
-            if (privatePaths.length > 0) {
-              try {
-                const headers = await getAuthHeaders();
-                if (headers.Authorization || headers['Authorization']) {
-                  const response = await fetchWithRetry('/api/storage', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
-                  });
-                  if (response.ok) {
-                    const data = await response.json();
-                    if (data.signedUrls) {
-                      data.signedUrls.forEach((item: any) => {
-                        if (item.signedUrl) {
-                          signedUrlsMap[item.path] = item.signedUrl;
-                        }
-                      });
-                    }
-                  }
-                }
-              } catch (e) {
-                console.warn('Failed to resolve signed URLs for private product images:', e);
+                await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
               }
             }
+          }
 
-            const resolvedProducts = combinedProducts.map((p: any) => {
-              const resolvedImages = p.images.map((img: string) => {
-                if (isPrivateStoragePath(img)) {
-                  return signedUrlsMap[img] || img;
-                }
-                return img;
-              });
-              return { ...p, images: resolvedImages };
-            });
-
-            set({ products: resolvedProducts as Product[] });
-
-            // 3. Fetch Orders, Order Items, Addresses
-            const { data: dbOrders, error: ordErr } = await supabase.from('orders').select('*');
-            if (ordErr) throw ordErr;
-
-            const { data: dbItems } = await supabase.from('order_items').select('*');
-            const { data: dbAddresses } = await supabase.from('order_addresses').select('*');
-            const { data: dbProfilesListForOrders } = await supabase.from('profiles').select('*');
-            
-            const formattedOrders = (dbOrders || []).map(o => {
-              const profile = dbProfilesListForOrders?.find((p: any) => p.id === o.user_id);
-              const addr = dbAddresses?.find((a: any) => a.order_id === o.id) || {
-                country: 'Uganda', district: 'Kampala', city: 'Lubowa', address: 'Lubowa Shopping Mall'
-              };
-              
-              const items = dbItems ? dbItems.filter((item: any) => item.order_id === o.id).map((item: any) => {
-                const prod = get().products.find(p => p.id === item.product_id);
-                return {
-                  productId: item.product_id,
-                  productName: prod?.name || 'Luxury Item',
-                  price: item.price,
-                  quantity: item.quantity,
-                  selectedSize: 'M',
-                  selectedColor: 'Default',
-                  image: prod?.images[0] || 'https://picsum.photos/seed/suit/600/600'
-                };
-              }) : [];
-
-              return {
-                id: o.order_number || o.id,
-                customerName: profile?.full_name || 'Gentleman Customer',
-                customerEmail: profile?.email || '',
-                customerPhone: profile?.phone || '',
-                amount: o.amount,
-                status: (() => {
-                  const s = o.status?.toLowerCase() || 'pending';
-                  if (s === 'completed' || s === 'delivered') return 'Delivered';
-                  if (s === 'processing') return 'Processing';
-                  if (s === 'cancelled') return 'Cancelled';
-                  return 'Pending';
-                })(),
-                date: o.created_at,
-                paymentMethod: o.payment_method,
-                notes: o.notes,
-                items,
-                shippingAddress: {
-                  country: addr.country,
-                  district: addr.district,
-                  city: addr.city,
-                  address: addr.address
-                }
-              };
-            });
-
-            // Bidirectional sync for orders
-            const localOrders = get().orders || INITIAL_ORDERS;
-            const missingOrders = localOrders.filter(lo => !formattedOrders.some(fo => fo.id === lo.id));
-            if (isAdminOrStaff) {
-              for (const order of missingOrders) {
-                await safeSupabaseUpsert('orders', order);
-                for (const item of order.items) {
-                  await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
-                }
-                await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
+          // Check orders
+          const { data: dbOrders } = await supabase.from('orders').select('id').limit(1);
+          if (!dbOrders || dbOrders.length === 0) {
+            for (const order of INITIAL_ORDERS) {
+              await safeSupabaseUpsert('orders', order);
+              for (const item of order.items) {
+                await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
               }
+              await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
             }
+          }
+        } catch (e) {
+          console.warn('[seedIfEmpty] Seeding error:', e);
+        }
+      },
 
-            set({ orders: [...formattedOrders, ...missingOrders] as Order[] });
+      fetchLatestState: async () => {
+        const supabase = getSupabaseClient();
+        if (!supabase) return;
 
-            // 4. Fetch Consultations (Try-catch in case table is missing)
+        // 1. Categories & Settings
+        const { data: dbCats } = await supabase.from('categories').select('*');
+        if (dbCats) {
+          const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
+          if (settingsCat && settingsCat.description) {
             try {
-              const { data: dbBookings, error: bookErr } = await supabase.from('consultations').select('*');
-              if (!bookErr && dbBookings) {
-                const camelBookings = keysToCamel(dbBookings) as ConsultationBooking[];
-                const localBookings = get().bookings || [];
-                const missingBookings = localBookings.filter(lb => !camelBookings.some(cb => cb.id === lb.id));
-                if (isAdminOrStaff) {
-                  for (const booking of missingBookings) {
-                    await safeSupabaseUpsert('consultations', booking);
-                  }
+              const parsedSettings = JSON.parse(settingsCat.description);
+              if (parsedSettings) {
+                if (parsedSettings.conciergePhone && !parsedSettings.supportPhone) {
+                  parsedSettings.supportPhone = parsedSettings.conciergePhone;
                 }
-                set({ bookings: [...camelBookings, ...missingBookings] });
+                if (!parsedSettings.supportPhone) {
+                  parsedSettings.supportPhone = INITIAL_SETTINGS.supportPhone;
+                }
               }
+              set({ settings: parsedSettings });
             } catch (e) {
-              console.warn('Could not sync consultations table:', e);
-            }
-
-            // 5. Fetch Newsletter Subscribers
-            try {
-              const { data: dbSubs, error: subsErr } = await supabase.from('newsletter_subscribers').select('*');
-              if (!subsErr && dbSubs) {
-                const mappedSubs = dbSubs.map((sub: any) => ({
-                  id: sub.id,
-                  email: sub.email,
-                  date: sub.subscribed_at
-                })) as NewsletterSubscriber[];
-                const localSubs = get().subscribers || [];
-                const missingSubs = localSubs.filter(ls => !mappedSubs.some(cs => cs.email.toLowerCase() === ls.email.toLowerCase()));
-                if (isAdminOrStaff) {
-                  for (const sub of missingSubs) {
-                    await safeSupabaseUpsert('newsletter_subscribers', sub);
-                  }
-                }
-                set({ subscribers: [...mappedSubs, ...missingSubs] });
-              }
-            } catch (e) {
-              console.warn('Could not sync newsletter_subscribers:', e);
-            }
-
-            // 6. Fetch Audit Logs
-            try {
-              const { data: dbLogs, error: logErr } = await supabase.from('audit_logs').select('*');
-              if (!logErr && dbLogs && dbLogs.length > 0) {
-                const { data: dbProfilesListForLogs } = await supabase.from('profiles').select('*');
-                const mappedLogs = dbLogs.map((log: any) => {
-                  const profile = dbProfilesListForLogs?.find((p: any) => p.id === log.user_id);
-                  return {
-                    id: log.id,
-                    userId: log.user_id || 'guest',
-                    userName: profile?.full_name || 'System / Guest',
-                    userRole: profile?.role || 'Customer',
-                    action: log.action,
-                    details: log.details || '',
-                    timestamp: log.created_at
-                  };
-                }) as AuditLog[];
-                const localLogs = get().auditLogs || INITIAL_AUDIT_LOGS;
-                const missingLogs = localLogs.filter(ll => !mappedLogs.some(ml => ml.id === ll.id));
-                if (isAdminOrStaff) {
-                  for (const log of missingLogs) {
-                    await safeSupabaseUpsert('audit_logs', log);
-                  }
-                }
-                set({ auditLogs: [...mappedLogs, ...missingLogs].slice(0, 500) });
-              } else if (!logErr) {
-                if (isAdminOrStaff) {
-                  for (const log of INITIAL_AUDIT_LOGS) {
-                    await safeSupabaseUpsert('audit_logs', log);
-                  }
-                }
-                set({ auditLogs: INITIAL_AUDIT_LOGS });
-              }
-            } catch (e) {
-              console.warn('Could not sync audit_logs:', e);
-            }
-
-            // Restore currentUser dynamically from active Supabase Auth session or persisted currentUserId
-            try {
-              const { data: authData } = await supabase.auth.getUser();
-              const authUser = authData?.user;
-              const targetUserId = authUser?.id || get().currentUserId;
-
-              if (authUser?.user_metadata?.cart) {
-                const userCart = authUser.user_metadata.cart;
-                if (Array.isArray(userCart) && userCart.length > 0) {
-                  set({ cart: userCart });
-                }
-              }
-
-              if (targetUserId) {
-                const { data: p } = await supabase
-                  .from('profiles')
-                  .select('*')
-                  .eq('id', targetUserId)
-                  .maybeSingle();
-                
-                const meta = authUser?.user_metadata || {};
-                const userObj: User = {
-                  id: targetUserId,
-                  name: p?.full_name || p?.name || authUser?.user_metadata?.name || (authUser ? authUser.email?.split('@')[0].toUpperCase() : 'Gentleman Customer'),
-                  email: p?.email || authUser?.email || '',
-                  phone: p?.phone || authUser?.user_metadata?.phone || '',
-                  role: p ? capitalizeRole(p.role) : 'Customer',
-                  spending: p ? (p.lifetime_spending || p.spending || 0) : 0,
-                  rewardsPoints: p ? (p.reward_points || p.rewardsPoints || 0) : 0,
-                  country: meta.country || undefined,
-                  district: meta.district || undefined,
-                  city: meta.city || undefined,
-                  address: meta.address || undefined
-                };
-                set({ currentUser: userObj });
-
-                // Fetch user's wishlist from Supabase
-                try {
-                  const { data: dbWishlists, error: wishErr } = await supabase
-                    .from('wishlists')
-                    .select('product_id')
-                    .eq('user_id', targetUserId);
-                  if (!wishErr && dbWishlists) {
-                    const productIds = dbWishlists.map((w: any) => w.product_id);
-                    set({ wishlist: productIds });
-                  }
-                } catch (wishErr) {
-                  console.warn('Failed to load wishlist from Supabase:', wishErr);
-                }
-              }
-            } catch (authError) {
-              console.warn('Could not restore auth user session:', authError);
-            }
-
-            success = true;
-            set({ cartError: null }); // clear any previous sync error upon success
-          } catch (err: any) {
-            console.error(`Sync attempt ${attempt} failed:`, err);
-            lastError = err;
-            if (attempt < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, attempt * 500));
+              console.warn('Failed to parse app-settings from categories:', e);
             }
           }
         }
 
-        if (!success) {
-          console.error('All syncFromSupabase attempts failed. Activating local mock simulation fallback.');
-          set({ cartError: `Database synchronization failed: ${lastError?.message || lastError || 'Check network connection'}` });
+        // 2. Profiles / Users
+        const { data: dbProfiles } = await supabase.from('profiles').select('*');
+        const mappedUsers = (dbProfiles || []).map((p: any) => ({
+          id: p.id,
+          name: p.full_name || p.name || 'Gentleman Customer',
+          email: p.email,
+          phone: p.phone,
+          role: capitalizeRole(p.role),
+          spending: p.lifetime_spending || p.spending || 0,
+          rewardsPoints: p.reward_points || p.rewardsPoints || 0
+        }));
+        const localUsers = get().users.length > 0 ? get().users : INITIAL_USERS;
+        const missingUsers = localUsers.filter(lu => !mappedUsers.some(mu => mu.id === lu.id));
+        set({ users: [...mappedUsers, ...missingUsers] as User[] });
+
+        // 3. Products & Reviews & Product Images
+        const { data: dbProducts } = await supabase.from('products').select('*');
+        const { data: dbReviews } = await supabase.from('reviews').select('*');
+        const { data: dbProfilesList } = await supabase.from('profiles').select('*');
+        let dbImages: any[] | null = null;
+        try {
+          const { data: imgData } = await supabase.from('product_images').select('*');
+          dbImages = imgData;
+        } catch (e) {
+          console.warn('Could not query product_images:', e);
         }
-        set({ isSyncing: false });
+
+        const reviewsWithProfiles = dbReviews ? dbReviews.map((r: any) => {
+          const profile = dbProfilesList?.find((prof: any) => prof.id === r.user_id);
+          return {
+            id: r.id,
+            productId: r.product_id,
+            userName: profile?.full_name || 'Gentleman Customer',
+            userRole: profile?.role || 'Customer',
+            rating: Number(r.rating) || 5,
+            comment: r.comment || '',
+            date: r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+          };
+        }) : [];
+
+        const mappedProducts = (dbProducts || []).map((p: any) => {
+          const catName = dbCats ? (dbCats.find((c: any) => c.id === p.category_id)?.name || 'Suits') : 'Suits';
+          const localProd = INITIAL_PRODUCTS.find(lp => toValidUUID(lp.id) === p.id);
+          const prodReviews = reviewsWithProfiles.filter(r => r.productId === p.id);
+
+          const productImages = dbImages
+            ? dbImages
+                .filter((img: any) => img.product_id === p.id)
+                .sort((a: any, b: any) => (a.display_order || 1) - (b.display_order || 1))
+                .map((img: any) => img.image_url)
+            : [];
+          const finalImages = productImages.length > 0 ? productImages : (localProd?.images || [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
+
+          let parsedSizes = localProd?.sizes || ['M', 'L', 'XL'];
+          let parsedColors = localProd?.colors || ['Classic Black'];
+          let dealHours = localProd?.dealHours !== undefined ? localProd.dealHours : 14;
+          let dealMins = localProd?.dealMins !== undefined ? localProd.dealMins : 42;
+          let dealSecs = localProd?.dealSecs !== undefined ? localProd.dealSecs : 19;
+
+          if (p.short_description) {
+            try {
+              const parsed = JSON.parse(p.short_description);
+              if (parsed && typeof parsed === 'object') {
+                if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) parsedSizes = parsed.sizes;
+                if (Array.isArray(parsed.colors) && parsed.colors.length > 0) parsedColors = parsed.colors;
+                if (parsed.dealHours !== undefined && parsed.dealHours !== null) dealHours = Number(parsed.dealHours);
+                if (parsed.dealMins !== undefined && parsed.dealMins !== null) dealMins = Number(parsed.dealMins);
+                if (parsed.dealSecs !== undefined && parsed.dealSecs !== null) dealSecs = Number(parsed.dealSecs);
+              }
+            } catch {}
+          }
+
+          return {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            category: catName,
+            price: Number(p.price) || 0,
+            images: finalImages,
+            sizes: parsedSizes,
+            colors: parsedColors,
+            stock: Number(p.stock) || 0,
+            rating: Number(p.rating) || 0,
+            isNew: p.is_new,
+            isFeatured: p.is_featured,
+            isDealOfTheDay: p.is_deal,
+            discountPercentage: Number(p.discount_percentage) || 0,
+            dealHours,
+            dealMins,
+            dealSecs,
+            reviews: prodReviews
+          };
+        });
+
+        const localProducts = get().products.length > 0 ? get().products : INITIAL_PRODUCTS;
+        const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id));
+        const combinedProducts = [...mappedProducts, ...missingProducts];
+
+        // Signed URLs resolution
+        const privatePaths: string[] = [];
+        combinedProducts.forEach((p: any) => {
+          if (p.images) {
+            p.images.forEach((img: string) => {
+              if (isPrivateStoragePath(img)) {
+                privatePaths.push(img);
+              }
+            });
+          }
+        });
+
+        let signedUrlsMap: Record<string, string> = {};
+        if (privatePaths.length > 0) {
+          try {
+            const headers = await getAuthHeaders();
+            if (headers.Authorization || headers['Authorization']) {
+              const response = await fetchWithRetry('/api/storage', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
+              });
+              if (response.ok) {
+                const data = await response.json();
+                if (data.signedUrls) {
+                  data.signedUrls.forEach((item: any) => {
+                    if (item.signedUrl) {
+                      signedUrlsMap[item.path] = item.signedUrl;
+                    }
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to resolve signed URLs:', e);
+          }
+        }
+
+        const resolvedProducts = combinedProducts.map((p: any) => {
+          const resolvedImages = p.images.map((img: string) => {
+            if (isPrivateStoragePath(img)) {
+              return signedUrlsMap[img] || img;
+            }
+            return img;
+          });
+          return { ...p, images: resolvedImages };
+        });
+
+        set({ products: resolvedProducts as Product[] });
+
+        // 4. Orders
+        const { data: dbOrders } = await supabase.from('orders').select('*');
+        const { data: dbItems } = await supabase.from('order_items').select('*');
+        const { data: dbAddresses } = await supabase.from('order_addresses').select('*');
+
+        const formattedOrders = (dbOrders || []).map(o => {
+          const profile = dbProfilesList?.find((p: any) => p.id === o.user_id);
+          const addr = dbAddresses?.find((a: any) => a.order_id === o.id) || {
+            country: 'Uganda', district: 'Kampala', city: 'Lubowa', address: 'Lubowa Shopping Mall'
+          };
+          
+          const items = dbItems ? dbItems.filter((item: any) => item.order_id === o.id).map((item: any) => {
+            const prod = resolvedProducts.find(p => p.id === item.product_id);
+            return {
+              productId: item.product_id,
+              productName: prod?.name || 'Luxury Item',
+              price: item.price,
+              quantity: item.quantity,
+              selectedSize: 'M',
+              selectedColor: 'Default',
+              image: prod?.images[0] || 'https://picsum.photos/seed/suit/600/600'
+            };
+          }) : [];
+
+          return {
+            id: o.order_number || o.id,
+            customerName: profile?.full_name || 'Gentleman Customer',
+            customerEmail: profile?.email || '',
+            customerPhone: profile?.phone || '',
+            amount: o.amount,
+            status: (() => {
+              const s = o.status?.toLowerCase() || 'pending';
+              if (s === 'completed' || s === 'delivered') return 'Delivered';
+              if (s === 'processing') return 'Processing';
+              if (s === 'cancelled') return 'Cancelled';
+              return 'Pending';
+            })(),
+            date: o.created_at,
+            paymentMethod: o.payment_method,
+            notes: o.notes,
+            items,
+            shippingAddress: {
+              country: addr.country,
+              district: addr.district,
+              city: addr.city,
+              address: addr.address
+            }
+          };
+        });
+
+        const localOrders = get().orders.length > 0 ? get().orders : INITIAL_ORDERS;
+        const missingOrders = localOrders.filter(lo => !formattedOrders.some(fo => fo.id === lo.id));
+        set({ orders: [...formattedOrders, ...missingOrders] as Order[] });
+
+        // 5. Consultations
+        try {
+          const { data: dbBookings } = await supabase.from('consultations').select('*');
+          if (dbBookings) {
+            const camelBookings = keysToCamel(dbBookings) as ConsultationBooking[];
+            set({ bookings: camelBookings });
+          }
+        } catch {}
+
+        // 6. Newsletter
+        try {
+          const { data: dbSubs } = await supabase.from('newsletter_subscribers').select('*');
+          if (dbSubs) {
+            const mappedSubs = dbSubs.map((sub: any) => ({
+              id: sub.id,
+              email: sub.email,
+              date: sub.subscribed_at
+            })) as NewsletterSubscriber[];
+            set({ subscribers: mappedSubs });
+          }
+        } catch {}
+
+        // 7. Audit Logs
+        try {
+          const { data: dbLogs } = await supabase.from('audit_logs').select('*');
+          if (dbLogs && dbLogs.length > 0) {
+            const mappedLogs = dbLogs.map((log: any) => {
+              const profile = dbProfilesList?.find((p: any) => p.id === log.user_id);
+              return {
+                id: log.id,
+                userId: log.user_id || 'guest',
+                userName: profile?.full_name || 'System / Guest',
+                userRole: profile?.role || 'Customer',
+                action: log.action,
+                details: log.details || '',
+                timestamp: log.created_at
+              };
+            }) as AuditLog[];
+            set({ auditLogs: mappedLogs.slice(0, 500) });
+          }
+        } catch {}
+
+        // 8. Auth session & Wishlist
+        try {
+          const { data: authData } = await supabase.auth.getUser();
+          const authUser = authData?.user;
+          const targetUserId = authUser?.id || get().currentUserId;
+
+          if (targetUserId) {
+            const { data: p } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', targetUserId)
+              .maybeSingle();
+            
+            const meta = authUser?.user_metadata || {};
+            const userObj: User = {
+              id: targetUserId,
+              name: p?.full_name || p?.name || authUser?.user_metadata?.name || (authUser ? authUser.email?.split('@')[0].toUpperCase() : 'Gentleman Customer'),
+              email: p?.email || authUser?.email || '',
+              phone: p?.phone || authUser?.user_metadata?.phone || '',
+              role: p ? capitalizeRole(p.role) : 'Customer',
+              spending: p ? (p.lifetime_spending || p.spending || 0) : 0,
+              rewardsPoints: p ? (p.reward_points || p.rewardsPoints || 0) : 0,
+              country: meta.country || undefined,
+              district: meta.district || undefined,
+              city: meta.city || undefined,
+              address: meta.address || undefined
+            };
+            set({ currentUser: userObj });
+
+            try {
+              const { data: dbWishlists } = await supabase
+                .from('wishlists')
+                .select('product_id')
+                .eq('user_id', targetUserId);
+              if (dbWishlists) {
+                set({ wishlist: dbWishlists.map((w: any) => w.product_id) });
+              }
+            } catch {}
+          }
+        } catch {}
       },
 
-      login: async (email, password, role) => {
+      syncFromSupabase: async () => {
+        if (get().isSyncing) return;
+        set({ isSyncing: true });
+
+        try {
+          await get().seedIfEmpty();
+          await get().fetchLatestState();
+          set({ cartError: null });
+        } catch (err: any) {
+          console.error('[syncFromSupabase] Sync error:', err);
+        } finally {
+          set({ isSyncing: false });
+        }
+      },
+
+      applyProductChange: (payload: any) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        const products = get().products;
+
+        if (eventType === 'DELETE') {
+          const deletedId = oldRow?.id || newRow?.id;
+          if (deletedId) {
+            set({ products: products.filter(p => p.id !== deletedId) });
+          }
+          return;
+        }
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          if (!newRow) return;
+          const prodId = newRow.id;
+          const existingIndex = products.findIndex(p => p.id === prodId);
+          const existing = existingIndex !== -1 ? products[existingIndex] : null;
+
+          let parsedSizes = existing?.sizes || ['M', 'L', 'XL'];
+          let parsedColors = existing?.colors || ['Classic Black'];
+          let dealHours = existing?.dealHours ?? 14;
+          let dealMins = existing?.dealMins ?? 42;
+          let dealSecs = existing?.dealSecs ?? 19;
+
+          if (newRow.short_description) {
+            try {
+              const parsed = JSON.parse(newRow.short_description);
+              if (parsed && typeof parsed === 'object') {
+                if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) parsedSizes = parsed.sizes;
+                if (Array.isArray(parsed.colors) && parsed.colors.length > 0) parsedColors = parsed.colors;
+                if (parsed.dealHours !== undefined) dealHours = Number(parsed.dealHours);
+                if (parsed.dealMins !== undefined) dealMins = Number(parsed.dealMins);
+                if (parsed.dealSecs !== undefined) dealSecs = Number(parsed.dealSecs);
+              }
+            } catch {}
+          }
+
+          const catName = newRow.category || existing?.category || 'Suits';
+
+          const updatedProduct: Product = {
+            id: prodId,
+            name: newRow.name || existing?.name || 'Luxury Asset',
+            description: newRow.description || existing?.description || '',
+            category: catName,
+            price: newRow.price !== undefined ? Number(newRow.price) : (existing?.price || 0),
+            images: existing?.images || (newRow.slug ? [`https://picsum.photos/seed/${newRow.slug}/600/600`] : ['https://picsum.photos/seed/suit/600/600']),
+            sizes: parsedSizes,
+            colors: parsedColors,
+            stock: newRow.stock !== undefined ? Number(newRow.stock) : (existing?.stock || 0),
+            rating: newRow.rating !== undefined ? Number(newRow.rating) : (existing?.rating || 0),
+            isNew: newRow.is_new !== undefined ? !!newRow.is_new : (existing?.isNew || false),
+            isFeatured: newRow.is_featured !== undefined ? !!newRow.is_featured : (existing?.isFeatured || false),
+            isDealOfTheDay: newRow.is_deal !== undefined ? !!newRow.is_deal : (existing?.isDealOfTheDay || false),
+            discountPercentage: newRow.discount_percentage !== undefined ? Number(newRow.discount_percentage) : (existing?.discountPercentage || 0),
+            dealHours,
+            dealMins,
+            dealSecs,
+            reviews: existing?.reviews || []
+          };
+
+          if (existingIndex !== -1) {
+            const newProducts = [...products];
+            newProducts[existingIndex] = updatedProduct;
+            set({ products: newProducts });
+          } else {
+            set({ products: [updatedProduct, ...products] });
+          }
+        }
+      },
+
+      applyReviewChange: (payload: any) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        const targetProductId = newRow?.product_id || oldRow?.product_id;
+        if (!targetProductId) return;
+
+        const products = get().products;
+        const targetProd = products.find(p => p.id === targetProductId);
+        if (!targetProd) return;
+
+        let updatedReviews = [...(targetProd.reviews || [])];
+
+        if (eventType === 'DELETE') {
+          const deletedId = oldRow?.id || newRow?.id;
+          if (deletedId) {
+            updatedReviews = updatedReviews.filter(r => r.id !== deletedId);
+          }
+        } else if (eventType === 'INSERT') {
+          if (newRow && !updatedReviews.some(r => r.id === newRow.id)) {
+            const matchedUser = get().users.find(u => u.id === newRow.user_id);
+            const newReview: Review = {
+              id: newRow.id,
+              productId: newRow.product_id,
+              userName: matchedUser?.name || 'Gentleman Customer',
+              userRole: matchedUser?.role || 'Customer',
+              rating: Number(newRow.rating) || 5,
+              comment: newRow.comment || '',
+              date: newRow.created_at ? newRow.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+            };
+            updatedReviews.unshift(newReview);
+          }
+        } else if (eventType === 'UPDATE') {
+          if (newRow) {
+            updatedReviews = updatedReviews.map(r => r.id === newRow.id ? {
+              ...r,
+              rating: Number(newRow.rating) || r.rating,
+              comment: newRow.comment || r.comment,
+            } : r);
+          }
+        }
+
+        const avgRating = updatedReviews.length > 0
+          ? Number((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1))
+          : targetProd.rating;
+
+        const updatedProducts = products.map(p => p.id === targetProductId ? {
+          ...p,
+          rating: avgRating,
+          reviews: updatedReviews
+        } : p);
+
+        set({ products: updatedProducts });
+      },
+
+      applyOrderChange: (payload: any) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        const orders = get().orders;
+
+        if (eventType === 'DELETE') {
+          const deletedId = oldRow?.id || oldRow?.order_number || newRow?.id;
+          if (deletedId) {
+            set({ orders: orders.filter(o => o.id !== deletedId) });
+          }
+          return;
+        }
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          if (!newRow) return;
+          const orderId = newRow.order_number || newRow.id;
+          const existingIndex = orders.findIndex(o => o.id === orderId);
+          const existing = existingIndex !== -1 ? orders[existingIndex] : null;
+
+          const formattedStatus = (() => {
+            const s = newRow.status?.toLowerCase() || 'pending';
+            if (s === 'completed' || s === 'delivered') return 'Delivered';
+            if (s === 'processing') return 'Processing';
+            if (s === 'cancelled') return 'Cancelled';
+            return 'Pending';
+          })();
+
+          const updatedOrder: Order = {
+            id: orderId,
+            customerName: existing?.customerName || 'Gentleman Customer',
+            customerEmail: existing?.customerEmail || '',
+            customerPhone: existing?.customerPhone || '',
+            amount: newRow.amount !== undefined ? Number(newRow.amount) : (existing?.amount || 0),
+            status: formattedStatus as Order['status'],
+            date: newRow.created_at || existing?.date || new Date().toISOString(),
+            paymentMethod: newRow.payment_method || existing?.paymentMethod || 'Mobile Money',
+            notes: newRow.notes || existing?.notes || '',
+            items: existing?.items || [],
+            shippingAddress: existing?.shippingAddress || { country: 'Uganda', district: 'Kampala', city: 'Lubowa', address: 'Lubowa Showroom' }
+          };
+
+          if (existingIndex !== -1) {
+            const newOrders = [...orders];
+            newOrders[existingIndex] = updatedOrder;
+            set({ orders: newOrders });
+          } else {
+            set({ orders: [updatedOrder, ...orders] });
+          }
+        }
+      },
+
+      applyProfileChange: (payload: any) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        const users = get().users;
+
+        if (eventType === 'DELETE') {
+          const deletedId = oldRow?.id || newRow?.id;
+          if (deletedId) {
+            set({ users: users.filter(u => u.id !== deletedId) });
+          }
+          return;
+        }
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          if (!newRow) return;
+          const userId = newRow.id;
+          const existingIndex = users.findIndex(u => u.id === userId);
+
+          const updatedUser: User = {
+            id: userId,
+            name: newRow.full_name || newRow.name || 'Gentleman Customer',
+            email: newRow.email || '',
+            phone: newRow.phone || '',
+            role: capitalizeRole(newRow.role) as User['role'],
+            spending: newRow.lifetime_spending || newRow.spending || 0,
+            rewardsPoints: newRow.reward_points || newRow.rewardsPoints || 0
+          };
+
+          if (existingIndex !== -1) {
+            const newUsers = [...users];
+            newUsers[existingIndex] = updatedUser;
+            set({ users: newUsers });
+          } else {
+            set({ users: [...users, updatedUser] });
+          }
+
+          if (get().currentUser?.id === userId) {
+            set(state => ({
+              currentUser: state.currentUser ? { ...state.currentUser, ...updatedUser } : updatedUser
+            }));
+          }
+        }
+      },
+
+      login: async (email, password) => {
         try {
           const supabase = getSupabaseClient();
-          const users = get().users;
 
           if (!password) {
             return { success: false, error: 'Password is required for standard authentication.' };
@@ -1415,7 +1555,6 @@ export const useStore = create<StoreState>()(
 
           let resUser = null;
           let resSession = null;
-          let fallbackToLocal = false;
 
           try {
             // Call rate-limited, secure server-side login endpoint
@@ -1425,38 +1564,23 @@ export const useStore = create<StoreState>()(
               body: JSON.stringify({ email, password })
             });
 
-            const res = await response.json();
+            const res = await response.json().catch(() => ({}));
             if (!response.ok || !res.success) {
-              // Check if it's a structural or connection/network error
               if (response.status === 502 || response.status === 503 || response.status === 504) {
-                fallbackToLocal = true;
-              } else {
-                return { success: false, error: res.error || 'Authentication failed.' };
+                return { success: false, error: 'Our authentication service is temporarily unavailable. Please try again shortly.' };
               }
-            } else {
-              resUser = res.user;
-              resSession = res.session;
+              return { success: false, error: res.error || 'Authentication failed.' };
             }
+
+            resUser = res.user;
+            resSession = res.session;
           } catch (fetchErr) {
-            console.warn('[STORE] Server login fetch failed, trying local fallback:', fetchErr);
-            fallbackToLocal = true;
+            console.warn('[STORE] Server login fetch failed:', fetchErr);
+            return { success: false, error: 'Our authentication service is temporarily unavailable. Please try again shortly.' };
           }
 
-          if (fallbackToLocal || !resUser) {
-            // Local fallback logic
-            const localUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-            if (localUser) {
-              set({ currentUser: localUser });
-              get().addAuditLog(
-                'User Login',
-                `Offline local fallback login successful for ${localUser.name}.`,
-                localUser.id,
-                localUser.name,
-                localUser.role
-              );
-              return { success: true };
-            }
-            return { success: false, error: 'Database service is currently offline and requested profile is missing.' };
+          if (!resUser) {
+            return { success: false, error: 'Authentication failed.' };
           }
 
           // Sync local Supabase client state if present
@@ -1544,33 +1668,30 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      register: async (name, email, phone, password, role = 'Customer') => {
+      register: async (name, email, phone, password) => {
         try {
-          if (email && email.toLowerCase() === 'loyohenoch@gmail.com') {
-            role = 'Super Admin';
-          }
           if (!password) {
             return { success: false, error: 'A password is required to compile a private profile.' };
           }
 
-          // Register via secure server-side API route to bypass SMTP & trigger RLS issues
+          // Register via secure server-side API route
           const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, phone, password, role })
+            body: JSON.stringify({ name, email, phone, password })
           });
 
           const res = await response.json();
-          if (!response.ok || !res.success) {
+          if (!response.ok || !res.success || !res.user) {
             return { success: false, error: res.error || 'Registration failed.' };
           }
 
           const newUser: User = {
             id: res.user.id,
-            name,
-            email,
-            phone,
-            role: role as User['role'],
+            name: res.user.name || name,
+            email: res.user.email || email,
+            phone: res.user.phone || phone,
+            role: (res.user.role || 'Customer') as User['role'],
             spending: 0,
             rewardsPoints: 0
           };

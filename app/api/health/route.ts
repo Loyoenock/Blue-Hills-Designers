@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   
   try {
     // 1. Rate Limiting Check (Max 60 health checks per minute to prevent status abuse)
-    const rateLimitRes = enforceRateLimit(req, 60, 60000);
+    const rateLimitRes = await enforceRateLimit(req, 60, 60000);
 
     logger.info('Health monitoring check initiated.');
     logs.push('Health monitoring check initiated.');

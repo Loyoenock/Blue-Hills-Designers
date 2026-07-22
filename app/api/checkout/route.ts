@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
+import { sendTransactionalEmail } from '@/lib/email';
 import crypto from 'crypto';
 
 // Standard Kampala luxury coupons
@@ -16,7 +17,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting Check (60 checkout attempts per minute max)
-    enforceRateLimit(req, 60, 60000);
+    await enforceRateLimit(req, 60, 60000);
 
     const body = await req.json().catch(() => ({}));
     
@@ -445,7 +446,24 @@ export async function POST(req: NextRequest) {
       </div>
     `;
 
-    logger.info(`[SMTP SIMULATOR] Dispatched order confirmation email to ${email} for Order ${orderNumber}`);
+    // 9. Dispatch order confirmation email (best-effort, non-blocking)
+    let emailDispatched = false;
+    let emailDeliveryError: string | null = null;
+    try {
+      const emailResult = await sendTransactionalEmail({
+        to: email,
+        subject: emailSubject,
+        html: emailHtml,
+        orderNumber,
+      });
+      emailDispatched = emailResult.success;
+      if (!emailResult.success) {
+        emailDeliveryError = emailResult.error || 'Failed to dispatch email';
+      }
+    } catch (emailErr: any) {
+      logger.error('Unexpected exception during order confirmation email dispatch:', emailErr);
+      emailDeliveryError = emailErr?.message || 'Email service exception';
+    }
 
     return NextResponse.json({
       success: true,
@@ -464,6 +482,8 @@ export async function POST(req: NextRequest) {
         transactionId,
         status: paymentStatus
       },
+      emailDispatched,
+      emailDeliveryError,
       emailHtml,
       emailSubject
     });

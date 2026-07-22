@@ -34,9 +34,47 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key-here"
 # Server-Only Supabase Master Secret (Needed for elevated bypass operations)
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-here"
 
+# Super Admin Bootstrap Emails
+ADMIN_BOOTSTRAP_EMAILS="owner@yourdomain.com"
+
+# Transactional Email (Resend)
+RESEND_API_KEY="re_123456789_abcdefghijklmnopqrstuvwxyz"
+EMAIL_FROM="Blue Hills Designers <orders@yourdomain.com>"
+
 # Deployment Endpoint
 APP_URL="https://your-domain.com"
 ```
+
+---
+
+## 📧 Transactional Email & Domain DNS Verification (Resend Setup)
+
+Order confirmation emails are dispatched server-side using **Resend**.
+
+1. **Obtain API Key**: Sign up on [Resend](https://resend.com) and copy your API key into `RESEND_API_KEY`.
+2. **Domain DNS Verification Checklist**:
+   To ensure high inbox deliverability and prevent order emails from being flagged as spam:
+   - **SPF Record**: Add TXT record `v=spf1 include:amazonses.com ~all` or Resend SPF record to your DNS host.
+   - **DKIM Record**: Add the CNAME / TXT DKIM keys generated in your Resend domain settings dashboard.
+   - **DMARC Record**: Add TXT record `_dmarc.yourdomain.com` with value `v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com`.
+3. **Resend Fallback Mode**: If `RESEND_API_KEY` is not set (e.g. during local testing), the platform gracefully logs email dispatches without failing checkout orders.
+
+---
+
+## 🛡️ Distributed Rate Limiting (Upstash Redis Setup)
+
+To support multi-instance / horizontally scaled deployments (e.g. Vercel serverless functions or multiple Cloud Run container replicas):
+
+1. **Configure Upstash Redis**:
+   - Create a Redis database on [Upstash Redis](https://upstash.com).
+   - Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in your server environment variables.
+2. **Atomic Sliding Window**:
+   - Uses `@upstash/ratelimit` for atomic sliding-window rate limiting across all instance replicas.
+3. **Outage Resilience & Failure Strategy**:
+   - **Fail Closed**: For security-critical routes (`/api/auth/*`) and high-cost routes (`/api/gemini`), network failures contacting Redis will deny the request to prevent brute-force attacks and key exhaustion.
+   - **Fail Open**: For general public routes (`/api/health`, `/api/db`, `/api/storage`, `/api/checkout`), Redis network hiccups allow requests to preserve core user experience and application availability.
+4. **Local Fallback Mode**:
+   - When Upstash Redis environment variables are absent (e.g. local development), the system automatically falls back to an in-memory sliding window limiter and logs a warning.
 
 ---
 

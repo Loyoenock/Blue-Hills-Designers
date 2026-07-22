@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, validateFields, ApiError, logger } from '@/lib/apiUtils';
+import { isBootstrapAdminEmail } from '@/lib/adminBootstrap';
 
 export async function POST(req: NextRequest) {
   try {
     // Enforce rate limit (max 15 login attempts per minute per IP)
-    enforceRateLimit(req, 15, 60000);
+    await enforceRateLimit(req, 15, 60000);
 
     const body = await req.json().catch(() => ({}));
     validateFields(body, {
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     // Capitalize user role if found in metadata
     let userRole = user.user_metadata?.role || 'Customer';
-    if (emailTrimmed === 'loyohenoch@gmail.com') {
+    if (isBootstrapAdminEmail(emailTrimmed)) {
       userRole = 'Super Admin';
     }
 

@@ -91,14 +91,13 @@ export default function AccountClient() {
               <span className="relative bg-[#F7F5F0] px-3 text-[10px] text-[#657892]/60 uppercase tracking-widest font-mono">Or Quick Validate As</span>
             </div>
 
-            {/* Quick login for preview checking */}
+            {/* Sign in shortcuts */}
             <div className="grid grid-cols-1 gap-2">
               {users.slice(0, 2).map((u) => (
                 <button
                   key={u.id}
                   onClick={() => {
-                    login(u.email);
-                    router.refresh();
+                    router.push('/login');
                   }}
                   className="bg-[#B9CDE5]/10 hover:bg-[#B9CDE5]/20 border border-[#657892]/20 rounded-lg p-2.5 text-xs text-left text-[#1D2B3F] flex justify-between items-center transition-all cursor-pointer"
                 >

@@ -5,7 +5,7 @@ import { enforceRateLimit, createErrorResponse, validateFields, ApiError, logger
 export async function POST(req: NextRequest) {
   try {
     // Enforce rate limit (max 10 OTP attempts per minute per IP)
-    enforceRateLimit(req, 10, 60000);
+    await enforceRateLimit(req, 10, 60000);
 
     const body = await req.json().catch(() => ({}));
     validateFields(body, {

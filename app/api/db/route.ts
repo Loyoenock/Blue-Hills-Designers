@@ -31,7 +31,7 @@ function checkRlsAndThrow(message: string): never {
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting Check (Max 600 DB requests per minute per IP to protect server resources while allowing fast client sync)
-    enforceRateLimit(req, 600, 60000);
+    await enforceRateLimit(req, 600, 60000);
 
     const body = await req.json().catch(() => ({}));
     

@@ -45,7 +45,7 @@ async function getBucketName(supabase: any): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting Check (Max 150 storage requests per minute per IP to prevent exhaustion attacks while enabling batch uploads)
-    enforceRateLimit(req, 150, 60000);
+    await enforceRateLimit(req, 150, 60000);
 
     // 2. Authentication Check
     const authUser = await requireAuth(req);

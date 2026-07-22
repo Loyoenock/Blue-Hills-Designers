@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   
   try {
     // 1. Rate Limiting Check (Max 20 AI style chats per minute per IP to defend API key usage)
-    enforceRateLimit(req, 20, 60000);
+    await enforceRateLimit(req, 20, 60000);
 
     const body = await req.json().catch(() => ({}));
     

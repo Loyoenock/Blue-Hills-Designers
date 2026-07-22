@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isBootstrapAdminEmail } from './lib/adminBootstrap';
 
 export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
@@ -98,8 +99,8 @@ export async function middleware(request: NextRequest) {
     if (isProtectedAdmin) {
       let userRole = 'Customer';
 
-      // Direct owner/developer bypass
-      if (user.email && user.email.toLowerCase() === 'loyohenoch@gmail.com') {
+      // Direct owner/developer bootstrap check
+      if (user.email && isBootstrapAdminEmail(user.email)) {
         userRole = 'Super Admin';
       } else {
         // Query the database profiles table directly via REST API using the validated JWT

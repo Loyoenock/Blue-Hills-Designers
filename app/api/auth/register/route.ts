@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
 import { isNetworkOrConnectionError } from '@/lib/utils';
+import { isBootstrapAdminEmail } from '@/lib/adminBootstrap';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate limiting check (max 10 registration requests per minute per IP)
-    enforceRateLimit(req, 10, 60000);
+    await enforceRateLimit(req, 10, 60000);
 
     const body = await req.json().catch(() => ({}));
     
@@ -33,9 +34,9 @@ export async function POST(req: NextRequest) {
     const cleanPhone = typeof phone === 'string' ? phone.trim().slice(0, 25).replace(/[^\d+\-\s()]/g, '') : '';
 
     // 4. Role Escalation Protection: Public signups can ONLY be 'Customer'.
-    // Only the hardcoded developer/owner email gains 'Super Admin' privilege during sign up.
+    // Only emails configured in ADMIN_BOOTSTRAP_EMAILS gain 'Super Admin' privilege during sign up.
     let resolvedRole = 'Customer';
-    if (emailTrimmed === 'loyohenoch@gmail.com') {
+    if (isBootstrapAdminEmail(emailTrimmed)) {
       resolvedRole = 'Super Admin';
     }
 

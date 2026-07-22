@@ -18,6 +18,7 @@ import MobileNav from '../../components/MobileNav';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, User } from '../../types';
+import { getSupabaseClient } from '../../lib/supabase';
 
 export default function Admin() {
   const router = useRouter();
@@ -25,7 +26,8 @@ export default function Admin() {
     currentUser, login, products, orders, users, auditLogs, payments, settings, bookings,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
-    deleteReview, updateProductStockQuick, updateBookingStatus
+    deleteReview, updateProductStockQuick, updateBookingStatus,
+    applyOrderChange, applyProfileChange
   } = useStore();
 
   const [mounted, setMounted] = useState(false);
@@ -52,6 +54,40 @@ export default function Admin() {
     }, 0);
     return () => clearTimeout(t);
   }, []);
+
+  // Admin-specific Realtime subscriptions for orders and profiles
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    let ordersChannel: any = null;
+    let profilesChannel: any = null;
+
+    if (supabase) {
+      ordersChannel = supabase
+        .channel('admin-orders-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+          console.log('Admin Realtime order change received:', payload);
+          applyOrderChange(payload);
+        })
+        .subscribe();
+
+      profilesChannel = supabase
+        .channel('admin-profiles-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+          console.log('Admin Realtime profile change received:', payload);
+          applyProfileChange(payload);
+        })
+        .subscribe();
+    }
+
+    return () => {
+      if (ordersChannel && supabase) {
+        supabase.removeChannel(ordersChannel);
+      }
+      if (profilesChannel && supabase) {
+        supabase.removeChannel(profilesChannel);
+      }
+    };
+  }, [applyOrderChange, applyProfileChange]);
 
   // Form states for ADD / EDIT Product
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -209,21 +245,12 @@ export default function Admin() {
             </p>
           </div>
           <div className="space-y-3">
-            <button 
-              onClick={() => {
-                // Predefined quick bypass login as Super Admin
-                login('admin@bluehills.com');
-              }}
-              className="w-full bg-[#5F39FF] text-white py-3 rounded-lg text-xs font-semibold uppercase tracking-widest text-center transition-all cursor-pointer"
-              id="bypass-admin-btn"
-            >
-              Log In as Master Admin (Robert)
-            </button>
             <Link 
               href="/login" 
-              className="block bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3 rounded-lg text-xs font-semibold uppercase tracking-widest text-center transition-all"
+              className="w-full bg-[#5F39FF] text-white py-3 rounded-lg text-xs font-semibold uppercase tracking-widest text-center transition-all block"
+              id="bypass-admin-btn"
             >
-              Sign In with Credentials
+              Sign In with Authorized Credentials
             </Link>
           </div>
         </main>

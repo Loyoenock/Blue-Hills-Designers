@@ -117,9 +117,20 @@ export default function LoginClient() {
 
             {/* Error / Success logs */}
             {errorMsg && (
-              <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 flex gap-3 text-rose-800 text-xs font-mono">
-                <AlertTriangle className="w-5 h-5 shrink-0" />
-                <span>{errorMsg}</span>
+              <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 flex flex-col gap-2 text-rose-800 text-xs font-mono">
+                <div className="flex gap-3 items-center">
+                  <AlertTriangle className="w-5 h-5 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                {errorMsg.toLowerCase().includes('unavailable') && (
+                  <button
+                    type="submit"
+                    form="login-credentials-form"
+                    className="mt-1 self-start text-[11px] underline font-sans font-semibold text-rose-900 hover:text-rose-700 cursor-pointer"
+                  >
+                    Retry Connection
+                  </button>
+                )}
               </div>
             )}
             {success && (
