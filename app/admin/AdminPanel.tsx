@@ -239,7 +239,7 @@ export default function Admin() {
             <ShieldAlert className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h3 className="font-serif text-xl text-white font-bold">Boutique Security Intercept</h3>
+            <h3 className="font-serif text-xl text-white font-bold">BHD Security Intercept</h3>
             <p className="text-white/40 text-xs font-light max-w-xs mx-auto leading-relaxed">
               This panel is restricted to Super Admins, Managers, and Staff. Please sign in with an authorized profile to bypass.
             </p>
@@ -833,7 +833,7 @@ export default function Admin() {
                       className="bg-[#5F39FF] hover:bg-opacity-95 text-white px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer"
                       id="create-product-btn"
                     >
-                      <Plus className="w-4 h-4" /> Add Tailoring Product
+                      <Plus className="w-4 h-4" /> Add Product
                     </button>
                   )}
                 </div>
@@ -1091,7 +1091,7 @@ export default function Admin() {
                 className="space-y-6"
               >
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <h3 className="font-serif text-xl text-white font-bold">Boutique Orders Ledger</h3>
+                  <h3 className="font-serif text-xl text-white font-bold">BHD Orders Ledger</h3>
 
                   <div className="flex gap-2.5">
                     <button 
@@ -1220,7 +1220,7 @@ export default function Admin() {
               >
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
                   <div>
-                    <h3 className="font-serif text-xl text-white font-bold">User & Boutique Access Directory</h3>
+                    <h3 className="font-serif text-xl text-white font-bold">User & BHD Access Directory</h3>
                     <p className="text-xs text-white/40">Manage staff roles, customer profiles, spending metrics, and loyalty keys.</p>
                   </div>
                   {canModifyUsers && (
