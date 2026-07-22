@@ -70,10 +70,7 @@ export default function HomeClient() {
       });
     }
   }, [
-    dealProduct?.id,
-    dealProduct?.dealHours,
-    dealProduct?.dealMins,
-    dealProduct?.dealSecs
+    dealProduct
   ]);
 
   useEffect(() => {

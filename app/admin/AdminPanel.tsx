@@ -2250,7 +2250,6 @@ export default function Admin() {
                       {pImages[0] && (
                         <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded p-2">
                           <div className="relative w-12 h-12 rounded overflow-hidden bg-black flex-shrink-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
                               src={getSafeImageSrc(pImages[0])} 
                               alt="Apparel Preview" 
@@ -2284,7 +2283,6 @@ export default function Admin() {
                       />
                       {pImages[0] && (
                         <div className="relative h-24 rounded-lg overflow-hidden bg-black border border-white/5 flex items-center justify-center">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
                             src={getSafeImageSrc(pImages[0])} 
                             alt="URL Preview" 
