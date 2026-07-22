@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     logger.info('Sending structured chat prompt to Gemini model', { userName: safeUserName });
 
     const response = await client.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       contents: fullPrompt,
     });
 
@@ -157,8 +157,35 @@ export async function POST(req: NextRequest) {
       return createErrorResponse(req, error);
     }
 
-    // Fall back to simulated response for other errors (such as network issues, API errors, bad key, model overload)
-    logger.error("Gemini API Error, falling back to simulated styling responses", error);
+    const errorMsg = error?.message || String(error);
+    const statusCode = error?.status || error?.statusCode || error?.code;
+
+    const isModelOrApiError = 
+      (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) ||
+      /404|400|model|not found|INVALID_ARGUMENT|PERMISSION_DENIED|UNAUTHENTICATED|RESOURCE_EXHAUSTED|API_KEY|invalid/i.test(errorMsg);
+
+    const isNetworkError = 
+      /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|fetch failed|timeout|AbortError|network|socket|EHOSTUNREACH/i.test(errorMsg);
+
+    if (isModelOrApiError) {
+      logger.error("Gemini API model/API error detected: AI falling back because model name, API key, or payload is invalid", {
+        errorCategory: "MODEL_OR_API_ERROR",
+        message: errorMsg,
+        status: statusCode
+      });
+    } else if (isNetworkError) {
+      logger.error("Gemini API network error detected: AI falling back because Google's API is unreachable or timed out", {
+        errorCategory: "NETWORK_UNREACHABLE",
+        message: errorMsg
+      });
+    } else {
+      logger.error("Gemini API call failed with generic error, falling back to simulated styling responses", {
+        errorCategory: "GENERIC_GEMINI_ERROR",
+        message: errorMsg,
+        status: statusCode
+      });
+    }
+
     const lastUserMessage = messages[messages.length - 1]?.content || "";
     const safeUserName = typeof userName === 'string' 
       ? userName.replace(/[^a-zA-Z0-9\s.\-_]/g, '').slice(0, 50).trim()
@@ -166,7 +193,7 @@ export async function POST(req: NextRequest) {
     const simulatedReply = getSimulatedStylistReply(lastUserMessage, safeUserName);
     return NextResponse.json({ 
       text: simulatedReply,
-      error: error.message || 'Model call exception, fell back to local styling database simulation.',
+      error: errorMsg || 'Model call exception, fell back to local styling database simulation.',
       simulated: true
     });
   }

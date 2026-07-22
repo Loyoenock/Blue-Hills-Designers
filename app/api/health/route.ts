@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai';
 import { getSupabaseClient } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger } from '@/lib/apiUtils';
 
@@ -43,17 +44,64 @@ export async function GET(req: NextRequest) {
       logs.push(`Database connection exception: ${err.message || err}`);
     }
 
+    // Gemini API connectivity check
+    let geminiConnected = false;
+    let geminiDetails = 'GEMINI_API_KEY is not defined in environment variables';
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      try {
+        const aiClient = new GoogleGenAI({
+          apiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build',
+            }
+          }
+        });
+
+        const geminiRes = await aiClient.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: 'ping',
+        });
+
+        if (geminiRes && geminiRes.text) {
+          geminiConnected = true;
+          geminiDetails = 'Successfully generated response from Gemini model (gemini-3.6-flash)';
+          logger.info('Gemini API connectivity check succeeded.');
+          logs.push('Gemini API connectivity check succeeded.');
+        } else {
+          geminiDetails = 'Gemini model returned empty response';
+          logger.warn('Gemini API connectivity check returned empty response.');
+          logs.push('Gemini API connectivity check returned empty response.');
+        }
+      } catch (gemErr: any) {
+        const errStr = gemErr.message || String(gemErr);
+        geminiDetails = `Call failed: ${errStr}`;
+        logger.error('Gemini API health check exception', gemErr);
+        logs.push(`Gemini API health check exception: ${errStr}`);
+      }
+    } else {
+      logger.warn('Gemini API key not configured for health check.');
+      logs.push('Gemini API key not configured for health check.');
+    }
+
     const durationMs = Date.now() - startTime;
-    logger.info('Health check completed successfully', { latencyMs: durationMs, databaseConnected });
+    const isHealthy = databaseConnected && (apiKey ? geminiConnected : true);
+    logger.info('Health check completed', { latencyMs: durationMs, databaseConnected, geminiConnected });
     
     return NextResponse.json({
-      status: databaseConnected ? 'healthy' : 'degraded',
+      status: isHealthy ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       latencyMs: durationMs,
       services: {
         database: {
           connected: databaseConnected,
           details: databaseDetails
+        },
+        gemini: {
+          connected: geminiConnected,
+          details: geminiDetails
         },
         rateLimiter: {
           status: 'active',
