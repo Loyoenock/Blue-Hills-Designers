@@ -130,6 +130,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data });
 
     } else if (actionLower === 'delete') {
+      if (['products', 'profiles'].includes(tableName)) {
+        const roleLower = (authUser?.role || '').toLowerCase();
+        if (!['super admin', 'admin'].includes(roleLower)) {
+          throw new ApiError('Access Denied: Only Admin or Super Admin accounts are authorized to delete these records.', 403);
+        }
+      }
+
       const { filters } = payload || {};
       if (!filters || Object.keys(filters).length === 0) {
         throw new ApiError('Delete filters are required to prevent unbounded mutations.', 400);
