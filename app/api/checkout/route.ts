@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
       customerName,
       shippingAddress,
       paymentMethod,
-      paymentDetails
+      paymentDetails,
+      idempotencyKey
     } = body;
 
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
@@ -131,6 +132,54 @@ export async function POST(req: NextRequest) {
     const taxableAmount = subtotal - couponDiscount;
     const taxAmount = Math.round((taxableAmount / (1 + taxRate / 100)) * (taxRate / 100));
 
+    // 5.5 Idempotency Check: Prevent duplicate payment charge or duplicate order creation
+    if (idempotencyKey) {
+      const { data: existingOrder } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+
+      if (existingOrder) {
+        logger.info('Duplicate checkout submission detected via idempotencyKey, returning existing order details', {
+          idempotencyKey,
+          orderNumber: existingOrder.order_number
+        });
+
+        const { data: paymentRecord } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('order_id', existingOrder.id)
+          .maybeSingle();
+
+        const txnId = paymentRecord?.transaction_id || 'COD-PENDING';
+        const pStatus = paymentRecord?.status === 'success' ? 'Paid' : (paymentRecord?.status || 'Pending');
+
+        return NextResponse.json({
+          success: true,
+          orderNumber: existingOrder.order_number,
+          orderUUID: existingOrder.id,
+          invoice: {
+            subtotal,
+            discount: couponDiscount,
+            deliveryFee,
+            tax: taxAmount,
+            total: Number(existingOrder.amount) || total,
+            currencySymbol: 'Ugx'
+          },
+          payment: {
+            method: existingOrder.payment_method || paymentMethod,
+            transactionId: txnId,
+            status: pStatus
+          },
+          emailDispatched: true,
+          emailDeliveryError: null,
+          emailHtml: '',
+          emailSubject: `Order Confirmed [${existingOrder.order_number}] - Savile Row & Lubowa Showroom`
+        });
+      }
+    }
+
     // 6. Execute Payment Charge BEFORE inventory decrement or DB order creation
     // If payment authorization fails/declines, chargeMobileMoney/chargeCard throws an ApiError,
     // stopping execution immediately BEFORE any inventory stock is modified or orders created.
@@ -209,6 +258,7 @@ export async function POST(req: NextRequest) {
           amount: total,
           status: 'pending',
           payment_method: paymentMethod,
+          idempotency_key: idempotencyKey || null,
           notes: paymentMethod === 'Mobile Money' 
             ? `MoMo Operator: ${paymentDetails?.momoProvider || 'MTN'}, Wallet: ${paymentDetails?.momoNumber || 'N/A'}` 
             : paymentMethod === 'Visa' 

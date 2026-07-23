@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -57,6 +57,7 @@ export default function CheckoutClient() {
   const [errorMsg, setErrorMsg] = useState('');
   const [emailInvoice, setEmailInvoice] = useState('');
   const [showInvoiceHtml, setShowInvoiceHtml] = useState(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -129,6 +130,15 @@ export default function CheckoutClient() {
 
   const handleOrderSubmission = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = typeof crypto?.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    }
+    const idempotencyKey = idempotencyKeyRef.current;
+
     setIsSubmitting(true);
     setErrorMsg('');
 
@@ -173,6 +183,7 @@ export default function CheckoutClient() {
       }
 
       const payload = {
+        idempotencyKey,
         cart,
         appliedCoupon,
         selectedShippingMethod,
@@ -252,6 +263,7 @@ export default function CheckoutClient() {
       setEmailInvoice(resData.emailHtml);
       setCheckoutSuccess(true);
       clearCart();
+      idempotencyKeyRef.current = null;
 
     } catch (err: any) {
       console.error('Checkout failure:', err);

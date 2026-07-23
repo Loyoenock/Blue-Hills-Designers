@@ -109,8 +109,10 @@ CREATE TABLE public.orders (
     status TEXT DEFAULT 'pending' NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'cancelled')),
     payment_method TEXT DEFAULT 'Cash on Delivery' NOT NULL,
     notes TEXT,
+    idempotency_key TEXT UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
 
 -- 1.7 ORDER ITEMS
 -- Relational mapping connecting items in the orders to specific quantities and prices.
