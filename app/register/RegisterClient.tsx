@@ -145,51 +145,59 @@ export default function RegisterClient() {
 
             <form onSubmit={handleRegisterSubmit} className="space-y-4 font-sans" id="register-profile-form">
               <div className="space-y-1.5">
-                <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Full Name</label>
+                <label htmlFor="reg-name-input" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Full Name</label>
                 <input 
+                  id="reg-name-input"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Charles Mugisha"
                   className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
                   required
+                  aria-label="Full Name"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Secure Email Address</label>
+                  <label htmlFor="reg-email-input" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Secure Email Address</label>
                   <input 
+                    id="reg-email-input"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="e.g. mugisha@corporate.com"
                     className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
                     required
+                    aria-label="Secure Email Address"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Mobile Contact Line</label>
+                  <label htmlFor="reg-phone-input" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Mobile Contact Line</label>
                   <input 
+                    id="reg-phone-input"
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="e.g. +256 772 123456"
                     className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
                     required
+                    aria-label="Mobile Contact Line"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Security Password</label>
+                <label htmlFor="reg-password-input" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Security Password</label>
                 <input 
+                  id="reg-password-input"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min. 8 characters"
                   className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-2.5 text-xs text-[#1D2B3F] placeholder-[#657892]/30 focus:border-[#1C4D8D] outline-none shadow-sm"
                   required
+                  aria-label="Security Password"
                 />
               </div>
 

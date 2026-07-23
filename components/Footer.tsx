@@ -82,12 +82,24 @@ export default function Footer() {
             </div>
           </div>
           <div className="flex items-center space-x-3 text-sm text-[#F7F5F0]/70">
-            <Phone className="w-5 h-5 text-[#C6A15B] shrink-0" />
-            <span>{settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456'}</span>
+            <Phone className="w-5 h-5 text-[#C6A15B] shrink-0" aria-hidden="true" />
+            <a 
+              href={`tel:${(settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456').replace(/[^0-9+]/g, '')}`} 
+              className="hover:text-[#C6A15B] transition-colors"
+              aria-label={`Call support at ${settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456'}`}
+            >
+              {settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456'}
+            </a>
           </div>
           <div className="flex items-center space-x-3 text-sm text-[#F7F5F0]/70">
-            <Mail className="w-5 h-5 text-[#C6A15B] shrink-0" />
-            <span>support@bluehillsdesigners.com</span>
+            <Mail className="w-5 h-5 text-[#C6A15B] shrink-0" aria-hidden="true" />
+            <a 
+              href="mailto:support@bluehillsdesigners.com" 
+              className="hover:text-[#C6A15B] transition-colors"
+              aria-label="Send email to support@bluehillsdesigners.com"
+            >
+              support@bluehillsdesigners.com
+            </a>
           </div>
           <div className="flex items-center space-x-3 text-xs text-[#F7F5F0]/40 border-t border-[#657892]/20 pt-3">
             <Calendar className="w-4 h-4 text-[#C6A15B]" />

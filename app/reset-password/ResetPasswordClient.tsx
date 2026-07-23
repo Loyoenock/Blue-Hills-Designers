@@ -161,26 +161,30 @@ export default function ResetPasswordClient() {
 
             <form onSubmit={handleSubmit} className="space-y-5 font-sans" id="reset-password-form">
               <div className="space-y-1.5">
-                <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">New Security Password</label>
+                <label htmlFor="reset-new-password" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">New Security Password</label>
                 <input 
+                  id="reset-new-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
                   required
+                  aria-label="New Security Password"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Confirm New Password</label>
+                <label htmlFor="reset-confirm-password" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Confirm New Password</label>
                 <input 
+                  id="reset-confirm-password"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••••••"
                   className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
                   required
+                  aria-label="Confirm New Password"
                 />
               </div>
 

@@ -206,6 +206,7 @@ export default function AIStylist() {
               }}
               className="text-[#657892] hover:text-[#1C4D8D] flex items-center gap-1.5 text-xs transition-colors p-1"
               title="Reset conversation"
+              aria-label="Reset styling conversation"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span className="hidden sm:inline font-mono">Reset Dialog</span>
@@ -217,6 +218,8 @@ export default function AIStylist() {
             ref={containerRef}
             className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F7F5F0]/50" 
             style={{ contentVisibility: 'auto' }}
+            aria-live="polite"
+            aria-label="Stylist chat messages"
           >
             <AnimatePresence initial={false}>
               {messages.map((msg) => (
@@ -278,6 +281,7 @@ export default function AIStylist() {
                   key={p.label}
                   onClick={() => handleSend(p.text)}
                   className="bg-[#B9CDE5]/30 hover:bg-[#B9CDE5]/50 text-xs text-[#1D2B3F] px-4 py-2 rounded-full border border-[#657892]/20 transition-all shrink-0 cursor-pointer"
+                  aria-label={`Ask about ${p.label}`}
                 >
                   {p.label}
                 </button>
@@ -305,6 +309,7 @@ export default function AIStylist() {
                 className="flex-1 bg-transparent border-0 outline-none ring-0 py-2.5 text-sm text-[#1D2B3F] placeholder-[#657892]/50 font-light focus:ring-0"
                 disabled={isLoading}
                 id="ai-stylist-input"
+                aria-label="Compose style inquiry for AI Personal Stylist"
               />
               <button
                 type="submit"
@@ -315,6 +320,7 @@ export default function AIStylist() {
                     : 'bg-[#657892]/10 text-[#657892]/40 cursor-not-allowed'
                 }`}
                 id="ai-stylist-send-btn"
+                aria-label="Send style inquiry"
               >
                 <Send className="w-4 h-4" />
               </button>

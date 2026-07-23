@@ -147,21 +147,23 @@ export default function LoginClient() {
 
             <form onSubmit={handleLoginSubmit} className="space-y-5 font-sans" id="login-credentials-form">
               <div className="space-y-1.5">
-                <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Executive Email Address</label>
+                <label htmlFor="login-email-input" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Executive Email Address</label>
                 <input 
+                  id="login-email-input"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. executive@corporate.com"
                   className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/50 focus:border-[#1C4D8D] outline-none shadow-sm"
                   required
+                  aria-label="Executive Email Address"
                 />
               </div>
 
               {!isForgotPassword && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Security Password</label>
+                    <label htmlFor="login-password-input" className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Security Password</label>
                     <button 
                       type="button"
                       onClick={() => {
@@ -175,12 +177,14 @@ export default function LoginClient() {
                     </button>
                   </div>
                   <input 
+                    id="login-password-input"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
                     className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/30 focus:border-[#1C4D8D] outline-none shadow-sm"
                     required
+                    aria-label="Security Password"
                   />
                 </div>
               )}

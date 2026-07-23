@@ -131,6 +131,8 @@ export default function Header() {
           onClick={() => setMobileMenuOpen(true)}
           className="md:hidden text-[#F7F5F0]/80 hover:text-[#C6A15B] transition-colors p-1"
           id="mobile-menu-trigger"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileMenuOpen}
         >
           <Menu className="w-6 h-6" />
         </button>
@@ -188,6 +190,9 @@ export default function Header() {
               className="flex items-center gap-1.5 text-xs text-[#F7F5F0]/70 hover:text-[#C6A15B] bg-[#F7F5F0]/5 hover:bg-[#F7F5F0]/10 px-2.5 py-1.5 rounded border border-[#657892]/20 transition-all"
               title="Switch user roles for preview validation"
               id="role-switcher-btn"
+              aria-label="Switch user roles for preview validation"
+              aria-expanded={roleSwitcherOpen}
+              aria-haspopup="true"
             >
               <Sliders className="w-3.5 h-3.5 text-[#C6A15B]" />
               <span className="hidden sm:inline font-mono text-[#F7F5F0]">
@@ -263,10 +268,11 @@ export default function Header() {
             href="/shop?filter=wishlist" 
             className="text-[#F7F5F0]/80 hover:text-[#C6A15B] relative transition-colors p-1"
             title="Wishlist"
+            aria-label={wishlist.length > 0 ? `Wishlist, ${wishlist.length} items` : "Wishlist"}
           >
             <Heart className="w-5 h-5" />
             {wishlist.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#1C4D8D] text-[9px] font-bold text-[#F7F5F0] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+              <span className="absolute -top-1 -right-1 bg-[#1C4D8D] text-[9px] font-bold text-[#F7F5F0] w-4 h-4 rounded-full flex items-center justify-center animate-pulse" aria-hidden="true">
                 {wishlist.length}
               </span>
             )}
@@ -278,10 +284,11 @@ export default function Header() {
             className="text-[#F7F5F0]/80 hover:text-[#C6A15B] relative transition-colors p-1"
             title="Cart"
             id="desktop-cart-link"
+            aria-label={cartCount > 0 ? `View cart, ${cartCount} items` : "View cart"}
           >
             <ShoppingBag className="w-5 h-5" />
             {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#C6A15B] text-[9px] font-bold text-[#1D2B3F] w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-[#C6A15B] text-[9px] font-bold text-[#1D2B3F] w-4 h-4 rounded-full flex items-center justify-center" aria-hidden="true">
                 {cartCount}
               </span>
             )}
@@ -294,6 +301,7 @@ export default function Header() {
               pathname === '/account' || pathname === '/login' ? 'text-[#C6A15B]' : 'text-[#F7F5F0]/80 hover:text-[#C6A15B]'
             }`}
             title="Account"
+            aria-label={currentUser ? "View account profile" : "Sign in to account"}
           >
             <User className="w-5 h-5" />
           </Link>
@@ -328,6 +336,7 @@ export default function Header() {
                   <button 
                     onClick={() => setMobileMenuOpen(false)}
                     className="text-[#F7F5F0]/80 hover:text-[#C6A15B] p-1"
+                    aria-label="Close menu"
                   >
                     <X className="w-6 h-6" />
                   </button>

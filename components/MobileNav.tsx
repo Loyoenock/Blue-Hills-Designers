@@ -38,11 +38,21 @@ export default function MobileNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.name === 'Wishlist' && pathname === '/shop' && item.badge !== null);
+          
+          let ariaLabel = item.name;
+          if (item.name === 'Shop' && cartCount > 0) {
+            ariaLabel = `Shop, ${cartCount} items in cart`;
+          } else if (item.name === 'Wishlist' && item.badge && item.badge > 0) {
+            ariaLabel = `Wishlist, ${item.badge} saved items`;
+          }
+
           return (
             <Link 
               key={item.name} 
               href={item.href}
               className="flex flex-col items-center justify-center relative group"
+              aria-label={ariaLabel}
+              aria-current={isActive ? 'page' : undefined}
             >
               <div className="relative p-1">
                 <Icon className={`w-5 h-5 transition-transform duration-200 ${
