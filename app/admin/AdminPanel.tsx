@@ -16,6 +16,7 @@ import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, User } from '../../types';
 import { getSupabaseClient } from '../../lib/supabase';
+import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 
 export default function Admin() {
   const router = useRouter();
@@ -23,9 +24,11 @@ export default function Admin() {
     currentUser, login, products, orders, users, auditLogs, payments, settings, bookings,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
-    deleteReview, updateProductStockQuick, updateBookingStatus,
-    applyOrderChange, applyProfileChange
+    deleteReview, updateProductStockQuick, updateBookingStatus
   } = useStore();
+
+  // Admin-specific Realtime subscriptions for orders and profiles
+  useRealtimeSync({ orders: true, profiles: true });
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
@@ -51,40 +54,6 @@ export default function Admin() {
     }, 0);
     return () => clearTimeout(t);
   }, []);
-
-  // Admin-specific Realtime subscriptions for orders and profiles
-  useEffect(() => {
-    const supabase = getSupabaseClient();
-    let ordersChannel: any = null;
-    let profilesChannel: any = null;
-
-    if (supabase) {
-      ordersChannel = supabase
-        .channel('admin-orders-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-          console.log('Admin Realtime order change received:', payload);
-          applyOrderChange(payload);
-        })
-        .subscribe();
-
-      profilesChannel = supabase
-        .channel('admin-profiles-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
-          console.log('Admin Realtime profile change received:', payload);
-          applyProfileChange(payload);
-        })
-        .subscribe();
-    }
-
-    return () => {
-      if (ordersChannel && supabase) {
-        supabase.removeChannel(ordersChannel);
-      }
-      if (profilesChannel && supabase) {
-        supabase.removeChannel(profilesChannel);
-      }
-    };
-  }, [applyOrderChange, applyProfileChange]);
 
   // Form states for ADD / EDIT Product
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);

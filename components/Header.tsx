@@ -10,6 +10,7 @@ import {
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { getSupabaseClient } from '../lib/supabase';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 
 export default function Header() {
   const pathname = usePathname();
@@ -21,12 +22,13 @@ export default function Header() {
   const logout = useStore((state) => state.logout);
   const wishlist = useStore((state) => state.wishlist);
   const syncFromSupabase = useStore((state) => state.syncFromSupabase);
-  const applyProductChange = useStore((state) => state.applyProductChange);
-  const applyReviewChange = useStore((state) => state.applyReviewChange);
   const settings = useStore((state) => state.settings);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Subscribe to realtime products & reviews changes via shared hook
+  useRealtimeSync({ products: true, reviews: true });
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -36,33 +38,10 @@ export default function Header() {
     // Initial sync from the database
     syncFromSupabase();
 
-    // Set up Supabase Realtime subscriptions to receive targeted updates for customer site
     const supabase = getSupabaseClient();
-    let prodChannel: any = null;
-    let revChannel: any = null;
     let authSubscription: any = null;
 
     if (supabase) {
-      prodChannel = supabase
-        .channel('public-products-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
-          console.log('Realtime product change received:', payload);
-          applyProductChange(payload);
-        })
-        .subscribe((status) => {
-          console.log('Realtime products channel status:', status);
-        });
-
-      revChannel = supabase
-        .channel('public-reviews-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, (payload) => {
-          console.log('Realtime review change received:', payload);
-          applyReviewChange(payload);
-        })
-        .subscribe((status) => {
-          console.log('Realtime reviews channel status:', status);
-        });
-
       // Set up onAuthStateChange listener for session synchronization
       const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Header Supabase Auth Change:', event, !!session);
@@ -73,17 +52,11 @@ export default function Header() {
 
     return () => {
       clearTimeout(t);
-      if (prodChannel && supabase) {
-        supabase.removeChannel(prodChannel);
-      }
-      if (revChannel && supabase) {
-        supabase.removeChannel(revChannel);
-      }
       if (authSubscription) {
         authSubscription.unsubscribe();
       }
     };
-  }, [syncFromSupabase, applyProductChange, applyReviewChange]);
+  }, [syncFromSupabase]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
