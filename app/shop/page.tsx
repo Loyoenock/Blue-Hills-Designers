@@ -21,14 +21,23 @@ export default async function ShopPage() {
     if (supabase) {
       const { data: dbProducts } = await supabase.from('products').select('*');
       if (dbProducts && dbProducts.length > 0) {
-        // Also fetch reviews and categories to build accurate product profiles
-        const { data: dbReviews } = await supabase.from('reviews').select('*');
+        const productIds = dbProducts.map((p: any) => p.id).filter(Boolean);
+
+        // Fetch reviews and images scoped to the products being displayed
+        let dbReviews: any[] | null = null;
+        if (productIds.length > 0) {
+          const { data: revData } = await supabase.from('reviews').select('*').in('product_id', productIds);
+          dbReviews = revData;
+        }
+
         const { data: dbCats } = await supabase.from('categories').select('*');
         
         let dbImages: any[] | null = null;
         try {
-          const { data: imgData } = await supabase.from('product_images').select('*');
-          dbImages = imgData;
+          if (productIds.length > 0) {
+            const { data: imgData } = await supabase.from('product_images').select('*').in('product_id', productIds);
+            dbImages = imgData;
+          }
         } catch (e) {
           console.warn('Could not query product_images:', e);
         }

@@ -60,16 +60,25 @@ export default async function ProductPage({ params }: ProductPageProps) {
         const { data: dbCats } = await supabase.from('categories').select('*');
         const catName = dbCats?.find((c: any) => c.id === p.category_id)?.name || 'Suits';
 
-        // Fetch reviews
+        // Fetch reviews for this product
         const { data: dbReviews } = await supabase
           .from('reviews')
           .select('*')
           .eq('product_id', id);
 
-        const { data: dbProfilesList } = await supabase.from('profiles').select('*');
+        // Fetch profiles only for users who authored reviews for this product
+        const userIds = Array.from(new Set((dbReviews || []).map((r: any) => r.user_id).filter(Boolean)));
+        let dbProfilesList: any[] = [];
+        if (userIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, full_name, role')
+            .in('id', userIds);
+          dbProfilesList = profilesData || [];
+        }
 
         const mappedReviews = dbReviews ? dbReviews.map((r: any) => {
-          const profile = dbProfilesList?.find((prof: any) => prof.id === r.user_id);
+          const profile = dbProfilesList.find((prof: any) => prof.id === r.user_id);
           return {
             id: r.id,
             productId: r.product_id,
@@ -83,7 +92,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         let dbImages: any[] | null = null;
         try {
-          const { data: imgData } = await supabase.from('product_images').select('*');
+          const { data: imgData } = await supabase
+            .from('product_images')
+            .select('*')
+            .eq('product_id', p.id);
           dbImages = imgData;
         } catch (e) {
           console.warn('Could not query product_images:', e);
