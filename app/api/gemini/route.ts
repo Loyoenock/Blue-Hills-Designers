@@ -141,8 +141,9 @@ export async function POST(req: NextRequest) {
 
     logger.info('Sending structured chat prompt to Gemini model', { userName: safeUserName });
 
+    // Verified valid model identifier for @google/genai v2.10.0
     const response = await client.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: fullPrompt,
     });
 
