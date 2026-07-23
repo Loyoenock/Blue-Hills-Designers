@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         const isNetworkOrAuthError = isNetworkOrConnectionError(error);
 
         if (isNetworkOrAuthError) {
-          logger.warn('Supabase service offline/unreachable during registration. Falling back to local/offline registry.', { error: errorMessage });
+          logger.warn('Supabase service offline/unreachable during registration.', { error: errorMessage });
           fallbackToLocal = true;
         } else {
           logger.error('Supabase admin createUser validation or client error', error);
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       }
       errorMessage = err.message || '';
       if (isNetworkOrConnectionError(err)) {
-        logger.warn('Network exception during Supabase admin createUser, will fallback', { error: errorMessage });
+        logger.warn('Network exception during Supabase admin createUser', { error: errorMessage });
         fallbackToLocal = true;
       } else {
         logger.error('Exception during Supabase admin createUser', err);
@@ -93,21 +93,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (fallbackToLocal || !authUser) {
-      logger.info('Failing back to offline mock session due to DB/Network connection issue', { email: emailTrimmed });
-      const localUuid = typeof crypto?.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `f81d4fae-7dec-11d0-a765-${Math.random().toString(16).substring(2, 14).padEnd(12, '0')}`;
-
-      return NextResponse.json({
-        success: true,
-        user: {
-          id: localUuid,
-          email: emailTrimmed,
-          name: cleanName,
-          phone: cleanPhone,
-          role: resolvedRole
-        }
-      });
+      logger.warn('Registration failed due to DB/Network connection issue', { email: emailTrimmed });
+      throw new ApiError('We could not complete your registration due to a temporary service issue. Please try again in a moment.', 503);
     }
 
     logger.info('User registration completed successfully', { userId: authUser.id, email: emailTrimmed });
