@@ -366,14 +366,17 @@ SET public = true,
     file_size_limit = EXCLUDED.file_size_limit,
     allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- 5.2 Ensure RLS is enabled on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- 5.2 Storage policies for storage.objects
+-- Note: Row Level Security (RLS) is enabled on storage.objects by default in Supabase.
 
 -- 5.3 Clear existing policies for 'app-file' if any, to avoid conflicts
 DROP POLICY IF EXISTS "Public Read Access" ON storage.objects;
 DROP POLICY IF EXISTS "Public Upload Access" ON storage.objects;
 DROP POLICY IF EXISTS "Public Update Access" ON storage.objects;
 DROP POLICY IF EXISTS "Public Delete Access" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Upload Access" ON storage.objects;
+DROP POLICY IF EXISTS "Admin or Staff Update Access" ON storage.objects;
+DROP POLICY IF EXISTS "Admin or Staff Delete Access" ON storage.objects;
 
 -- 5.4 Public Read/Select Policy
 -- Allows anyone to view images and files within the 'app-file' bucket
@@ -383,23 +386,23 @@ TO public
 USING (bucket_id = 'app-file');
 
 -- 5.5 Upload/Insert Policy
--- Allows public (including anonymous guests and admins) to upload files into 'app-file' bucket
-CREATE POLICY "Public Upload Access"
+-- Allows authenticated users to upload files into 'app-file' bucket
+CREATE POLICY "Authenticated Upload Access"
 ON storage.objects FOR INSERT
-TO public
-WITH CHECK (bucket_id = 'app-file');
+TO authenticated
+WITH CHECK (bucket_id = 'app-file' AND auth.role() = 'authenticated');
 
 -- 5.6 Update/Upsert Policy
--- Allows users/system to update files within 'app-file' bucket
-CREATE POLICY "Public Update Access"
+-- Allows admin or staff users to update files within 'app-file' bucket
+CREATE POLICY "Admin or Staff Update Access"
 ON storage.objects FOR UPDATE
-TO public
-USING (bucket_id = 'app-file');
+TO authenticated
+USING (bucket_id = 'app-file' AND public.is_admin_or_staff(auth.uid()));
 
 -- 5.7 Delete Policy
--- Allows users/system to remove/delete files from 'app-file' bucket
-CREATE POLICY "Public Delete Access"
+-- Allows admin or staff users to remove/delete files from 'app-file' bucket
+CREATE POLICY "Admin or Staff Delete Access"
 ON storage.objects FOR DELETE
-TO public
-USING (bucket_id = 'app-file');
+TO authenticated
+USING (bucket_id = 'app-file' AND public.is_admin_or_staff(auth.uid()));
 
