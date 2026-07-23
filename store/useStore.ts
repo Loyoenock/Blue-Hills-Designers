@@ -8,6 +8,7 @@ import {
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
+import { VALID_COUPONS } from '../lib/coupons';
 
 interface StoreState {
   products: Product[];
@@ -900,12 +901,7 @@ async function seedCategories() {
   }
 }
 
-const VALID_COUPONS: Coupon[] = [
-  { code: 'WELCOME10', discountType: 'percentage', discountValue: 10 },
-  { code: 'GENTLEMAN20', discountType: 'percentage', discountValue: 20 },
-  { code: 'SAVILEROW50', discountType: 'fixed', discountValue: 50 },
-  { code: 'KAMPALA30', discountType: 'percentage', discountValue: 30 },
-];
+
 
 export const useStore = create<StoreState>()(
   persist(

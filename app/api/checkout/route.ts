@@ -3,15 +3,8 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { sendTransactionalEmail } from '@/lib/email';
 import { chargeMobileMoney, chargeCard } from '@/lib/payment';
+import { VALID_COUPONS } from '@/lib/coupons';
 import crypto from 'crypto';
-
-// Standard Kampala luxury coupons
-const VALID_COUPONS = [
-  { code: 'WELCOME10', discountType: 'percentage', discountValue: 10 },
-  { code: 'GENTLEMAN20', discountType: 'percentage', discountValue: 20 },
-  { code: 'SAVILEROW50', discountType: 'fixed', discountValue: 50 },
-  { code: 'KAMPALA30', discountType: 'percentage', discountValue: 30 },
-];
 
 export async function POST(req: NextRequest) {
   try {
