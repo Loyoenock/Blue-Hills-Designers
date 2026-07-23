@@ -17,7 +17,8 @@ const ALLOWED_TABLES = [
   'consultations',
   'wishlists',
   'audit_logs',
-  'newsletter_subscribers'
+  'newsletter_subscribers',
+  'coupons'
 ];
 
 function checkRlsAndThrow(message: string): never {

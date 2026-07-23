@@ -45,10 +45,18 @@ export interface User {
 }
 
 export interface Coupon {
+  id?: string;
   code: string;
   discountType: 'percentage' | 'fixed';
   discountValue: number;
   minSubtotal?: number;
+  isActive?: boolean;
+  expiresAt?: string | null;
+  usageLimit?: number | null;
+  timesUsed?: number;
+  createdBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CartItem {

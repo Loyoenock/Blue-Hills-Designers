@@ -3,7 +3,6 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { sendTransactionalEmail } from '@/lib/email';
 import { chargeMobileMoney, chargeCard } from '@/lib/payment';
-import { VALID_COUPONS } from '@/lib/coupons';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -102,17 +101,57 @@ export async function POST(req: NextRequest) {
 
     // 5. Calculate final invoice details autoritatively on the server
     let couponDiscount = 0;
-    let validatedCoupon = null;
+    let validatedCoupon: any = null;
 
     if (appliedCoupon) {
       const sanitizedCode = appliedCoupon.code?.trim().toUpperCase();
-      const serverCoupon = VALID_COUPONS.find(c => c.code === sanitizedCode);
-      if (serverCoupon) {
+      if (sanitizedCode) {
+        const { data: serverCoupon, error: couponErr } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('code', sanitizedCode)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (couponErr) {
+          logger.warn('Error querying coupon from DB during checkout', { couponErr, code: sanitizedCode });
+        }
+
+        if (!serverCoupon) {
+          throw new ApiError(`Applied coupon "${sanitizedCode}" is invalid or inactive.`, 400);
+        }
+
+        // Enforce expiration
+        if (serverCoupon.expires_at) {
+          const expiryDate = new Date(serverCoupon.expires_at);
+          if (!isNaN(expiryDate.getTime()) && expiryDate.getTime() < Date.now()) {
+            throw new ApiError(`Coupon code "${sanitizedCode}" has expired.`, 400);
+          }
+        }
+
+        // Enforce usage limit
+        if (serverCoupon.usage_limit !== null && serverCoupon.usage_limit !== undefined) {
+          const limit = Number(serverCoupon.usage_limit);
+          const used = Number(serverCoupon.times_used) || 0;
+          if (used >= limit) {
+            throw new ApiError(`Coupon code "${sanitizedCode}" has reached its usage limit.`, 400);
+          }
+        }
+
+        // Enforce minimum subtotal
+        if (serverCoupon.min_subtotal !== null && serverCoupon.min_subtotal !== undefined) {
+          const minSub = Number(serverCoupon.min_subtotal);
+          if (minSub > 0 && subtotal < minSub) {
+            throw new ApiError(`Coupon "${sanitizedCode}" requires a minimum subtotal of Ugx ${minSub}.`, 400);
+          }
+        }
+
         validatedCoupon = serverCoupon;
-        if (serverCoupon.discountType === 'percentage') {
-          couponDiscount = Math.round(subtotal * (serverCoupon.discountValue / 100));
-        } else if (serverCoupon.discountType === 'fixed') {
-          couponDiscount = serverCoupon.discountValue;
+        const discountVal = Number(serverCoupon.discount_value) || 0;
+        if (serverCoupon.discount_type === 'percentage') {
+          couponDiscount = Math.round(subtotal * (discountVal / 100));
+        } else if (serverCoupon.discount_type === 'fixed') {
+          couponDiscount = discountVal;
         }
       }
     }
@@ -340,7 +379,23 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Step G: Log checkout security audit telemetry
+      // Step G: Increment times_used if a coupon was used
+      if (validatedCoupon && validatedCoupon.id) {
+        try {
+          const currentTimesUsed = Number(validatedCoupon.times_used) || 0;
+          await supabase
+            .from('coupons')
+            .update({
+              times_used: currentTimesUsed + 1,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', validatedCoupon.id);
+        } catch (couponIncErr) {
+          logger.warn('Failed to increment coupon times_used', { couponIncErr, couponId: validatedCoupon.id });
+        }
+      }
+
+      // Step H: Log checkout security audit telemetry
       const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
       await supabase
         .from('audit_logs')

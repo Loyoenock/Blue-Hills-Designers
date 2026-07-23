@@ -1,9 +1,14 @@
 import { Coupon } from '@/types';
 
-// Standard Kampala luxury coupons
-export const VALID_COUPONS: Coupon[] = [
-  { code: 'WELCOME10', discountType: 'percentage', discountValue: 10 },
-  { code: 'GENTLEMAN20', discountType: 'percentage', discountValue: 20 },
-  { code: 'SAVILEROW50', discountType: 'fixed', discountValue: 50 },
-  { code: 'KAMPALA30', discountType: 'percentage', discountValue: 30 },
-];
+/**
+ * Calculates the discount amount for a given subtotal and coupon.
+ */
+export function calculateCouponDiscount(subtotal: number, coupon: Coupon): number {
+  if (!coupon) return 0;
+  if (coupon.discountType === 'percentage') {
+    return Math.round(subtotal * (coupon.discountValue / 100));
+  } else if (coupon.discountType === 'fixed') {
+    return coupon.discountValue;
+  }
+  return 0;
+}

@@ -408,3 +408,42 @@ ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'app-file' AND public.is_admin_or_staff(auth.uid()));
 
+-- ==========================================
+-- 6. COUPONS
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.coupons (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT NOT NULL UNIQUE,
+    discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage','fixed')),
+    discount_value NUMERIC NOT NULL,
+    min_subtotal NUMERIC NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    expires_at TIMESTAMP WITH TIME ZONE NULL,
+    usage_limit INTEGER NULL,
+    times_used INTEGER NOT NULL DEFAULT 0,
+    created_by UUID NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read-access to active coupons" ON public.coupons;
+CREATE POLICY "Allow public read-access to active coupons"
+    ON public.coupons FOR SELECT
+    USING (is_active = true);
+
+DROP POLICY IF EXISTS "Allow administrative full access to coupons" ON public.coupons;
+CREATE POLICY "Allow administrative full access to coupons"
+    ON public.coupons FOR ALL
+    USING (public.is_admin_or_staff(auth.uid()));
+
+-- Seed default luxury coupons
+INSERT INTO public.coupons (code, discount_type, discount_value, is_active)
+VALUES
+    ('WELCOME10', 'percentage', 10, true),
+    ('GENTLEMAN20', 'percentage', 20, true),
+    ('SAVILEROW50', 'fixed', 50, true),
+    ('KAMPALA30', 'percentage', 30, true)
+ON CONFLICT (code) DO NOTHING;
+

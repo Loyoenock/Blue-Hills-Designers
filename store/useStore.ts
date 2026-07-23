@@ -8,7 +8,6 @@ import {
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
-import { VALID_COUPONS } from '../lib/coupons';
 
 interface StoreState {
   products: Product[];
@@ -17,6 +16,7 @@ interface StoreState {
   currentUserId?: string | null;
   cart: CartItem[];
   appliedCoupon: Coupon | null;
+  coupons: Coupon[];
   selectedShippingMethod: 'standard' | 'express' | 'pickup';
   cartError: string | null;
   orders: Order[];
