@@ -9,9 +9,6 @@ import {
   Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut, Heart
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -67,7 +64,6 @@ export default function AccountClient() {
   if (!currentUser) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-        <Header />
         <main className="max-w-md mx-auto px-4 py-24 text-center space-y-6 flex-1 flex flex-col justify-center">
           <div className="w-16 h-16 rounded-full bg-[#B9CDE5]/15 border border-[#657892]/20 flex items-center justify-center mx-auto text-[#1D2B3F]">
             <User className="w-8 h-8" />
@@ -111,7 +107,6 @@ export default function AccountClient() {
             </div>
           </div>
         </main>
-        <Footer />
       </div>
     );
   }
@@ -155,7 +150,6 @@ export default function AccountClient() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-      <Header />
 
       {/* Account Dashboard Header */}
       <div className="bg-[#1D2B3F] border-b border-[#657892]/20 py-12">
@@ -757,9 +751,6 @@ export default function AccountClient() {
 
         </div>
       </main>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

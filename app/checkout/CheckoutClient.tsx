@@ -9,9 +9,6 @@ import {
   MapPin, CheckCircle2, ChevronRight, Truck, Award
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 import { getSafeImageSrc } from '../../lib/utils';
 import { getSupabaseClient } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -83,7 +80,6 @@ export default function CheckoutClient() {
   if (cart.length === 0 && !checkoutSuccess) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-        <Header />
         <div className="py-24 text-center max-w-md mx-auto space-y-4 animate-fade-in">
           <p className="font-serif text-lg text-[#1D2B3F]">Your Trunk is Empty</p>
           <p className="text-[#657892] text-xs font-light">You cannot checkout without registering an item first.</p>
@@ -91,7 +87,6 @@ export default function CheckoutClient() {
             Go to Shop
           </Link>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -275,7 +270,6 @@ export default function CheckoutClient() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-      <Header />
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-16 flex-1 w-full" id="checkout-root">
         <AnimatePresence mode="wait">
@@ -987,9 +981,6 @@ export default function CheckoutClient() {
           )}
         </AnimatePresence>
       </main>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

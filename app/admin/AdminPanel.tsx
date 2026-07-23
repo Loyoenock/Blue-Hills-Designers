@@ -12,9 +12,6 @@ import {
   Star, MessageSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, User } from '../../types';
@@ -233,7 +230,6 @@ export default function Admin() {
   if (!isAuthorized) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-black">
-        <Header />
         <main className="max-w-md mx-auto px-4 py-24 text-center space-y-6 flex-1 flex flex-col justify-center">
           <div className="w-16 h-16 rounded-full bg-red-950/20 border border-red-500/20 flex items-center justify-center mx-auto text-red-400">
             <ShieldAlert className="w-8 h-8" />
@@ -254,7 +250,6 @@ export default function Admin() {
             </Link>
           </div>
         </main>
-        <Footer />
       </div>
     );
   }
@@ -621,7 +616,6 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#0A0A0A] text-white">
-      <Header />
 
       {/* Admin Panel Header */}
       <div className="border-b border-white/5 bg-[#111111]/60 py-8 px-4 md:px-8">
@@ -2614,9 +2608,6 @@ export default function Admin() {
           </>
         )}
       </AnimatePresence>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

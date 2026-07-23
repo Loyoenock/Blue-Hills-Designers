@@ -9,9 +9,6 @@ import {
   Heart, ShoppingCart, Clock, Sparkles, CheckCircle2, Eye, Calendar
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import MobileNav from '../components/MobileNav';
 import dynamic from 'next/dynamic';
 const AIStylist = dynamic(() => import('../components/AIStylist'), { ssr: false });
 import { motion, AnimatePresence } from 'motion/react';
@@ -233,7 +230,6 @@ export default function HomeClient() {
           })
         }}
       />
-      <Header />
 
       {/* Added Alert Notification */}
       <AnimatePresence>
@@ -1125,9 +1121,6 @@ export default function HomeClient() {
           </div>
         )}
       </AnimatePresence>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

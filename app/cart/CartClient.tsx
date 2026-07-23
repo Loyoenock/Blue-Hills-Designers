@@ -7,9 +7,6 @@ import {
   ShoppingBag, Trash2, ArrowRight, Shield, Award, MapPin 
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -77,7 +74,6 @@ export default function CartClient() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-      <Header />
 
       {/* Cart Shelf Header */}
       <div className="bg-[#1D2B3F] border-b border-[#657892]/20 py-10">
@@ -414,9 +410,6 @@ export default function CartClient() {
           )}
         </AnimatePresence>
       </main>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

@@ -7,9 +7,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, ArrowRight, Check, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getSupabaseClient } from '../../lib/supabase';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 
 export default function VerifyEmailClient() {
   const router = useRouter();
@@ -162,7 +159,6 @@ export default function VerifyEmailClient() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-      <Header />
 
       <main className="flex-1 w-full flex items-stretch bg-[#F7F5F0] min-h-[80vh]">
         <div className="grid grid-cols-1 lg:grid-cols-12 w-full max-w-7xl mx-auto px-4 md:px-8 py-10 gap-10">
@@ -294,9 +290,6 @@ export default function VerifyEmailClient() {
 
         </div>
       </main>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

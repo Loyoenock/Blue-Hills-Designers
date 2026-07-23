@@ -9,9 +9,6 @@ import {
   Truck, ShieldCheck, MessageSquare, Plus, ChevronRight, Check
 } from 'lucide-react';
 import { useStore } from '../../../store/useStore';
-import Header from '../../../components/Header';
-import Footer from '../../../components/Footer';
-import MobileNav from '../../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Review } from '../../../types';
 import { getSafeImageSrc } from '../../../lib/utils';
@@ -263,7 +260,6 @@ export default function ProductClient({ productId: propProductId, initialProduct
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0] text-[#1D2B3F]">
-        <Header />
         
         {/* Breadcrumbs Header skeleton */}
         <div className="bg-[#1D2B3F] border-b border-[#657892]/20 py-6">
@@ -352,9 +348,6 @@ export default function ProductClient({ productId: propProductId, initialProduct
 
           </div>
         </main>
-        
-        <Footer />
-        <MobileNav />
       </div>
     );
   }
@@ -363,7 +356,6 @@ export default function ProductClient({ productId: propProductId, initialProduct
   if (!activeProduct) {
     return (
       <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0] text-[#1D2B3F]">
-        <Header />
         <main className="max-w-md mx-auto px-4 py-24 text-center space-y-4 flex-1 flex flex-col justify-center">
           <p className="font-serif text-lg">Product Registry Not Found</p>
           <p className="text-[#657892] text-xs font-light">The specified custom menswear ID does not exist in our active atelier records.</p>
@@ -371,7 +363,6 @@ export default function ProductClient({ productId: propProductId, initialProduct
             Back to Shop
           </Link>
         </main>
-        <Footer />
       </div>
     );
   }
@@ -407,7 +398,6 @@ export default function ProductClient({ productId: propProductId, initialProduct
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0] text-[#1D2B3F]">
-      <Header />
 
       {/* Added Alert Notification */}
       <AnimatePresence>
@@ -892,9 +882,6 @@ export default function ProductClient({ productId: propProductId, initialProduct
           </>
         )}
       </AnimatePresence>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

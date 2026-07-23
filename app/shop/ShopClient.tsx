@@ -9,9 +9,6 @@ import {
   Heart, ShoppingCart, Star, Eye, RefreshCw, X
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../../types';
 import { getSafeImageSrc } from '../../lib/utils';
@@ -258,7 +255,6 @@ function ShopContent({ initialProducts }: { initialProducts?: Product[] }) {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-      <Header />
 
       {/* Added Alert Notification */}
       <AnimatePresence>
@@ -1020,9 +1016,6 @@ function ShopContent({ initialProducts }: { initialProducts?: Product[] }) {
           </div>
         )}
       </AnimatePresence>
-
-      <Footer />
-      <MobileNav />
     </div>
   );
 }

@@ -8,9 +8,6 @@ import {
   ShieldCheck, ArrowRight, AlertTriangle, Check, Info
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-import MobileNav from '../../components/MobileNav';
 import { motion } from 'motion/react';
 
 export default function RegisterClient() {
@@ -100,7 +97,6 @@ export default function RegisterClient() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F7F5F0]">
-      <Header />
 
       <main className="flex-1 w-full flex items-stretch bg-[#F7F5F0] min-h-[80vh]">
         <div className="grid grid-cols-1 lg:grid-cols-12 w-full max-w-7xl mx-auto px-4 md:px-8 py-10 gap-10">
@@ -260,9 +256,6 @@ export default function RegisterClient() {
 
         </div>
       </main>
-
-      <Footer />
-      <MobileNav />
 
       {/* Account Already Registered Popup Modal */}
       {showAlreadyRegisteredModal && (
