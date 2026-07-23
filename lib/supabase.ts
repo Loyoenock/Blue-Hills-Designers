@@ -56,12 +56,7 @@ export function getSupabaseClient(): SupabaseClient | null {
     supabaseClientInstance = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         fetch: (url, options) => {
-          const isGet = !options || !options.method || options.method.toUpperCase() === 'GET';
-          const fetchOptions: RequestInit = { ...options };
-          if (isGet) {
-            fetchOptions.cache = 'no-store';
-          }
-          return retryableFetch(url as string, fetchOptions);
+          return retryableFetch(url as string, options);
         }
       }
     });
@@ -100,12 +95,7 @@ export function getSupabaseAdmin(): SupabaseClient {
       },
       global: {
         fetch: (url, options) => {
-          const isGet = !options || !options.method || options.method.toUpperCase() === 'GET';
-          const fetchOptions: RequestInit = { ...options };
-          if (isGet) {
-            fetchOptions.cache = 'no-store';
-          }
-          return retryableFetch(url as string, fetchOptions);
+          return retryableFetch(url as string, options);
         }
       }
     });
@@ -136,12 +126,7 @@ export function getSupabaseForRequest(accessToken: string | null): SupabaseClien
     global: {
       headers: {},
       fetch: (url: string, fetchOptions: any) => {
-        const isGet = !fetchOptions || !fetchOptions.method || fetchOptions.method.toUpperCase() === 'GET';
-        const updatedOptions: RequestInit = { ...fetchOptions };
-        if (isGet) {
-          updatedOptions.cache = 'no-store';
-        }
-        return retryableFetch(url as string, updatedOptions);
+        return retryableFetch(url as string, fetchOptions);
       }
     }
   };
