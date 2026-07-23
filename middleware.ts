@@ -18,8 +18,10 @@ export async function middleware(request: NextRequest) {
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn('[MIDDLEWARE] Supabase environment keys missing. Bypassing token validation.');
-      return NextResponse.next();
+      console.warn('[MIDDLEWARE] Supabase environment keys missing. Blocking protected route and redirecting to login.');
+      url.pathname = '/login';
+      url.searchParams.set('redirect', request.nextUrl.pathname);
+      return NextResponse.redirect(url);
     }
 
     let user = null;
