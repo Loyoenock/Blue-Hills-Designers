@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 
 export default async function ShopPage() {
   let initialProducts: any[] = [];
+  let initialCategories: string[] = [];
 
   try {
     const supabase = getSupabaseClient();
@@ -31,6 +32,9 @@ export default async function ShopPage() {
         }
 
         const { data: dbCats } = await supabase.from('categories').select('*');
+        if (dbCats) {
+          initialCategories = dbCats.filter((c: any) => c.slug !== 'app-settings').map((c: any) => c.name);
+        }
         
         let dbImages: any[] | null = null;
         try {
@@ -131,7 +135,7 @@ export default async function ShopPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ShopClientWrapper initialProducts={initialProducts} />
+      <ShopClientWrapper initialProducts={initialProducts} initialCategories={initialCategories} />
     </>
   );
 }

@@ -37,14 +37,14 @@ async function seedDatabase() {
   try {
     // 1. Seed Categories
     const categories = [
-      { id: 'cat-suits', name: 'Suits', slug: 'suits', description: 'Bespoke & Ready-to-wear tailored suits' },
-      { id: 'cat-shirts', name: 'Shirts', slug: 'shirts', description: 'Egyptian cotton custom tailored shirts' },
-      { id: 'cat-shoes', name: 'Footwear', slug: 'footwear', description: 'Italian handcrafted leather footwear' },
-      { id: 'cat-accessories', name: 'Accessories', slug: 'accessories', description: 'Silk ties, cufflinks, and leather belts' }
+      { name: 'Suits', slug: 'suits', description: 'Bespoke & Ready-to-wear tailored suits' },
+      { name: 'Shirts', slug: 'shirts', description: 'Egyptian cotton custom tailored shirts' },
+      { name: 'Shoes', slug: 'shoes', description: 'Italian handcrafted leather footwear' },
+      { name: 'Accessories', slug: 'accessories', description: 'Silk ties, cufflinks, and leather belts' }
     ];
 
     for (const cat of categories) {
-      const { error } = await supabase.from('categories').upsert(cat, { onConflict: 'id' });
+      const { error } = await supabase.from('categories').upsert(cat, { onConflict: 'slug' });
       if (error) console.warn(`Category upsert warning (${cat.name}):`, error.message);
     }
     console.log('[Seed Script] Categories seeded successfully.');

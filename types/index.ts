@@ -9,11 +9,20 @@ export interface Review {
   date: string;
 }
 
+export interface Category {
+  id?: string;
+  name: string;
+  slug: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   description: string;
-  category: 'Suits' | 'Shirts' | 'Shoes' | 'Accessories';
+  category: string;
   price: number;
   images: string[];
   sizes: string[];

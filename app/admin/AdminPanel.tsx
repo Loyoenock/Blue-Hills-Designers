@@ -14,25 +14,99 @@ import {
 import { useStore } from '../../store/useStore';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, Order, User, Coupon } from '../../types';
+import { Product, Order, User, Coupon, Category } from '../../types';
 import { getSupabaseClient } from '../../lib/supabase';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 
 export default function Admin() {
   const router = useRouter();
   const { 
-    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons,
+    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons, categories,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
     deleteReview, updateProductStockQuick, updateBookingStatus,
-    addCoupon, updateCoupon, deleteCoupon
+    addCoupon, updateCoupon, deleteCoupon,
+    addCategory, updateCategory, deleteCategory
   } = useStore();
 
   // Admin-specific Realtime subscriptions for orders and profiles
   useRealtimeSync({ orders: true, profiles: true });
 
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'coupons' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'categories' | 'coupons' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
+
+  // Category Management State
+  const [categorySearch, setCategorySearch] = useState('');
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [catNameInput, setCatNameInput] = useState('');
+  const [catSlugInput, setCatSlugInput] = useState('');
+  const [catDescInput, setCatDescInput] = useState('');
+  const [isDeleteCategoryModalOpen, setIsDeleteCategoryModalOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [categoryDeleteError, setCategoryDeleteError] = useState<string | null>(null);
+
+  const handleOpenCategoryModal = (cat?: Category) => {
+    if (cat) {
+      setEditingCategory(cat);
+      setCatNameInput(cat.name);
+      setCatSlugInput(cat.slug);
+      setCatDescInput(cat.description || '');
+    } else {
+      setEditingCategory(null);
+      setCatNameInput('');
+      setCatSlugInput('');
+      setCatDescInput('');
+    }
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catNameInput.trim()) return;
+    const adminName = currentUser?.name || 'Master Admin';
+    const adminRole = currentUser?.role || 'Super Admin';
+    const slug = catSlugInput.trim() ? catSlugInput.trim().toLowerCase() : catNameInput.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    
+    if (editingCategory) {
+      await updateCategory(editingCategory.id || editingCategory.slug, {
+        name: catNameInput.trim(),
+        slug,
+        description: catDescInput.trim()
+      }, adminName, adminRole);
+    } else {
+      await addCategory({
+        name: catNameInput.trim(),
+        slug,
+        description: catDescInput.trim()
+      }, adminName, adminRole);
+    }
+    setIsCategoryModalOpen(false);
+  };
+
+  const handleOpenDeleteCategoryModal = (cat: Category) => {
+    setCategoryToDelete(cat);
+    setCategoryDeleteError(null);
+    const count = (products || []).filter(p => p.category?.toLowerCase() === cat.name.toLowerCase() || p.category?.toLowerCase() === cat.slug.toLowerCase()).length;
+    if (count > 0) {
+      setCategoryDeleteError(`Cannot delete '${cat.name}': ${count} product(s) are assigned to this category. Reassign or remove those products first.`);
+    }
+    setIsDeleteCategoryModalOpen(true);
+  };
+
+  const handleConfirmDeleteCategory = async () => {
+    if (categoryToDelete && !categoryDeleteError) {
+      const adminName = currentUser?.name || 'Master Admin';
+      const adminRole = currentUser?.role || 'Super Admin';
+      const res = await deleteCategory(categoryToDelete.id || categoryToDelete.slug, adminName, adminRole);
+      if (!res.success) {
+        setCategoryDeleteError(res.message || 'Failed to delete category.');
+        return;
+      }
+      setIsDeleteCategoryModalOpen(false);
+      setCategoryToDelete(null);
+    }
+  };
 
   // Form and search/filter states for User Management
   const [userSearch, setUserSearch] = useState('');
@@ -271,6 +345,18 @@ export default function Admin() {
     });
   }, [coupons, couponSearch, couponTypeFilter, couponStatusFilter]);
 
+  const filteredCategories = useMemo(() => {
+    return (categories || []).filter(c => {
+      const query = categorySearch.toLowerCase().trim();
+      if (!query) return true;
+      return (
+        c.name.toLowerCase().includes(query) ||
+        c.slug.toLowerCase().includes(query) ||
+        (c.description || '').toLowerCase().includes(query)
+      );
+    });
+  }, [categories, categorySearch]);
+
   if (!mounted) return null;
 
   // Authorization Shield
@@ -284,6 +370,8 @@ export default function Admin() {
   const canSeeLogs = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeSettings = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeCoupons = userRole === 'Super Admin' || userRole === 'Admin';
+  const canSeeCategories = userRole === 'Super Admin' || userRole === 'Admin';
+  const canModifyCategories = userRole === 'Super Admin' || userRole === 'Admin';
   const canModifyUsers = userRole === 'Super Admin' || userRole === 'Admin';
 
   if (!isAuthorized) {
@@ -707,6 +795,7 @@ export default function Admin() {
             {[
               { id: 'dashboard', name: 'Boutique Pulse', icon: BarChart },
               { id: 'products', name: 'Apparel Registry', icon: Grid },
+              { id: 'categories', name: 'Categories', icon: Layers, count: (categories || []).length },
               { id: 'coupons', name: 'Coupons', icon: Tag, count: (coupons || []).length },
               { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: orders.length },
               { id: 'bookings', name: 'Style Bookings', icon: Calendar, count: (bookings || []).length },
@@ -718,6 +807,7 @@ export default function Admin() {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
               
+              if (tab.id === 'categories' && !canSeeCategories) return null;
               if (tab.id === 'coupons' && !canSeeCoupons) return null;
               if (tab.id === 'logs' && !canSeeLogs) return null;
               if (tab.id === 'settings' && !canSeeSettings) return null;
@@ -1129,6 +1219,120 @@ export default function Admin() {
                             )}
                           </Fragment>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* SUB-TAB: CATEGORIES MANAGEMENT */}
+            {activeTab === 'categories' && canSeeCategories && (
+              <motion.div 
+                key="categories"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-serif text-xl text-white font-bold flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-[#20D9A1]" />
+                      Apparel Categories Registry
+                    </h3>
+                    <p className="text-[11px] text-white/40 mt-0.5">Manage database-backed merchandise categories and catalog organization.</p>
+                  </div>
+                  
+                  {canModifyCategories && (
+                    <button 
+                      onClick={() => handleOpenCategoryModal()}
+                      className="bg-[#20D9A1] hover:bg-opacity-95 text-black px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-[#20D9A1]/20 font-mono"
+                      id="create-category-btn"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Category
+                    </button>
+                  )}
+                </div>
+
+                {/* Filters */}
+                <div className="bg-[#111111] p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 max-w-md">
+                    <Search className="w-4 h-4 text-white/40" />
+                    <input 
+                      type="text" 
+                      value={categorySearch}
+                      onChange={(e) => setCategorySearch(e.target.value)}
+                      placeholder="Search category name, slug, description..."
+                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0 font-mono"
+                      id="category-search-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] uppercase tracking-wider text-white/40 font-mono">
+                          <th className="py-3.5 px-4">Category Name & Slug</th>
+                          <th className="py-3.5 px-4">Description</th>
+                          <th className="py-3.5 px-3 text-center">Assigned Products</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-xs text-white/80">
+                        {filteredCategories.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-12 text-center text-white/40 font-mono text-xs">
+                              No merchandise categories matching criteria.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredCategories.map((c) => {
+                            const productCount = (products || []).filter(p => p.category?.toLowerCase() === c.name.toLowerCase() || p.category?.toLowerCase() === c.slug.toLowerCase()).length;
+                            return (
+                              <tr key={c.id || c.slug} className="hover:bg-white/[0.02] transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="font-semibold text-white text-sm">{c.name}</div>
+                                  <div className="text-[10px] text-white/40 font-mono font-light">slug: {c.slug}</div>
+                                </td>
+                                <td className="py-3.5 px-4 text-white/70 max-w-xs font-light text-xs">
+                                  {c.description || <span className="text-white/30 italic">No description provided</span>}
+                                </td>
+                                <td className="py-3.5 px-3 text-center font-mono">
+                                  <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded text-xs font-bold text-[#20D9A1]">
+                                    {productCount} {productCount === 1 ? 'Product' : 'Products'}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex justify-end gap-1.5">
+                                    {canModifyCategories && (
+                                      <>
+                                        <button 
+                                          onClick={() => handleOpenCategoryModal(c)}
+                                          className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
+                                          title="Edit category"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button 
+                                          onClick={() => handleOpenDeleteCategoryModal(c)}
+                                          className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
+                                          title="Delete category"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -2173,10 +2377,9 @@ export default function Admin() {
                       onChange={(e) => setPCategory(e.target.value)}
                       className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-white outline-none"
                     >
-                      <option value="Suits">Suits</option>
-                      <option value="Shirts">Shirts</option>
-                      <option value="Shoes">Shoes</option>
-                      <option value="Accessories">Accessories</option>
+                      {((categories && categories.length > 0) ? categories.map(c => c.name) : ['Suits', 'Shirts', 'Shoes', 'Accessories']).map(catName => (
+                        <option key={catName} value={catName}>{catName}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -3032,6 +3235,160 @@ export default function Admin() {
                 >
                   Confirm Delete
                 </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* CATEGORY CREATE/EDIT MODAL */}
+      <AnimatePresence>
+        {isCategoryModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCategoryModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-md h-fit bg-[#111111] border border-white/10 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="category-modal"
+            >
+              <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-[#20D9A1]" />
+                  <h4 className="font-serif text-lg text-white font-bold">
+                    {editingCategory ? 'Edit Merchandise Category' : 'Create Merchandise Category'}
+                  </h4>
+                </div>
+                <button 
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="text-white/40 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveCategory} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                    Category Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={catNameInput}
+                    onChange={(e) => {
+                      setCatNameInput(e.target.value);
+                      if (!editingCategory && !catSlugInput) {
+                        setCatSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+                      }
+                    }}
+                    placeholder="e.g. Suits, Outerwear, Knitwear"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                    URL Slug
+                  </label>
+                  <input
+                    type="text"
+                    value={catSlugInput}
+                    onChange={(e) => setCatSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, ''))}
+                    placeholder="e.g. suits, outerwear"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                    Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={catDescInput}
+                    onChange={(e) => setCatDescInput(e.target.value)}
+                    placeholder="Brief overview of merchandise in this department..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all resize-none font-mono"
+                  />
+                </div>
+
+                <div className="pt-4 flex justify-end gap-3 border-t border-white/5 font-mono">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsCategoryModalOpen(false)}
+                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl text-xs uppercase font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="bg-[#20D9A1] hover:bg-[#1bb887] text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer"
+                  >
+                    {editingCategory ? 'Update Category' : 'Save Category'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* CATEGORY DELETION SAFETY MODAL */}
+      <AnimatePresence>
+        {isDeleteCategoryModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteCategoryModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-sm h-fit bg-[#111111] border border-red-500/20 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="category-delete-safety-modal"
+            >
+              <div className="space-y-3 text-center">
+                <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
+                <h4 className="font-serif text-base text-white font-bold uppercase tracking-wider">Confirm Category Removal</h4>
+                
+                {categoryDeleteError ? (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs font-mono text-left leading-relaxed">
+                    {categoryDeleteError}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-white/40 leading-relaxed max-w-xs mx-auto">
+                    Sir, are you sure you want to delete category <span className="text-white font-mono font-semibold">&ldquo;{categoryToDelete?.name}&rdquo;</span>?
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 font-mono">
+                <button 
+                  onClick={() => setIsDeleteCategoryModalOpen(false)}
+                  className="bg-white/5 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold border border-white/10 cursor-pointer"
+                >
+                  {categoryDeleteError ? 'Close' : 'Cancel'}
+                </button>
+                {!categoryDeleteError && (
+                  <button 
+                    onClick={handleConfirmDeleteCategory}
+                    className="bg-red-500 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold hover:bg-red-600 transition-colors cursor-pointer"
+                  >
+                    Confirm Delete
+                  </button>
+                )}
               </div>
             </motion.div>
           </>

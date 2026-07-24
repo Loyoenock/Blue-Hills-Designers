@@ -341,6 +341,7 @@ export default function HomeClient() {
       </section>
 
       {/* CATEGORY GRID */}
+      {/* Note: This curated section assumes the four default category names ('Suits', 'Shirts', 'Shoes', 'Accessories') continue to exist in the system */}
       <section className="py-24 bg-[#F7F5F0]">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="text-center mb-16">

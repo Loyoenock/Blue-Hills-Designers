@@ -6,9 +6,10 @@ import { Product } from '../../types';
 
 interface ShopClientWrapperProps {
   initialProducts?: Product[];
+  initialCategories?: string[];
 }
 
-export default function ShopClientWrapper({ initialProducts }: ShopClientWrapperProps) {
+export default function ShopClientWrapper({ initialProducts, initialCategories }: ShopClientWrapperProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -26,5 +27,5 @@ export default function ShopClientWrapper({ initialProducts }: ShopClientWrapper
     );
   }
 
-  return <ShopClient initialProducts={initialProducts} />;
+  return <ShopClient initialProducts={initialProducts} initialCategories={initialCategories} />;
 }

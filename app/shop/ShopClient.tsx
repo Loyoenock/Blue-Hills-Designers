@@ -14,10 +14,11 @@ import { Product } from '../../types';
 import { getSafeImageSrc } from '../../lib/utils';
 
 
-function ShopContent({ initialProducts }: { initialProducts?: Product[] }) {
+function ShopContent({ initialProducts, initialCategories }: { initialProducts?: Product[]; initialCategories?: string[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const storeProducts = useStore((state) => state.products);
+  const storeCategories = useStore((state) => state.categories);
   const products = useMemo(() => {
     return storeProducts.length > 0 ? storeProducts : (initialProducts || []);
   }, [storeProducts, initialProducts]);
@@ -145,7 +146,14 @@ function ShopContent({ initialProducts }: { initialProducts?: Product[] }) {
   }, [search, selectedCategory, selectedSize, selectedColor, priceRange, sortBy, currentPage, maxPriceLimit, urlParsed, router, searchParams]);
 
   // All categories, sizes, and colors extracted dynamically
-  const categories = ['All', 'Suits', 'Shirts', 'Shoes', 'Accessories'];
+  const categories = useMemo(() => {
+    const rawCatNames = (storeCategories && storeCategories.length > 0)
+      ? storeCategories.map(c => c.name)
+      : (initialCategories && initialCategories.length > 0 ? initialCategories : ['Suits', 'Shirts', 'Shoes', 'Accessories']);
+    
+    const defaults = ['Suits', 'Shirts', 'Shoes', 'Accessories'];
+    return Array.from(new Set(['All', ...rawCatNames, ...defaults]));
+  }, [storeCategories, initialCategories]);
   const sizes = ['All', '48R', '50R', '52R', '54R', '56R', '39', '40', '41', '42', '43', '44', '45'];
   const colors = ['All', 'Midnight Navy', 'Charcoal', 'Cognac Brown', 'Obsidian Black', 'Pristine White', 'Emerald Green', 'Classic Camel'];
 
@@ -1022,12 +1030,13 @@ function ShopContent({ initialProducts }: { initialProducts?: Product[] }) {
 
 interface ShopProps {
   initialProducts?: Product[];
+  initialCategories?: string[];
 }
 
-export default function Shop({ initialProducts }: ShopProps) {
+export default function Shop({ initialProducts, initialCategories }: ShopProps) {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-[#1D2B3F] font-serif">Loading Boutique Registry...</div>}>
-      <ShopContent initialProducts={initialProducts} />
+      <ShopContent initialProducts={initialProducts} initialCategories={initialCategories} />
     </Suspense>
   );
 }

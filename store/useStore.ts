@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon
+  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
@@ -17,6 +17,7 @@ interface StoreState {
   cart: CartItem[];
   appliedCoupon: Coupon | null;
   coupons: Coupon[];
+  categories: Category[];
   selectedShippingMethod: 'standard' | 'express' | 'pickup';
   cartError: string | null;
   orders: Order[];
@@ -51,6 +52,11 @@ interface StoreState {
   addCoupon: (couponData: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<void>;
   updateCoupon: (id: string, updatedFields: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<void>;
   deleteCoupon: (id: string, adminName?: string, adminRole?: string) => Promise<void>;
+
+  // Category management actions (Admin)
+  addCategory: (categoryData: Partial<Category>, adminName?: string, adminRole?: string) => Promise<void>;
+  updateCategory: (id: string, updatedFields: Partial<Category>, adminName?: string, adminRole?: string) => Promise<void>;
+  deleteCategory: (id: string, adminName?: string, adminRole?: string) => Promise<{ success: boolean; message?: string }>;
 
   // Checkout / Order actions
   placeOrder: (orderData: Omit<Order, 'id' | 'date'> & { id?: string; date?: string; paymentId?: string; paymentStatus?: Payment['status']; paymentTransactionId?: string; }, skipDbSync?: boolean) => Order;
@@ -94,6 +100,13 @@ interface StoreState {
   applyProfileChange: (payload: any) => void;
   isSyncing: boolean;
 }
+
+export const INITIAL_CATEGORIES: Category[] = [
+  { name: 'Suits', slug: 'suits', description: 'Bespoke & Ready-to-wear tailored suits' },
+  { name: 'Shirts', slug: 'shirts', description: 'Egyptian cotton custom tailored shirts' },
+  { name: 'Shoes', slug: 'shoes', description: 'Italian handcrafted leather footwear' },
+  { name: 'Accessories', slug: 'accessories', description: 'Silk ties, cufflinks, and leather belts' }
+];
 
 const INITIAL_PRODUCTS: Product[] = [
   {
@@ -461,10 +474,15 @@ function capitalizeRole(role: string): User['role'] {
   return 'Customer';
 }
 
+function isUUID(str: string): boolean {
+  if (!str) return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 function toValidUUID(str: string): string {
   if (!str) return '00000000-0000-0000-0000-000000000000';
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(str)) {
+  if (isUUID(str)) {
     return str.toLowerCase();
   }
 
@@ -502,14 +520,17 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
       const fullProd = existingProd ? { ...existingProd, ...payload } : payload;
 
       const catName = fullProd.category || 'Suits';
-      const catKey = catName.toLowerCase();
-      const catId = toValidUUID('cat-' + catKey);
+      const loadedCategories = (state as any).categories || [];
+      const matchedCat = loadedCategories.find(
+        (c: any) => c.name?.toLowerCase() === catName.toLowerCase() || c.slug?.toLowerCase() === catName.toLowerCase()
+      );
+      const catId = matchedCat?.id && isUUID(matchedCat.id) ? matchedCat.id : undefined;
       const prodName = fullProd.name || 'Luxury Product';
       const slug = fullProd.slug || (prodName ? prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'product');
 
       return {
         id: toValidUUID(fullProd.id),
-        category_id: catId,
+        ...(catId ? { category_id: catId } : {}),
         name: prodName,
         slug,
         description: fullProd.description || '',
@@ -692,6 +713,17 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         times_used: Number(payload.timesUsed ?? payload.times_used) || 0,
         created_by: payload.createdBy || payload.created_by ? toValidUUID(payload.createdBy || payload.created_by) : null,
         updated_at: new Date().toISOString()
+      };
+    }
+
+    case 'categories': {
+      const name = payload.name ? String(payload.name).trim() : '';
+      const slug = payload.slug ? String(payload.slug).trim().toLowerCase() : name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      return {
+        ...(payload.id && isUUID(payload.id) ? { id: payload.id } : {}),
+        name,
+        slug,
+        description: payload.description || ''
       };
     }
 
@@ -933,6 +965,7 @@ export const useStore = create<StoreState>()(
       cart: [],
       appliedCoupon: null,
       coupons: [],
+      categories: INITIAL_CATEGORIES,
       selectedShippingMethod: 'standard',
       cartError: null,
       orders: INITIAL_ORDERS,
@@ -1033,6 +1066,19 @@ export const useStore = create<StoreState>()(
         // 1. Categories & Settings
         const { data: dbCats } = await supabase.from('categories').select('*');
         if (dbCats) {
+          const realCats = dbCats.filter((c: any) => c.slug !== 'app-settings');
+          const mappedCategories: Category[] = realCats.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            description: c.description || '',
+            createdAt: c.created_at,
+            updatedAt: c.updated_at
+          }));
+          if (mappedCategories.length > 0) {
+            set({ categories: mappedCategories });
+          }
+
           const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
           if (settingsCat && settingsCat.description) {
             try {
@@ -2261,6 +2307,100 @@ export const useStore = create<StoreState>()(
 
         await safeSupabaseDelete('coupons', { id: couponToDelete?.id || id });
         get().syncFromSupabase();
+      },
+
+      addCategory: async (categoryData, adminName, adminRole) => {
+        const name = (categoryData.name || '').trim();
+        if (!name) return;
+        const slug = categoryData.slug?.trim().toLowerCase() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const newCat: Category = {
+          name,
+          slug,
+          description: categoryData.description || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        // Optimistic state update
+        set(state => ({
+          categories: [...(state.categories || []).filter(c => c.slug !== slug), newCat]
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Category Registered',
+            `Admin registered new category '${name}' (${slug}).`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseUpsert('categories', newCat);
+        await get().fetchLatestState();
+      },
+
+      updateCategory: async (id, updatedFields, adminName, adminRole) => {
+        const existingCat = (get().categories || []).find(c => c.id === id || c.slug === id);
+        if (!existingCat) return;
+        const name = updatedFields.name?.trim() || existingCat.name;
+        const slug = updatedFields.slug?.trim().toLowerCase() || existingCat.slug;
+        const updatedCat: Category = {
+          ...existingCat,
+          ...updatedFields,
+          id: existingCat.id || id,
+          name,
+          slug,
+          updatedAt: new Date().toISOString()
+        };
+
+        set(state => ({
+          categories: (state.categories || []).map(c => (c.id === id || c.slug === id) ? updatedCat : c)
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Category Modified',
+            `Admin modified category '${updatedCat.name}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseUpsert('categories', updatedCat);
+        await get().fetchLatestState();
+      },
+
+      deleteCategory: async (id, adminName, adminRole) => {
+        const categoryToDelete = (get().categories || []).find(c => c.id === id || c.slug === id);
+        if (!categoryToDelete) return { success: false, message: 'Category not found.' };
+
+        // Block deletion if products reference this category
+        const referencingProducts = (get().products || []).filter(p => p.category?.toLowerCase() === categoryToDelete.name.toLowerCase() || p.category?.toLowerCase() === categoryToDelete.slug.toLowerCase());
+        if (referencingProducts.length > 0) {
+          return { success: false, message: `Cannot delete '${categoryToDelete.name}': ${referencingProducts.length} product(s) reference this category. Reassign or delete those products first.` };
+        }
+
+        set(state => ({
+          categories: (state.categories || []).filter(c => c.id !== id && c.slug !== id)
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Category Removed',
+            `Admin deleted category '${categoryToDelete.name}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        if (categoryToDelete.id) {
+          await safeSupabaseDelete('categories', { id: categoryToDelete.id });
+        }
+        await get().fetchLatestState();
+        return { success: true };
       },
 
       removeCoupon: () => {
