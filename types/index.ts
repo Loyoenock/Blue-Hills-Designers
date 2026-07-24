@@ -34,6 +34,7 @@ export interface Product {
   isFeatured?: boolean;
   isDealOfTheDay?: boolean;
   discountPercentage?: number;
+  dealDays?: number;
   dealHours?: number;
   dealMins?: number;
   dealSecs?: number;

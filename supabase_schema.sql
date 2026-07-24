@@ -70,6 +70,10 @@ CREATE TABLE public.products (
     is_featured BOOLEAN DEFAULT false NOT NULL,
     is_new BOOLEAN DEFAULT false NOT NULL,
     is_deal BOOLEAN DEFAULT false NOT NULL,
+    deal_days INTEGER NULL,
+    deal_hours INTEGER NULL,
+    deal_mins INTEGER NULL,
+    deal_secs INTEGER NULL,
     rating NUMERIC DEFAULT 0 NOT NULL,
     stock INTEGER DEFAULT 0 NOT NULL,
     status TEXT DEFAULT 'Active' NOT NULL,
@@ -481,5 +485,11 @@ VALUES
     ('Blue Hills Designers has completely reshaped corporate fashion in East Africa. The fit of their Savile suit is unmatched. Perfect boardroom armory.', 'Dr. David Ssewankambo', 'Managing Director', 'Standard Capital Uganda', 1, true),
     ('The Egyptian Poplin White shirt stays exceptionally crisp during long diplomatic flights and state banquets. Their concierge delivery is top tier.', 'Hon. Andrew Mukasa', 'Senior Diplomat', 'Ministry of Foreign Affairs', 2, true),
     ('I visited their Lubowa showroom for a ready-made corporate suit. The level of personal attention, refreshment service, and premium clothing quality was truly top tier.', 'Charles Mugisha', 'Investment VP', 'Ascent Capital Africa', 3, true);
+
+-- Additive migration for Secret Offer deal countdown columns
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_days INTEGER NULL;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_hours INTEGER NULL;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_mins INTEGER NULL;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_secs INTEGER NULL;
 
 

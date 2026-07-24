@@ -47,7 +47,7 @@ export default function HomeClient() {
   const [newsError, setNewsError] = useState('');
 
   // Countdown timer for Deal of the Day
-  const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 40, seconds: 17 });
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 14, minutes: 40, seconds: 17 });
 
   // Testimonial index slider
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
@@ -67,6 +67,7 @@ export default function HomeClient() {
   useEffect(() => {
     if (dealProduct) {
       setTimeLeft({
+        days: typeof dealProduct.dealDays === 'number' ? dealProduct.dealDays : 0,
         hours: typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14,
         minutes: typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40,
         seconds: typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17
@@ -89,9 +90,11 @@ export default function HomeClient() {
         } else if (prev.minutes > 0) {
           return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
         } else if (prev.hours > 0) {
-          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
+          return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
+        } else if (prev.days > 0) {
+          return { days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
         } else {
-          return { hours: 24, minutes: 0, seconds: 0 }; // Reset
+          return { days: 0, hours: 24, minutes: 0, seconds: 0 }; // Reset
         }
       });
     }, 1000);
@@ -599,6 +602,7 @@ export default function HomeClient() {
                 <h4 className="text-[#F7F5F0]/40 text-[10px] tracking-widest uppercase font-mono">Atelier reservation lines close in:</h4>
                 <div className="flex gap-4">
                   {[
+                    { val: timeLeft.days, label: "Days" },
                     { val: timeLeft.hours, label: "Hours" },
                     { val: timeLeft.minutes, label: "Mins" },
                     { val: timeLeft.seconds, label: "Secs" }

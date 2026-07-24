@@ -296,6 +296,7 @@ export default function Admin() {
   const [pIsFeatured, setPIsFeatured] = useState(false);
   const [pIsDeal, setPIsDeal] = useState(false);
   const [pDiscountPercentage, setPDiscountPercentage] = useState(0);
+  const [pSecretDays, setPSecretDays] = useState(0);
   const [pSecretHours, setPSecretHours] = useState(14);
   const [pSecretMins, setPSecretMins] = useState(42);
   const [pSecretSecs, setPSecretSecs] = useState(19);
@@ -587,6 +588,7 @@ export default function Admin() {
       setPIsFeatured(!!prod.isFeatured);
       setPIsDeal(!!prod.isDealOfTheDay);
       setPDiscountPercentage(prod.discountPercentage || 0);
+      setPSecretDays(prod.dealDays !== undefined ? prod.dealDays : 0);
       setPSecretHours(prod.dealHours !== undefined ? prod.dealHours : 14);
       setPSecretMins(prod.dealMins !== undefined ? prod.dealMins : 42);
       setPSecretSecs(prod.dealSecs !== undefined ? prod.dealSecs : 19);
@@ -613,6 +615,7 @@ export default function Admin() {
       setPIsFeatured(false);
       setPIsDeal(false);
       setPDiscountPercentage(0);
+      setPSecretDays(0);
       setPSecretHours(14);
       setPSecretMins(42);
       setPSecretSecs(19);
@@ -723,6 +726,7 @@ export default function Admin() {
         isFeatured: pIsFeatured,
         isDealOfTheDay: pIsDeal,
         discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0,
+        dealDays: pIsDeal ? Number(pSecretDays) : undefined,
         dealHours: pIsDeal ? Number(pSecretHours) : undefined,
         dealMins: pIsDeal ? Number(pSecretMins) : undefined,
         dealSecs: pIsDeal ? Number(pSecretSecs) : undefined
@@ -741,6 +745,7 @@ export default function Admin() {
         isFeatured: pIsFeatured,
         isDealOfTheDay: pIsDeal,
         discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0,
+        dealDays: pIsDeal ? Number(pSecretDays) : undefined,
         dealHours: pIsDeal ? Number(pSecretHours) : undefined,
         dealMins: pIsDeal ? Number(pSecretMins) : undefined,
         dealSecs: pIsDeal ? Number(pSecretSecs) : undefined
@@ -2804,6 +2809,21 @@ export default function Admin() {
                         </label>
                         
                         <div className="flex gap-4">
+                          {/* DAYS CARD */}
+                          <div className="flex flex-col items-center justify-center bg-[#132844] border border-[#2C4A70] rounded-2xl p-4 w-24 h-24 shadow-lg shadow-black/30 transition-all focus-within:border-[#C6A15B]/50">
+                            <input 
+                              type="number" 
+                              min="0"
+                              max="99"
+                              value={pSecretDays} 
+                              onChange={(e) => setPSecretDays(Math.max(0, parseInt(e.target.value) || 0))} 
+                              className="w-full bg-transparent text-center font-mono text-3xl font-bold text-[#C6A15B] outline-none border-none p-0 focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              required={pIsDeal}
+                              id="product-deal-days-input"
+                            />
+                            <span className="text-[9px] text-[#657892] uppercase tracking-widest mt-1.5 font-sans font-medium">DAYS</span>
+                          </div>
+
                           {/* HOURS CARD */}
                           <div className="flex flex-col items-center justify-center bg-[#132844] border border-[#2C4A70] rounded-2xl p-4 w-24 h-24 shadow-lg shadow-black/30 transition-all focus-within:border-[#C6A15B]/50">
                             <input 

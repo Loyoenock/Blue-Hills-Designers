@@ -233,6 +233,7 @@ const INITIAL_PRODUCTS: Product[] = [
     stock: 5,
     rating: 5.0,
     isDealOfTheDay: true,
+    dealDays: 0,
     dealHours: 14,
     dealMins: 40,
     dealSecs: 17,
@@ -583,6 +584,10 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         is_featured: !!fullProd.isFeatured,
         is_new: !!fullProd.isNew,
         is_deal: !!fullProd.isDealOfTheDay,
+        deal_days: fullProd.dealDays !== undefined && fullProd.dealDays !== null ? Number(fullProd.dealDays) : null,
+        deal_hours: fullProd.dealHours !== undefined && fullProd.dealHours !== null ? Number(fullProd.dealHours) : null,
+        deal_mins: fullProd.dealMins !== undefined && fullProd.dealMins !== null ? Number(fullProd.dealMins) : null,
+        deal_secs: fullProd.dealSecs !== undefined && fullProd.dealSecs !== null ? Number(fullProd.dealSecs) : null,
         rating: Number(fullProd.rating) || 0,
         stock: Number(fullProd.stock) || 0,
         status: 'Active'
@@ -1211,9 +1216,10 @@ export const useStore = create<StoreState>()(
 
           let parsedSizes = localProd?.sizes || ['M', 'L', 'XL'];
           let parsedColors = localProd?.colors || ['Classic Black'];
-          let dealHours = localProd?.dealHours !== undefined ? localProd.dealHours : 14;
-          let dealMins = localProd?.dealMins !== undefined ? localProd.dealMins : 42;
-          let dealSecs = localProd?.dealSecs !== undefined ? localProd.dealSecs : 19;
+          let dealDays = p.deal_days !== undefined && p.deal_days !== null ? Number(p.deal_days) : (localProd?.dealDays !== undefined ? localProd.dealDays : 0);
+          let dealHours = p.deal_hours !== undefined && p.deal_hours !== null ? Number(p.deal_hours) : (localProd?.dealHours !== undefined ? localProd.dealHours : 14);
+          let dealMins = p.deal_mins !== undefined && p.deal_mins !== null ? Number(p.deal_mins) : (localProd?.dealMins !== undefined ? localProd.dealMins : 40);
+          let dealSecs = p.deal_secs !== undefined && p.deal_secs !== null ? Number(p.deal_secs) : (localProd?.dealSecs !== undefined ? localProd.dealSecs : 17);
 
           if (p.short_description) {
             try {
@@ -1221,9 +1227,10 @@ export const useStore = create<StoreState>()(
               if (parsed && typeof parsed === 'object') {
                 if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) parsedSizes = parsed.sizes;
                 if (Array.isArray(parsed.colors) && parsed.colors.length > 0) parsedColors = parsed.colors;
-                if (parsed.dealHours !== undefined && parsed.dealHours !== null) dealHours = Number(parsed.dealHours);
-                if (parsed.dealMins !== undefined && parsed.dealMins !== null) dealMins = Number(parsed.dealMins);
-                if (parsed.dealSecs !== undefined && parsed.dealSecs !== null) dealSecs = Number(parsed.dealSecs);
+                if ((p.deal_days === undefined || p.deal_days === null) && parsed.dealDays !== undefined && parsed.dealDays !== null) dealDays = Number(parsed.dealDays);
+                if ((p.deal_hours === undefined || p.deal_hours === null) && parsed.dealHours !== undefined && parsed.dealHours !== null) dealHours = Number(parsed.dealHours);
+                if ((p.deal_mins === undefined || p.deal_mins === null) && parsed.dealMins !== undefined && parsed.dealMins !== null) dealMins = Number(parsed.dealMins);
+                if ((p.deal_secs === undefined || p.deal_secs === null) && parsed.dealSecs !== undefined && parsed.dealSecs !== null) dealSecs = Number(parsed.dealSecs);
               }
             } catch {}
           }
@@ -1245,6 +1252,7 @@ export const useStore = create<StoreState>()(
             isFeatured: p.is_featured,
             isDealOfTheDay: p.is_deal,
             discountPercentage: Number(p.discount_percentage) || 0,
+            dealDays,
             dealHours,
             dealMins,
             dealSecs,
@@ -1524,9 +1532,10 @@ export const useStore = create<StoreState>()(
 
           let parsedSizes = existing?.sizes || ['M', 'L', 'XL'];
           let parsedColors = existing?.colors || ['Classic Black'];
-          let dealHours = existing?.dealHours ?? 14;
-          let dealMins = existing?.dealMins ?? 42;
-          let dealSecs = existing?.dealSecs ?? 19;
+          let dealDays = newRow.deal_days !== undefined && newRow.deal_days !== null ? Number(newRow.deal_days) : (existing?.dealDays ?? 0);
+          let dealHours = newRow.deal_hours !== undefined && newRow.deal_hours !== null ? Number(newRow.deal_hours) : (existing?.dealHours ?? 14);
+          let dealMins = newRow.deal_mins !== undefined && newRow.deal_mins !== null ? Number(newRow.deal_mins) : (existing?.dealMins ?? 40);
+          let dealSecs = newRow.deal_secs !== undefined && newRow.deal_secs !== null ? Number(newRow.deal_secs) : (existing?.dealSecs ?? 17);
 
           if (newRow.short_description) {
             try {
@@ -1534,9 +1543,10 @@ export const useStore = create<StoreState>()(
               if (parsed && typeof parsed === 'object') {
                 if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) parsedSizes = parsed.sizes;
                 if (Array.isArray(parsed.colors) && parsed.colors.length > 0) parsedColors = parsed.colors;
-                if (parsed.dealHours !== undefined) dealHours = Number(parsed.dealHours);
-                if (parsed.dealMins !== undefined) dealMins = Number(parsed.dealMins);
-                if (parsed.dealSecs !== undefined) dealSecs = Number(parsed.dealSecs);
+                if ((newRow.deal_days === undefined || newRow.deal_days === null) && parsed.dealDays !== undefined) dealDays = Number(parsed.dealDays);
+                if ((newRow.deal_hours === undefined || newRow.deal_hours === null) && parsed.dealHours !== undefined) dealHours = Number(parsed.dealHours);
+                if ((newRow.deal_mins === undefined || newRow.deal_mins === null) && parsed.dealMins !== undefined) dealMins = Number(parsed.dealMins);
+                if ((newRow.deal_secs === undefined || newRow.deal_secs === null) && parsed.dealSecs !== undefined) dealSecs = Number(parsed.dealSecs);
               }
             } catch {}
           }
@@ -1558,6 +1568,7 @@ export const useStore = create<StoreState>()(
             isFeatured: newRow.is_featured !== undefined ? !!newRow.is_featured : (existing?.isFeatured || false),
             isDealOfTheDay: newRow.is_deal !== undefined ? !!newRow.is_deal : (existing?.isDealOfTheDay || false),
             discountPercentage: newRow.discount_percentage !== undefined ? Number(newRow.discount_percentage) : (existing?.discountPercentage || 0),
+            dealDays,
             dealHours,
             dealMins,
             dealSecs,
