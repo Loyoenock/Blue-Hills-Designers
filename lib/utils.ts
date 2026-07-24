@@ -9,7 +9,24 @@ export function getSafeImageSrc(src: any): string {
   if (!src || typeof src !== 'string') {
     return 'https://picsum.photos/seed/suit/600/600';
   }
-  const s = src.trim();
+  let s = src.trim();
+  if (!s) {
+    return 'https://picsum.photos/seed/suit/600/600';
+  }
+
+  // Handle Supabase signed or authenticated object URLs
+  if (s.includes('/storage/v1/object/sign/') || s.includes('/storage/v1/object/authenticated/')) {
+    try {
+      const urlObj = new URL(s);
+      let pathname = urlObj.pathname;
+      pathname = pathname.replace('/storage/v1/object/sign/', '/storage/v1/object/public/');
+      pathname = pathname.replace('/storage/v1/object/authenticated/', '/storage/v1/object/public/');
+      return `${urlObj.origin}${pathname}`;
+    } catch (e) {
+      // Fall through if URL parsing fails
+    }
+  }
+
   if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:') || s.startsWith('/')) {
     return s;
   }
