@@ -156,3 +156,16 @@ export interface AppSettings {
   currencySymbol: string;
 }
 
+export interface Testimonial {
+  id?: string;
+  quote: string;
+  name: string;
+  role?: string;
+  company?: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+

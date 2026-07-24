@@ -447,3 +447,39 @@ VALUES
     ('KAMPALA30', 'percentage', 30, true)
 ON CONFLICT (code) DO NOTHING;
 
+-- ==========================================
+-- 7. TESTIMONIALS
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.testimonials (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    quote TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NULL,
+    company TEXT NULL,
+    display_order INTEGER NOT NULL DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_by UUID NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read-access to active testimonials" ON public.testimonials;
+CREATE POLICY "Allow public read-access to active testimonials"
+    ON public.testimonials FOR SELECT
+    USING (is_active = true);
+
+DROP POLICY IF EXISTS "Allow administrative full access to testimonials" ON public.testimonials;
+CREATE POLICY "Allow administrative full access to testimonials"
+    ON public.testimonials FOR ALL
+    USING (public.is_admin_or_staff(auth.uid()));
+
+-- Seed default testimonials
+INSERT INTO public.testimonials (quote, name, role, company, display_order, is_active)
+VALUES
+    ('Blue Hills Designers has completely reshaped corporate fashion in East Africa. The fit of their Savile suit is unmatched. Perfect boardroom armory.', 'Dr. David Ssewankambo', 'Managing Director', 'Standard Capital Uganda', 1, true),
+    ('The Egyptian Poplin White shirt stays exceptionally crisp during long diplomatic flights and state banquets. Their concierge delivery is top tier.', 'Hon. Andrew Mukasa', 'Senior Diplomat', 'Ministry of Foreign Affairs', 2, true),
+    ('I visited their Lubowa showroom for a ready-made corporate suit. The level of personal attention, refreshment service, and premium clothing quality was truly top tier.', 'Charles Mugisha', 'Investment VP', 'Ascent Capital Africa', 3, true);
+
+

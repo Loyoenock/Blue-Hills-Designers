@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,7 +19,7 @@ import { getSafeImageSrc } from '../lib/utils';
 export default function HomeClient() {
   const router = useRouter();
   const { 
-    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing 
+    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing, testimonials 
   } = useStore();
   const currency = settings?.currencySymbol || 'Ugx';
   
@@ -51,6 +51,12 @@ export default function HomeClient() {
 
   // Testimonial index slider
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
+
+  const activeTestimonials = useMemo(() => {
+    return (testimonials || [])
+      .filter(t => t.isActive)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [testimonials]);
 
   // Filter products for featured, new, and deal of the day
   const featuredProducts = products.filter(p => p.isFeatured && !p.isDealOfTheDay).slice(0, 3);
@@ -92,7 +98,11 @@ export default function HomeClient() {
 
     // Testimonials auto slide
     const testimonialsTimer = setInterval(() => {
-      setCurrentTestimonial(prev => (prev + 1) % TESTIMONIALS.length);
+      setCurrentTestimonial(prev => {
+        const len = activeTestimonials.length;
+        if (len === 0) return 0;
+        return (prev + 1) % len;
+      });
     }, 6000);
 
     return () => {
@@ -100,7 +110,7 @@ export default function HomeClient() {
       clearInterval(testimonialsTimer);
       clearTimeout(mountTimer);
     };
-  }, []);
+  }, [activeTestimonials.length]);
 
   if (!mounted) return null;
 
@@ -754,53 +764,57 @@ export default function HomeClient() {
       </section>
 
       {/* TESTIMONIALS */}
-      <section className="py-24 bg-[#1D2B3F] border-t border-[#657892]/20 overflow-hidden relative">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#B9CDE5]/5 rounded-full blur-3xl -z-10"></div>
-        
-        <div className="max-w-4xl mx-auto px-4 md:px-8 text-center space-y-12">
-          <span className="text-xs uppercase tracking-[0.3em] text-[#C6A15B] font-semibold">Testimonials</span>
+      {activeTestimonials.length > 0 && (
+        <section className="py-24 bg-[#1D2B3F] border-t border-[#657892]/20 overflow-hidden relative">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#B9CDE5]/5 rounded-full blur-3xl -z-10"></div>
           
-          <div className="h-[280px] md:h-[220px] flex items-center justify-center">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentTestimonial}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.5 }}
-                className="space-y-6"
-              >
-                <blockquote className="font-serif text-xl md:text-3xl text-[#F7F5F0]/90 italic leading-relaxed max-w-2xl mx-auto">
-                  &ldquo;{TESTIMONIALS[currentTestimonial].quote}&rdquo;
-                </blockquote>
-                
-                <div className="space-y-1">
-                  <h4 className="font-serif text-base font-semibold text-[#C6A15B] tracking-wider uppercase">
-                    {TESTIMONIALS[currentTestimonial].name}
-                  </h4>
-                  <p className="text-xs text-[#F7F5F0]/60 uppercase tracking-widest font-mono">
-                    {TESTIMONIALS[currentTestimonial].role} • {TESTIMONIALS[currentTestimonial].company}
-                  </p>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
+          <div className="max-w-4xl mx-auto px-4 md:px-8 text-center space-y-12">
+            <span className="text-xs uppercase tracking-[0.3em] text-[#C6A15B] font-semibold">Testimonials</span>
+            
+            <div className="h-[280px] md:h-[220px] flex items-center justify-center">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentTestimonial % activeTestimonials.length}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.5 }}
+                  className="space-y-6"
+                >
+                  <blockquote className="font-serif text-xl md:text-3xl text-[#F7F5F0]/90 italic leading-relaxed max-w-2xl mx-auto">
+                    &ldquo;{activeTestimonials[currentTestimonial % activeTestimonials.length].quote}&rdquo;
+                  </blockquote>
+                  
+                  <div className="space-y-1">
+                    <h4 className="font-serif text-base font-semibold text-[#C6A15B] tracking-wider uppercase">
+                      {activeTestimonials[currentTestimonial % activeTestimonials.length].name}
+                    </h4>
+                    <p className="text-xs text-[#F7F5F0]/60 uppercase tracking-widest font-mono">
+                      {activeTestimonials[currentTestimonial % activeTestimonials.length].role}
+                      {activeTestimonials[currentTestimonial % activeTestimonials.length].role && activeTestimonials[currentTestimonial % activeTestimonials.length].company ? ' • ' : ''}
+                      {activeTestimonials[currentTestimonial % activeTestimonials.length].company}
+                    </p>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
-          {/* Stepper Dots */}
-          <div className="flex justify-center gap-2 pt-4">
-            {TESTIMONIALS.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentTestimonial(idx)}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  currentTestimonial === idx ? 'bg-[#C6A15B] w-6' : 'bg-[#F7F5F0]/10'
-                }`}
-                title={`View slide ${idx + 1}`}
-              />
-            ))}
+            {/* Stepper Dots */}
+            <div className="flex justify-center gap-2 pt-4">
+              {activeTestimonials.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentTestimonial(idx)}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    (currentTestimonial % activeTestimonials.length) === idx ? 'bg-[#C6A15B] w-6' : 'bg-[#F7F5F0]/10'
+                  }`}
+                  title={`View slide ${idx + 1}`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* AI PERSONAL STYLIST INTEGRATION */}
       <AIStylist />
@@ -1125,24 +1139,3 @@ export default function HomeClient() {
     </div>
   );
 }
-
-const TESTIMONIALS = [
-  {
-    quote: "Blue Hills Designers has completely reshaped corporate fashion in East Africa. The fit of their Savile suit is unmatched. Perfect boardroom armory.",
-    name: "Dr. David Ssewankambo",
-    role: "Managing Director",
-    company: "Standard Capital Uganda"
-  },
-  {
-    quote: "The Egyptian Poplin White shirt stays exceptionally crisp during long diplomatic flights and state banquets. Their concierge delivery is top tier.",
-    name: "Hon. Andrew Mukasa",
-    role: "Senior Diplomat",
-    company: "Ministry of Foreign Affairs"
-  },
-  {
-    quote: "I visited their Lubowa showroom for a ready-made corporate suit. The level of personal attention, refreshment service, and premium clothing quality was truly top tier.",
-    name: "Charles Mugisha",
-    role: "Investment VP",
-    company: "Ascent Capital Africa"
-  }
-];

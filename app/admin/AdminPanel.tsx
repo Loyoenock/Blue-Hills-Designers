@@ -14,26 +14,98 @@ import {
 import { useStore } from '../../store/useStore';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, Order, User, Coupon, Category } from '../../types';
+import { Product, Order, User, Coupon, Category, Testimonial } from '../../types';
 import { getSupabaseClient } from '../../lib/supabase';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 
 export default function Admin() {
   const router = useRouter();
   const { 
-    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons, categories,
+    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons, categories, testimonials,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
     deleteReview, updateProductStockQuick, updateBookingStatus,
     addCoupon, updateCoupon, deleteCoupon,
-    addCategory, updateCategory, deleteCategory
+    addCategory, updateCategory, deleteCategory,
+    addTestimonial, updateTestimonial, deleteTestimonial
   } = useStore();
 
   // Admin-specific Realtime subscriptions for orders and profiles
   useRealtimeSync({ orders: true, profiles: true });
 
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'categories' | 'coupons' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'categories' | 'testimonials' | 'coupons' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
+
+  // Testimonial Management State
+  const [testimonialSearch, setTestimonialSearch] = useState('');
+  const [isTestimonialModalOpen, setIsTestimonialModalOpen] = useState(false);
+  const [editingTestimonial, setEditingTestimonial] = useState<Testimonial | null>(null);
+  const [testiQuoteInput, setTestiQuoteInput] = useState('');
+  const [testiNameInput, setTestiNameInput] = useState('');
+  const [testiRoleInput, setTestiRoleInput] = useState('');
+  const [testiCompanyInput, setTestiCompanyInput] = useState('');
+  const [testiDisplayOrderInput, setTestiDisplayOrderInput] = useState<number>(1);
+  const [testiIsActiveInput, setTestiIsActiveInput] = useState<boolean>(true);
+  const [isDeleteTestimonialModalOpen, setIsDeleteTestimonialModalOpen] = useState(false);
+  const [testimonialToDelete, setTestimonialToDelete] = useState<Testimonial | null>(null);
+
+  const handleOpenTestimonialModal = (t?: Testimonial) => {
+    if (t) {
+      setEditingTestimonial(t);
+      setTestiQuoteInput(t.quote);
+      setTestiNameInput(t.name);
+      setTestiRoleInput(t.role || '');
+      setTestiCompanyInput(t.company || '');
+      setTestiDisplayOrderInput(t.displayOrder || 1);
+      setTestiIsActiveInput(t.isActive ?? true);
+    } else {
+      setEditingTestimonial(null);
+      setTestiQuoteInput('');
+      setTestiNameInput('');
+      setTestiRoleInput('');
+      setTestiCompanyInput('');
+      setTestiDisplayOrderInput(((testimonials || []).length + 1));
+      setTestiIsActiveInput(true);
+    }
+    setIsTestimonialModalOpen(true);
+  };
+
+  const handleSaveTestimonial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testiQuoteInput.trim() || !testiNameInput.trim()) return;
+
+    const adminName = currentUser?.name || 'Master Admin';
+    const adminRole = currentUser?.role || 'Super Admin';
+
+    const payload = {
+      quote: testiQuoteInput.trim(),
+      name: testiNameInput.trim(),
+      role: testiRoleInput.trim(),
+      company: testiCompanyInput.trim(),
+      displayOrder: Number(testiDisplayOrderInput) || 1,
+      isActive: testiIsActiveInput
+    };
+
+    if (editingTestimonial && editingTestimonial.id) {
+      await updateTestimonial(editingTestimonial.id, payload, adminName, adminRole);
+    } else {
+      await addTestimonial(payload, adminName, adminRole);
+    }
+    setIsTestimonialModalOpen(false);
+  };
+
+  const handleOpenDeleteTestimonialModal = (t: Testimonial) => {
+    setTestimonialToDelete(t);
+    setIsDeleteTestimonialModalOpen(true);
+  };
+
+  const handleConfirmDeleteTestimonial = async () => {
+    if (testimonialToDelete && testimonialToDelete.id) {
+      await deleteTestimonial(testimonialToDelete.id, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin');
+    }
+    setIsDeleteTestimonialModalOpen(false);
+    setTestimonialToDelete(null);
+  };
 
   // Category Management State
   const [categorySearch, setCategorySearch] = useState('');
@@ -357,6 +429,21 @@ export default function Admin() {
     });
   }, [categories, categorySearch]);
 
+  const filteredTestimonials = useMemo(() => {
+    return (testimonials || [])
+      .filter(t => {
+        const query = testimonialSearch.toLowerCase().trim();
+        if (!query) return true;
+        return (
+          t.quote.toLowerCase().includes(query) ||
+          t.name.toLowerCase().includes(query) ||
+          (t.role || '').toLowerCase().includes(query) ||
+          (t.company || '').toLowerCase().includes(query)
+        );
+      })
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [testimonials, testimonialSearch]);
+
   if (!mounted) return null;
 
   // Authorization Shield
@@ -372,6 +459,8 @@ export default function Admin() {
   const canSeeCoupons = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeCategories = userRole === 'Super Admin' || userRole === 'Admin';
   const canModifyCategories = userRole === 'Super Admin' || userRole === 'Admin';
+  const canSeeTestimonials = userRole === 'Super Admin' || userRole === 'Admin';
+  const canModifyTestimonials = userRole === 'Super Admin' || userRole === 'Admin';
   const canModifyUsers = userRole === 'Super Admin' || userRole === 'Admin';
 
   if (!isAuthorized) {
@@ -796,6 +885,7 @@ export default function Admin() {
               { id: 'dashboard', name: 'Boutique Pulse', icon: BarChart },
               { id: 'products', name: 'Apparel Registry', icon: Grid },
               { id: 'categories', name: 'Categories', icon: Layers, count: (categories || []).length },
+              { id: 'testimonials', name: 'Testimonials', icon: MessageSquare, count: (testimonials || []).length },
               { id: 'coupons', name: 'Coupons', icon: Tag, count: (coupons || []).length },
               { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: orders.length },
               { id: 'bookings', name: 'Style Bookings', icon: Calendar, count: (bookings || []).length },
@@ -808,6 +898,7 @@ export default function Admin() {
               const active = activeTab === tab.id;
               
               if (tab.id === 'categories' && !canSeeCategories) return null;
+              if (tab.id === 'testimonials' && !canSeeTestimonials) return null;
               if (tab.id === 'coupons' && !canSeeCoupons) return null;
               if (tab.id === 'logs' && !canSeeLogs) return null;
               if (tab.id === 'settings' && !canSeeSettings) return null;
@@ -1332,6 +1423,141 @@ export default function Admin() {
                               </tr>
                             );
                           })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* SUB-TAB: TESTIMONIALS MANAGEMENT */}
+            {activeTab === 'testimonials' && canSeeTestimonials && (
+              <motion.div 
+                key="testimonials"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#111111] p-6 rounded-2xl border border-white/10">
+                  <div>
+                    <h3 className="font-serif text-xl text-white font-bold flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-[#C6A15B]" />
+                      Executive Testimonials
+                    </h3>
+                    <p className="text-[11px] text-white/40 mt-0.5">Manage customer endorsements and VIP quotes displayed on the public homepage.</p>
+                  </div>
+                  {canModifyTestimonials && (
+                    <button
+                      onClick={() => handleOpenTestimonialModal()}
+                      className="bg-[#5F39FF] text-white hover:bg-[#4d2ee0] px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-[#5F39FF]/20 font-mono shrink-0"
+                      id="create-testimonial-btn"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Testimonial
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter / Search */}
+                <div className="bg-[#111111] p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 max-w-md">
+                    <Search className="w-4 h-4 text-white/40" />
+                    <input 
+                      type="text" 
+                      value={testimonialSearch}
+                      onChange={(e) => setTestimonialSearch(e.target.value)}
+                      placeholder="Search quote, author name, role, company..."
+                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0 font-mono"
+                      id="testimonial-search-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Testimonials Table */}
+                <div className="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] uppercase tracking-wider text-white/40 font-mono">
+                          <th className="py-3.5 px-3 text-center w-16">Order</th>
+                          <th className="py-3.5 px-4">Author & Role</th>
+                          <th className="py-3.5 px-4">Quote</th>
+                          <th className="py-3.5 px-3 text-center">Status</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-xs text-white/80">
+                        {filteredTestimonials.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-12 text-center text-white/40 font-mono text-xs">
+                              No testimonials found matching criteria.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredTestimonials.map((t) => (
+                            <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-3.5 px-3 text-center font-mono">
+                                <span className="bg-white/5 border border-white/10 text-white/70 px-2.5 py-1 rounded text-xs font-bold">
+                                  #{t.displayOrder}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 min-w-[180px]">
+                                <div className="font-serif font-bold text-white text-sm">{t.name}</div>
+                                <div className="text-[10px] text-[#C6A15B] font-mono font-medium">
+                                  {t.role}{t.role && t.company ? ' • ' : ''}{t.company}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 max-w-md font-serif italic text-white/80 text-xs leading-relaxed">
+                                &ldquo;{t.quote}&rdquo;
+                              </td>
+                              <td className="py-3.5 px-3 text-center font-mono">
+                                {canModifyTestimonials ? (
+                                  <button
+                                    onClick={() => updateTestimonial(t.id!, { isActive: !t.isActive }, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin')}
+                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                                      t.isActive
+                                        ? 'bg-[#20D9A1]/10 border-[#20D9A1]/30 text-[#20D9A1] hover:bg-[#20D9A1]/20'
+                                        : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70'
+                                    }`}
+                                  >
+                                    {t.isActive ? 'Active' : 'Inactive'}
+                                  </button>
+                                ) : (
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                    t.isActive
+                                      ? 'bg-[#20D9A1]/10 border-[#20D9A1]/30 text-[#20D9A1]'
+                                      : 'bg-white/5 border-white/10 text-white/40'
+                                  }`}>
+                                    {t.isActive ? 'Active' : 'Inactive'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex justify-end gap-1.5">
+                                  {canModifyTestimonials && (
+                                    <>
+                                      <button 
+                                        onClick={() => handleOpenTestimonialModal(t)}
+                                        className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
+                                        title="Edit testimonial"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button 
+                                        onClick={() => handleOpenDeleteTestimonialModal(t)}
+                                        className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
+                                        title="Delete testimonial"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
                         )}
                       </tbody>
                     </table>
@@ -3389,6 +3615,197 @@ export default function Admin() {
                     Confirm Delete
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* TESTIMONIAL CREATE / EDIT MODAL */}
+      <AnimatePresence>
+        {isTestimonialModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTestimonialModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-xl h-fit max-h-[90vh] overflow-y-auto bg-[#111111] border border-white/10 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="testimonial-modal"
+            >
+              <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                <h3 className="font-serif text-lg text-white font-bold flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-[#C6A15B]" />
+                  {editingTestimonial ? 'Edit Executive Testimonial' : 'Create Executive Testimonial'}
+                </h3>
+                <button 
+                  onClick={() => setIsTestimonialModalOpen(false)}
+                  className="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/5 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveTestimonial} className="space-y-4 font-sans">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-white/60 uppercase tracking-wider block">
+                    Quote / Endorsement <span className="text-red-400">*</span>
+                  </label>
+                  <textarea 
+                    value={testiQuoteInput}
+                    onChange={(e) => setTestiQuoteInput(e.target.value)}
+                    required
+                    rows={4}
+                    placeholder="Enter the client quote..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#C6A15B] placeholder-white/30 resize-none"
+                    id="testimonial-quote-input"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-white/60 uppercase tracking-wider block">
+                      Author Full Name <span className="text-red-400">*</span>
+                    </label>
+                    <input 
+                      type="text"
+                      value={testiNameInput}
+                      onChange={(e) => setTestiNameInput(e.target.value)}
+                      required
+                      placeholder="e.g. Dr. David Ssewankambo"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#C6A15B] placeholder-white/30"
+                      id="testimonial-name-input"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-white/60 uppercase tracking-wider block">
+                      Display Order Number
+                    </label>
+                    <input 
+                      type="number"
+                      min={1}
+                      value={testiDisplayOrderInput}
+                      onChange={(e) => setTestiDisplayOrderInput(Number(e.target.value))}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#C6A15B] font-mono"
+                      id="testimonial-order-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-white/60 uppercase tracking-wider block">
+                      Role / Title
+                    </label>
+                    <input 
+                      type="text"
+                      value={testiRoleInput}
+                      onChange={(e) => setTestiRoleInput(e.target.value)}
+                      placeholder="e.g. Managing Director"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#C6A15B] placeholder-white/30"
+                      id="testimonial-role-input"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-white/60 uppercase tracking-wider block">
+                      Company / Organization
+                    </label>
+                    <input 
+                      type="text"
+                      value={testiCompanyInput}
+                      onChange={(e) => setTestiCompanyInput(e.target.value)}
+                      placeholder="e.g. Standard Capital Uganda"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#C6A15B] placeholder-white/30"
+                      id="testimonial-company-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={testiIsActiveInput}
+                      onChange={(e) => setTestiIsActiveInput(e.target.checked)}
+                      className="w-4 h-4 rounded bg-black/40 border-white/20 text-[#5F39FF] focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                      id="testimonial-active-checkbox"
+                    />
+                    <span className="text-xs text-white font-medium">
+                      Publish and display this testimonial on the homepage
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-white/10 font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setIsTestimonialModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-xs font-semibold text-white/70 hover:text-white transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-[#5F39FF] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#4d2ee0] transition-all cursor-pointer shadow-lg shadow-[#5F39FF]/20"
+                    id="save-testimonial-btn"
+                  >
+                    {editingTestimonial ? 'Update Testimonial' : 'Create Testimonial'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* DELETE TESTIMONIAL MODAL */}
+      <AnimatePresence>
+        {isDeleteTestimonialModalOpen && testimonialToDelete && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteTestimonialModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-sm h-fit bg-[#111111] border border-red-500/20 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="testimonial-delete-modal"
+            >
+              <div className="space-y-3 text-center">
+                <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
+                <h4 className="font-serif text-base text-white font-bold uppercase tracking-wider">Confirm Testimonial Removal</h4>
+                <p className="text-[11px] text-white/40 leading-relaxed max-w-xs mx-auto">
+                  Are you sure you want to delete testimonial by <span className="text-white font-mono font-semibold">&ldquo;{testimonialToDelete.name}&rdquo;</span>?
+                </p>
+              </div>
+
+              <div className="flex gap-3 font-mono">
+                <button 
+                  onClick={() => setIsDeleteTestimonialModalOpen(false)}
+                  className="bg-white/5 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold border border-white/10 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmDeleteTestimonial}
+                  className="bg-red-500 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold hover:bg-red-600 transition-colors cursor-pointer"
+                  id="confirm-delete-testimonial-btn"
+                >
+                  Confirm Delete
+                </button>
               </div>
             </motion.div>
           </>

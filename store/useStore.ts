@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category
+  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category, Testimonial
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
@@ -18,6 +18,7 @@ interface StoreState {
   appliedCoupon: Coupon | null;
   coupons: Coupon[];
   categories: Category[];
+  testimonials: Testimonial[];
   selectedShippingMethod: 'standard' | 'express' | 'pickup';
   cartError: string | null;
   orders: Order[];
@@ -27,6 +28,11 @@ interface StoreState {
   subscribers: NewsletterSubscriber[];
   auditLogs: AuditLog[];
   wishlist: string[]; // array of product ids
+
+  // Testimonial management actions (Admin)
+  addTestimonial: (testimonialData: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<void>;
+  updateTestimonial: (id: string, updatedFields: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<void>;
+  deleteTestimonial: (id: string, adminName?: string, adminRole?: string) => Promise<void>;
   
   // Auth actions
   login: (email: string, password?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
@@ -437,6 +443,36 @@ const INITIAL_SETTINGS: AppSettings = {
   currencySymbol: 'Ugx'
 };
 
+export const INITIAL_TESTIMONIALS: Testimonial[] = [
+  {
+    id: toValidUUID('testi-ssewankambo'),
+    quote: "Blue Hills Designers has completely reshaped corporate fashion in East Africa. The fit of their Savile suit is unmatched. Perfect boardroom armory.",
+    name: "Dr. David Ssewankambo",
+    role: "Managing Director",
+    company: "Standard Capital Uganda",
+    displayOrder: 1,
+    isActive: true
+  },
+  {
+    id: toValidUUID('testi-mukasa'),
+    quote: "The Egyptian Poplin White shirt stays exceptionally crisp during long diplomatic flights and state banquets. Their concierge delivery is top tier.",
+    name: "Hon. Andrew Mukasa",
+    role: "Senior Diplomat",
+    company: "Ministry of Foreign Affairs",
+    displayOrder: 2,
+    isActive: true
+  },
+  {
+    id: toValidUUID('testi-mugisha'),
+    quote: "I visited their Lubowa showroom for a ready-made corporate suit. The level of personal attention, refreshment service, and premium clothing quality was truly top tier.",
+    name: "Charles Mugisha",
+    role: "Investment VP",
+    company: "Ascent Capital Africa",
+    displayOrder: 3,
+    isActive: true
+  }
+];
+
 // Helper functions to map between camelCase (Zustand state) and snake_case (standard relational databases / Supabase)
 function keysToCamel(obj: any): any {
   if (Array.isArray(obj)) {
@@ -727,6 +763,19 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
       };
     }
 
+    case 'testimonials': {
+      return {
+        ...(payload.id && isUUID(payload.id) ? { id: payload.id } : {}),
+        quote: payload.quote ? String(payload.quote).trim() : '',
+        name: payload.name ? String(payload.name).trim() : '',
+        role: payload.role ? String(payload.role).trim() : null,
+        company: payload.company ? String(payload.company).trim() : null,
+        display_order: typeof payload.displayOrder === 'number' ? payload.displayOrder : (typeof payload.display_order === 'number' ? payload.display_order : 1),
+        is_active: payload.isActive !== undefined ? Boolean(payload.isActive) : (payload.is_active !== undefined ? Boolean(payload.is_active) : true),
+        updated_at: new Date().toISOString()
+      };
+    }
+
     default:
       return payload;
   }
@@ -966,6 +1015,7 @@ export const useStore = create<StoreState>()(
       appliedCoupon: null,
       coupons: [],
       categories: INITIAL_CATEGORIES,
+      testimonials: INITIAL_TESTIMONIALS,
       selectedShippingMethod: 'standard',
       cartError: null,
       orders: INITIAL_ORDERS,
@@ -1052,6 +1102,14 @@ export const useStore = create<StoreState>()(
                 await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
               }
               await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
+            }
+          }
+
+          // Check testimonials
+          const { data: dbTesti } = await supabase.from('testimonials').select('id').limit(1);
+          if (!dbTesti || dbTesti.length === 0) {
+            for (const t of INITIAL_TESTIMONIALS) {
+              await safeSupabaseUpsert('testimonials', t);
             }
           }
         } catch (e) {
@@ -1366,6 +1424,27 @@ export const useStore = create<StoreState>()(
           }
         } catch (couponErr) {
           console.warn('Failed to fetch coupons from DB:', couponErr);
+        }
+
+        // 10. Testimonials
+        try {
+          const { data: dbTestimonials } = await supabase.from('testimonials').select('*').order('display_order', { ascending: true });
+          if (dbTestimonials && dbTestimonials.length > 0) {
+            const mappedTestimonials: Testimonial[] = dbTestimonials.map((t: any) => ({
+              id: t.id,
+              quote: t.quote,
+              name: t.name,
+              role: t.role || '',
+              company: t.company || '',
+              displayOrder: typeof t.display_order === 'number' ? t.display_order : 1,
+              isActive: t.is_active ?? true,
+              createdAt: t.created_at,
+              updatedAt: t.updated_at
+            }));
+            set({ testimonials: mappedTestimonials });
+          }
+        } catch (testiErr) {
+          console.warn('Failed to fetch testimonials from DB:', testiErr);
         }
 
         // 9. Auth session & Wishlist
@@ -2401,6 +2480,89 @@ export const useStore = create<StoreState>()(
         }
         await get().fetchLatestState();
         return { success: true };
+      },
+
+      addTestimonial: async (testimonialData, adminName, adminRole) => {
+        const quote = (testimonialData.quote || '').trim();
+        const name = (testimonialData.name || '').trim();
+        if (!quote || !name) return;
+        const newTestimonial: Testimonial = {
+          quote,
+          name,
+          role: testimonialData.role?.trim() || '',
+          company: testimonialData.company?.trim() || '',
+          displayOrder: typeof testimonialData.displayOrder === 'number' ? testimonialData.displayOrder : ((get().testimonials || []).length + 1),
+          isActive: testimonialData.isActive !== undefined ? Boolean(testimonialData.isActive) : true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        set(state => ({
+          testimonials: [...(state.testimonials || []), newTestimonial]
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Testimonial Created',
+            `Admin created new testimonial for '${name}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseInsert('testimonials', newTestimonial);
+        await get().fetchLatestState();
+      },
+
+      updateTestimonial: async (id, updatedFields, adminName, adminRole) => {
+        const existing = (get().testimonials || []).find(t => t.id === id);
+        const updatedTestimonial: Testimonial = {
+          ...(existing || {}),
+          ...updatedFields,
+          id: existing?.id || id,
+          updatedAt: new Date().toISOString()
+        } as Testimonial;
+
+        set(state => ({
+          testimonials: (state.testimonials || []).map(t => t.id === id ? updatedTestimonial : t)
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Testimonial Updated',
+            `Admin updated testimonial for '${updatedTestimonial.name}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseUpsert('testimonials', updatedTestimonial);
+        await get().fetchLatestState();
+      },
+
+      deleteTestimonial: async (id, adminName, adminRole) => {
+        const testimonialToDelete = (get().testimonials || []).find(t => t.id === id);
+
+        set(state => ({
+          testimonials: (state.testimonials || []).filter(t => t.id !== id)
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Testimonial Deleted',
+            `Admin deleted testimonial for '${testimonialToDelete?.name || id}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        if (testimonialToDelete?.id) {
+          await safeSupabaseDelete('testimonials', { id: testimonialToDelete.id });
+        }
+        await get().fetchLatestState();
       },
 
       removeCoupon: () => {
