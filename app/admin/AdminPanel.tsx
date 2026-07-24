@@ -9,29 +9,30 @@ import {
   Download, Edit, Eye, Filter, Grid, HelpCircle, Layers, LogOut, 
   Plus, Printer, RefreshCw, Search, ShieldAlert, ShoppingBag, 
   Trash2, TrendingUp, Users, X, FileText, CheckCircle, Upload, Settings,
-  Star, MessageSquare, ChevronDown, ChevronUp
+  Star, MessageSquare, ChevronDown, ChevronUp, Tag
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getSafeImageSrc } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, Order, User } from '../../types';
+import { Product, Order, User, Coupon } from '../../types';
 import { getSupabaseClient } from '../../lib/supabase';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 
 export default function Admin() {
   const router = useRouter();
   const { 
-    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings,
+    currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
-    deleteReview, updateProductStockQuick, updateBookingStatus
+    deleteReview, updateProductStockQuick, updateBookingStatus,
+    addCoupon, updateCoupon, deleteCoupon
   } = useStore();
 
   // Admin-specific Realtime subscriptions for orders and profiles
   useRealtimeSync({ orders: true, profiles: true });
 
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'coupons' | 'orders' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings'>('dashboard');
 
   // Form and search/filter states for User Management
   const [userSearch, setUserSearch] = useState('');
@@ -46,6 +47,81 @@ export default function Admin() {
   const [uRewardsPoints, setURewardsPoints] = useState(0);
   const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // Coupon Management State
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponTypeFilter, setCouponTypeFilter] = useState('All');
+  const [couponStatusFilter, setCouponStatusFilter] = useState('All');
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  const [cpnCode, setCpnCode] = useState('');
+  const [cpnDiscountType, setCpnDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [cpnDiscountValue, setCpnDiscountValue] = useState<number>(10);
+  const [cpnMinSubtotal, setCpnMinSubtotal] = useState<string>('');
+  const [cpnExpiresAt, setCpnExpiresAt] = useState<string>('');
+  const [cpnUsageLimit, setCpnUsageLimit] = useState<string>('');
+  const [cpnIsActive, setCpnIsActive] = useState<boolean>(true);
+  const [isDeleteCouponModalOpen, setIsDeleteCouponModalOpen] = useState(false);
+  const [couponToDelete, setCouponToDelete] = useState<Coupon | null>(null);
+
+  const handleOpenCouponModal = (coupon?: Coupon) => {
+    if (coupon) {
+      setEditingCoupon(coupon);
+      setCpnCode(coupon.code);
+      setCpnDiscountType(coupon.discountType);
+      setCpnDiscountValue(coupon.discountValue);
+      setCpnMinSubtotal(coupon.minSubtotal !== undefined && coupon.minSubtotal !== null ? String(coupon.minSubtotal) : '');
+      setCpnExpiresAt(coupon.expiresAt ? coupon.expiresAt.split('T')[0] : '');
+      setCpnUsageLimit(coupon.usageLimit !== undefined && coupon.usageLimit !== null ? String(coupon.usageLimit) : '');
+      setCpnIsActive(coupon.isActive ?? true);
+    } else {
+      setEditingCoupon(null);
+      setCpnCode('');
+      setCpnDiscountType('percentage');
+      setCpnDiscountValue(10);
+      setCpnMinSubtotal('');
+      setCpnExpiresAt('');
+      setCpnUsageLimit('');
+      setCpnIsActive(true);
+    }
+    setIsCouponModalOpen(true);
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cpnCode.trim()) return;
+
+    const payload = {
+      code: cpnCode.trim().toUpperCase(),
+      discountType: cpnDiscountType,
+      discountValue: Number(cpnDiscountValue) || 0,
+      minSubtotal: cpnMinSubtotal ? Number(cpnMinSubtotal) : undefined,
+      expiresAt: cpnExpiresAt ? new Date(cpnExpiresAt).toISOString() : null,
+      usageLimit: cpnUsageLimit ? Number(cpnUsageLimit) : null,
+      isActive: cpnIsActive
+    };
+
+    if (editingCoupon && editingCoupon.id) {
+      await updateCoupon(editingCoupon.id, payload, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+    } else {
+      await addCoupon(payload, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+    }
+
+    setIsCouponModalOpen(false);
+  };
+
+  const handleOpenDeleteCouponModal = (coupon: Coupon) => {
+    setCouponToDelete(coupon);
+    setIsDeleteCouponModalOpen(true);
+  };
+
+  const handleConfirmDeleteCoupon = async () => {
+    if (couponToDelete && couponToDelete.id) {
+      await deleteCoupon(couponToDelete.id, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+    }
+    setIsDeleteCouponModalOpen(false);
+    setCouponToDelete(null);
+  };
 
   // Fast bypass for testing/evaluation
   useEffect(() => {
@@ -182,6 +258,19 @@ export default function Admin() {
     return list;
   }, [products, productSearch, productCategoryFilter, stockStatusFilter, productLabelFilter, productSort]);
 
+  const filteredCoupons = useMemo(() => {
+    return (coupons || []).filter(c => {
+      const matchesSearch = c.code.toLowerCase().includes(couponSearch.toLowerCase());
+      const matchesType = couponTypeFilter === 'All' || c.discountType === couponTypeFilter;
+      const matchesStatus = couponStatusFilter === 'All' 
+        ? true 
+        : couponStatusFilter === 'Active' 
+          ? c.isActive !== false 
+          : c.isActive === false;
+      return matchesSearch && matchesType && matchesStatus;
+    });
+  }, [coupons, couponSearch, couponTypeFilter, couponStatusFilter]);
+
   if (!mounted) return null;
 
   // Authorization Shield
@@ -194,6 +283,7 @@ export default function Admin() {
   const canDeleteProducts = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeLogs = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeSettings = userRole === 'Super Admin' || userRole === 'Admin';
+  const canSeeCoupons = userRole === 'Super Admin' || userRole === 'Admin';
   const canModifyUsers = userRole === 'Super Admin' || userRole === 'Admin';
 
   if (!isAuthorized) {
@@ -617,6 +707,7 @@ export default function Admin() {
             {[
               { id: 'dashboard', name: 'Boutique Pulse', icon: BarChart },
               { id: 'products', name: 'Apparel Registry', icon: Grid },
+              { id: 'coupons', name: 'Coupons', icon: Tag, count: (coupons || []).length },
               { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: orders.length },
               { id: 'bookings', name: 'Style Bookings', icon: Calendar, count: (bookings || []).length },
               { id: 'payments', name: 'Payment Ledger', icon: CreditCard, count: (payments || []).length },
@@ -627,6 +718,7 @@ export default function Admin() {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
               
+              if (tab.id === 'coupons' && !canSeeCoupons) return null;
               if (tab.id === 'logs' && !canSeeLogs) return null;
               if (tab.id === 'settings' && !canSeeSettings) return null;
 
@@ -1037,6 +1129,176 @@ export default function Admin() {
                             )}
                           </Fragment>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* SUB-TAB: COUPONS MANAGEMENT */}
+            {activeTab === 'coupons' && canSeeCoupons && (
+              <motion.div 
+                key="coupons"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-serif text-xl text-white font-bold flex items-center gap-2">
+                      <Tag className="w-5 h-5 text-[#C6A15B]" />
+                      Coupons & Promotions Registry
+                    </h3>
+                    <p className="text-[11px] text-white/40 mt-0.5">Manage luxury promotional discount codes, minimum subtotals, limits, and expiration.</p>
+                  </div>
+                  
+                  <button 
+                    onClick={() => handleOpenCouponModal()}
+                    className="bg-[#5F39FF] hover:bg-opacity-95 text-white px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-[#5F39FF]/20"
+                    id="create-coupon-btn"
+                  >
+                    <Plus className="w-4 h-4" /> Add Coupon
+                  </button>
+                </div>
+
+                {/* Search & filtering */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#111111] p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 sm:col-span-1">
+                    <Search className="w-3.5 h-3.5 text-white/40" />
+                    <input 
+                      type="text" 
+                      value={couponSearch}
+                      onChange={(e) => setCouponSearch(e.target.value)}
+                      placeholder="Search code (e.g. WELCOME10)..."
+                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
+                    />
+                  </div>
+                  <div>
+                    <select 
+                      value={couponTypeFilter}
+                      onChange={(e) => setCouponTypeFilter(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer font-mono"
+                    >
+                      <option value="All">All Discount Types</option>
+                      <option value="percentage">Percentage Off (%)</option>
+                      <option value="fixed">Fixed Amount (Ugx)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <select 
+                      value={couponStatusFilter}
+                      onChange={(e) => setCouponStatusFilter(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer font-mono"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Active">Active Only</option>
+                      <option value="Inactive">Inactive Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-white/70">
+                      <thead className="bg-white/5 uppercase text-[9px] font-mono tracking-widest text-white/40 border-b border-white/10">
+                        <tr>
+                          <th className="py-3.5 px-4 font-bold">Coupon Code</th>
+                          <th className="py-3.5 px-3 font-bold">Discount</th>
+                          <th className="py-3.5 px-3 font-bold">Min Subtotal</th>
+                          <th className="py-3.5 px-3 font-bold">Usage / Limit</th>
+                          <th className="py-3.5 px-3 font-bold">Expiration</th>
+                          <th className="py-3.5 px-3 font-bold">Status</th>
+                          <th className="py-3.5 px-4 text-right font-bold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {filteredCoupons.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-12 text-center text-white/40 text-xs font-mono">
+                              No coupon records found matching your query.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredCoupons.map((c) => {
+                            const isExpired = c.expiresAt && new Date(c.expiresAt).getTime() < Date.now();
+                            const isLimitReached = c.usageLimit !== null && c.usageLimit !== undefined && (c.timesUsed || 0) >= c.usageLimit;
+
+                            return (
+                              <tr key={c.id || c.code} className="hover:bg-white/[0.02] transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-white text-xs tracking-wider bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
+                                      {c.code}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-3 font-mono font-bold text-[#20D9A1]">
+                                  {c.discountType === 'percentage' 
+                                    ? `${c.discountValue}% OFF` 
+                                    : `Ugx ${c.discountValue.toLocaleString()} OFF`}
+                                </td>
+                                <td className="py-3.5 px-3 font-mono text-white/60">
+                                  {c.minSubtotal ? `Ugx ${c.minSubtotal.toLocaleString()}` : <span className="text-white/20">—</span>}
+                                </td>
+                                <td className="py-3.5 px-3 font-mono text-xs">
+                                  <span className={isLimitReached ? 'text-red-400 font-bold' : 'text-white'}>
+                                    {c.timesUsed || 0}
+                                  </span>
+                                  <span className="text-white/30"> / {c.usageLimit !== null && c.usageLimit !== undefined ? c.usageLimit : '∞'}</span>
+                                </td>
+                                <td className="py-3.5 px-3 font-mono text-[11px]">
+                                  {c.expiresAt ? (
+                                    <span className={isExpired ? 'text-red-400 font-bold' : 'text-white/70'}>
+                                      {new Date(c.expiresAt).toLocaleDateString()}
+                                    </span>
+                                  ) : (
+                                    <span className="text-white/30">No expiry</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-3">
+                                  {c.isActive === false ? (
+                                    <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      Disabled
+                                    </span>
+                                  ) : isExpired ? (
+                                    <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      Expired
+                                    </span>
+                                  ) : isLimitReached ? (
+                                    <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      Limit Maxed
+                                    </span>
+                                  ) : (
+                                    <span className="bg-[#20D9A1]/10 border border-[#20D9A1]/20 text-[#20D9A1] text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+                                      Active
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex justify-end gap-1.5">
+                                    <button 
+                                      onClick={() => handleOpenCouponModal(c)}
+                                      className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
+                                      title="Edit coupon"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleOpenDeleteCouponModal(c)}
+                                      className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
+                                      title="Delete coupon"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -2571,6 +2833,204 @@ export default function Admin() {
                   className="bg-red-500 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold hover:bg-red-600 transition-colors cursor-pointer"
                 >
                   Confirm Wipe
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* COUPON ADD/EDIT MODAL */}
+      <AnimatePresence>
+        {isCouponModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCouponModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-lg h-fit max-h-[90vh] overflow-y-auto bg-[#111111] border border-white/10 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="coupon-modal"
+            >
+              <div className="flex justify-between items-center pb-4 border-b border-white/10">
+                <h3 className="font-serif text-lg text-white font-bold flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-[#C6A15B]" />
+                  {editingCoupon ? 'Modify Promotional Coupon' : 'Create Luxury Coupon'}
+                </h3>
+                <button 
+                  onClick={() => setIsCouponModalOpen(false)}
+                  className="text-white/40 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveCoupon} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                    Coupon Code <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={cpnCode}
+                    onChange={(e) => setCpnCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. SUMMER20"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono uppercase tracking-wider"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                      Discount Type <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={cpnDiscountType}
+                      onChange={(e) => setCpnDiscountType(e.target.value as 'percentage' | 'fixed')}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all cursor-pointer font-mono"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed Amount (Ugx)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                      Discount Value <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={cpnDiscountValue}
+                      onChange={(e) => setCpnDiscountValue(Number(e.target.value))}
+                      placeholder={cpnDiscountType === 'percentage' ? '20' : '50000'}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                      Minimum Subtotal (Ugx)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={cpnMinSubtotal}
+                      onChange={(e) => setCpnMinSubtotal(e.target.value)}
+                      placeholder="Optional e.g. 100000"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                      Usage Limit
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={cpnUsageLimit}
+                      onChange={(e) => setCpnUsageLimit(e.target.value)}
+                      placeholder="Optional e.g. 100"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                    Expiration Date
+                  </label>
+                  <input
+                    type="date"
+                    value={cpnExpiresAt}
+                    onChange={(e) => setCpnExpiresAt(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#20D9A1] outline-none transition-all font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <input
+                    type="checkbox"
+                    id="cpnIsActive"
+                    checked={cpnIsActive}
+                    onChange={(e) => setCpnIsActive(e.target.checked)}
+                    className="w-4 h-4 accent-[#20D9A1] bg-black/40 border-white/10 rounded cursor-pointer"
+                  />
+                  <label htmlFor="cpnIsActive" className="text-xs text-white font-mono cursor-pointer">
+                    Enable Coupon for Storefront Checkout
+                  </label>
+                </div>
+
+                <div className="pt-4 flex justify-end gap-3 border-t border-white/5 font-mono">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsCouponModalOpen(false)}
+                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl text-xs uppercase font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="bg-[#20D9A1] hover:bg-[#1bb887] text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer"
+                  >
+                    {editingCoupon ? 'Update Coupon' : 'Save Coupon'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* COUPON DELETION SAFETY MODAL */}
+      <AnimatePresence>
+        {isDeleteCouponModalOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteCouponModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-sm h-fit bg-[#111111] border border-red-500/20 rounded-2xl z-50 p-6 space-y-6 shadow-2xl"
+              id="coupon-delete-safety-modal"
+            >
+              <div className="space-y-3 text-center">
+                <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
+                <h4 className="font-serif text-base text-white font-bold uppercase tracking-wider">Confirm Coupon Removal</h4>
+                <p className="text-[11px] text-white/40 leading-relaxed max-w-xs mx-auto">
+                  Sir, are you sure you want to delete coupon code <span className="text-white font-mono font-semibold">&ldquo;{couponToDelete?.code}&rdquo;</span>? Customers will no longer be able to use it.
+                </p>
+              </div>
+
+              <div className="flex gap-3 font-mono">
+                <button 
+                  onClick={() => setIsDeleteCouponModalOpen(false)}
+                  className="bg-white/5 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold border border-white/10 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmDeleteCoupon}
+                  className="bg-red-500 text-white flex-1 py-2.5 rounded-xl text-xs uppercase tracking-wider font-semibold hover:bg-red-600 transition-colors cursor-pointer"
+                >
+                  Confirm Delete
                 </button>
               </div>
             </motion.div>

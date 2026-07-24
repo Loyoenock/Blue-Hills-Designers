@@ -47,6 +47,11 @@ interface StoreState {
   removeCoupon: () => void;
   setShippingMethod: (method: 'standard' | 'express' | 'pickup') => void;
 
+  // Coupon management actions (Admin)
+  addCoupon: (couponData: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<void>;
+  updateCoupon: (id: string, updatedFields: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<void>;
+  deleteCoupon: (id: string, adminName?: string, adminRole?: string) => Promise<void>;
+
   // Checkout / Order actions
   placeOrder: (orderData: Omit<Order, 'id' | 'date'> & { id?: string; date?: string; paymentId?: string; paymentStatus?: Payment['status']; paymentTransactionId?: string; }, skipDbSync?: boolean) => Order;
   updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => void;
@@ -674,6 +679,22 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
       };
     }
 
+    case 'coupons': {
+      return {
+        id: payload.id ? toValidUUID(payload.id) : undefined,
+        code: payload.code ? payload.code.trim().toUpperCase() : '',
+        discount_type: payload.discountType || payload.discount_type || 'percentage',
+        discount_value: Number(payload.discountValue ?? payload.discount_value) || 0,
+        min_subtotal: payload.minSubtotal !== undefined && payload.minSubtotal !== null ? Number(payload.minSubtotal) : null,
+        is_active: payload.isActive !== undefined ? !!payload.isActive : (payload.is_active !== undefined ? !!payload.is_active : true),
+        expires_at: payload.expiresAt || payload.expires_at || null,
+        usage_limit: payload.usageLimit !== undefined && payload.usageLimit !== null ? Number(payload.usageLimit) : null,
+        times_used: Number(payload.timesUsed ?? payload.times_used) || 0,
+        created_by: payload.createdBy || payload.created_by ? toValidUUID(payload.createdBy || payload.created_by) : null,
+        updated_at: new Date().toISOString()
+      };
+    }
+
     default:
       return payload;
   }
@@ -911,6 +932,7 @@ export const useStore = create<StoreState>()(
       currentUser: null,
       cart: [],
       appliedCoupon: null,
+      coupons: [],
       selectedShippingMethod: 'standard',
       cartError: null,
       orders: INITIAL_ORDERS,
@@ -1276,7 +1298,31 @@ export const useStore = create<StoreState>()(
           }
         } catch {}
 
-        // 8. Auth session & Wishlist
+        // 8. Coupons
+        try {
+          const { data: dbCoupons } = await supabase.from('coupons').select('*');
+          if (dbCoupons) {
+            const mappedCoupons: Coupon[] = dbCoupons.map((c: any) => ({
+              id: c.id,
+              code: c.code,
+              discountType: c.discount_type,
+              discountValue: Number(c.discount_value) || 0,
+              minSubtotal: c.min_subtotal !== null && c.min_subtotal !== undefined ? Number(c.min_subtotal) : undefined,
+              isActive: c.is_active ?? true,
+              expiresAt: c.expires_at || null,
+              usageLimit: c.usage_limit !== null && c.usage_limit !== undefined ? Number(c.usage_limit) : null,
+              timesUsed: Number(c.times_used) || 0,
+              createdBy: c.created_by || null,
+              createdAt: c.created_at,
+              updatedAt: c.updated_at
+            }));
+            set({ coupons: mappedCoupons });
+          }
+        } catch (couponErr) {
+          console.warn('Failed to fetch coupons from DB:', couponErr);
+        }
+
+        // 9. Auth session & Wishlist
         try {
           const { data: authData } = await supabase.auth.getUser();
           const authUser = authData?.user;
@@ -2100,18 +2146,121 @@ export const useStore = create<StoreState>()(
 
       applyCoupon: (code) => {
         const sanitizedCode = code.trim().toUpperCase();
-        const coupon = VALID_COUPONS.find(c => c.code === sanitizedCode);
+        let couponsList = get().coupons || [];
+
+        let coupon = couponsList.find(c => c.code.trim().toUpperCase() === sanitizedCode);
+
         if (!coupon) {
           return { success: false, message: 'Invalid luxury coupon code.' };
         }
-        
+
+        if (coupon.isActive === false) {
+          return { success: false, message: 'This coupon code is currently inactive.' };
+        }
+
+        if (coupon.expiresAt) {
+          const expiry = new Date(coupon.expiresAt);
+          if (!isNaN(expiry.getTime()) && expiry.getTime() < Date.now()) {
+            return { success: false, message: 'This coupon code has expired.' };
+          }
+        }
+
+        if (coupon.usageLimit !== null && coupon.usageLimit !== undefined) {
+          if ((coupon.timesUsed || 0) >= coupon.usageLimit) {
+            return { success: false, message: 'This coupon code has reached its maximum usage limit.' };
+          }
+        }
+
         const subtotal = get().cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
         if (coupon.minSubtotal && subtotal < coupon.minSubtotal) {
-          return { success: false, message: `This coupon requires a minimum subtotal of ${coupon.minSubtotal}.` };
+          return { success: false, message: `This coupon requires a minimum subtotal of Ugx ${coupon.minSubtotal}.` };
         }
 
         set({ appliedCoupon: coupon });
         return { success: true, message: `Coupon ${coupon.code} applied successfully!` };
+      },
+
+      addCoupon: async (couponData, adminName, adminRole) => {
+        const code = (couponData.code || '').trim().toUpperCase();
+        const newCoupon: Coupon = {
+          id: couponData.id || `cpn-${Math.random().toString(36).substring(2, 11)}`,
+          code,
+          discountType: couponData.discountType || 'percentage',
+          discountValue: Number(couponData.discountValue) || 0,
+          minSubtotal: couponData.minSubtotal !== undefined && couponData.minSubtotal !== null ? Number(couponData.minSubtotal) : undefined,
+          isActive: couponData.isActive !== undefined ? couponData.isActive : true,
+          expiresAt: couponData.expiresAt || null,
+          usageLimit: couponData.usageLimit !== undefined && couponData.usageLimit !== null ? Number(couponData.usageLimit) : null,
+          timesUsed: Number(couponData.timesUsed) || 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        set(state => ({
+          coupons: [newCoupon, ...state.coupons.filter(c => c.code !== code)]
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Coupon Created',
+            `Admin created new coupon '${newCoupon.code}' (${newCoupon.discountValue}${newCoupon.discountType === 'percentage' ? '%' : ' Ugx'} off).`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseInsert('coupons', newCoupon);
+        get().syncFromSupabase();
+      },
+
+      updateCoupon: async (id, updatedFields, adminName, adminRole) => {
+        const existing = get().coupons.find(c => c.id === id || c.code === id);
+        const updatedCoupon: Coupon = {
+          ...(existing || {}),
+          ...updatedFields,
+          code: updatedFields.code ? updatedFields.code.trim().toUpperCase() : (existing?.code || ''),
+          id: existing?.id || id,
+          updatedAt: new Date().toISOString()
+        } as Coupon;
+
+        set(state => ({
+          coupons: state.coupons.map(c => (c.id === id || c.code === id) ? updatedCoupon : c)
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Coupon Updated',
+            `Admin updated coupon '${updatedCoupon.code}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseUpsert('coupons', updatedCoupon);
+        get().syncFromSupabase();
+      },
+
+      deleteCoupon: async (id, adminName, adminRole) => {
+        const couponToDelete = get().coupons.find(c => c.id === id || c.code === id);
+
+        set(state => ({
+          coupons: state.coupons.filter(c => c.id !== id && c.code !== id)
+        }));
+
+        if (adminName) {
+          get().addAuditLog(
+            'Coupon Deleted',
+            `Admin deleted coupon '${couponToDelete?.code || id}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+        }
+
+        await safeSupabaseDelete('coupons', { id: couponToDelete?.id || id });
+        get().syncFromSupabase();
       },
 
       removeCoupon: () => {
