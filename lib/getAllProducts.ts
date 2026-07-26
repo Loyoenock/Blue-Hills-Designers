@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase';
+import { logger } from './apiUtils';
 
 export interface SitemapProduct {
   id: string;
@@ -35,7 +36,7 @@ export async function getAllProductsForSitemap(): Promise<SitemapProduct[]> {
       }
     }
   } catch (err) {
-    console.warn('[sitemap] Failed to query products from Supabase:', err);
+    logger.warn('[sitemap] Failed to query products from Supabase:', { error: err });
   }
 
   return FALLBACK_PRODUCT_IDS;

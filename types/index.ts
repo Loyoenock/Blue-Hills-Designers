@@ -38,6 +38,7 @@ export interface Product {
   dealHours?: number;
   dealMins?: number;
   dealSecs?: number;
+  dealExpiresAt?: string | null;
 }
 
 export interface User {

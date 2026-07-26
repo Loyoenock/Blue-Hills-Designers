@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { isNetworkOrConnectionError } from './utils';
+import { logger } from './apiUtils';
 import './env';
 
 let supabaseClientInstance: SupabaseClient | null = null;
@@ -17,7 +18,7 @@ async function retryableFetch(url: string, options?: RequestInit, maxRetries = 3
       if (!response.ok && response.status >= 500 && attempt < maxRetries) {
         attempt++;
         const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
-        console.warn(`Supabase server returned status ${response.status} for ${url}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
+        logger.warn(`Supabase server returned status ${response.status} for ${url}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
         await delay(delayTime);
         continue;
       }
@@ -30,7 +31,7 @@ async function retryableFetch(url: string, options?: RequestInit, maxRetries = 3
       if (isConnError && attempt < maxRetries) {
         attempt++;
         const delayTime = initialDelayMs * Math.pow(2, attempt) + Math.random() * 100;
-        console.warn(`Supabase connection error for ${url}: ${errMsg}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
+        logger.warn(`Supabase connection error for ${url}: ${errMsg}. Retrying attempt ${attempt}/${maxRetries} in ${Math.round(delayTime)}ms...`);
         await delay(delayTime);
         continue;
       }
@@ -78,7 +79,7 @@ export function getSupabaseAdmin(): SupabaseClient {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseServiceKey) {
-      console.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Falling back to anon key.');
+      logger.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Falling back to anon key.');
     }
 
     if (!supabaseUrl || !supabaseServiceKey) {

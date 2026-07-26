@@ -63,18 +63,36 @@ export default function HomeClient() {
   const newArrivals = products.filter(p => p.isNew && !p.isDealOfTheDay).slice(0, 4);
   const dealProduct = products.find(p => p.isDealOfTheDay);
 
+  // Helper to compute remaining time from dealExpiresAt timestamp
+  const getExpiresAtTimeLeft = (expiresAt: string) => {
+    const diffMs = new Date(expiresAt).getTime() - Date.now();
+    if (isNaN(diffMs) || diffMs <= 0) {
+      return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    }
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+    return { days, hours, minutes, seconds };
+  };
+
   // Synchronize timeLeft state with dealProduct timer properties when they load or change
   useEffect(() => {
     if (dealProduct) {
-      setTimeLeft({
-        days: typeof dealProduct.dealDays === 'number' ? dealProduct.dealDays : 0,
-        hours: typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14,
-        minutes: typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40,
-        seconds: typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17
-      });
+      if (dealProduct.dealExpiresAt) {
+        setTimeLeft(getExpiresAtTimeLeft(dealProduct.dealExpiresAt));
+      } else {
+        setTimeLeft({
+          days: typeof dealProduct.dealDays === 'number' ? dealProduct.dealDays : 0,
+          hours: typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14,
+          minutes: typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40,
+          seconds: typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17
+        });
+      }
     }
   }, [
-    dealProduct
+    dealProduct,
+    dealProduct?.dealExpiresAt
   ]);
 
   useEffect(() => {
@@ -84,19 +102,23 @@ export default function HomeClient() {
 
     // Deal of the day countdown interval
     const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        } else if (prev.days > 0) {
-          return { days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
-        } else {
-          return { days: 0, hours: 24, minutes: 0, seconds: 0 }; // Reset
-        }
-      });
+      if (dealProduct?.dealExpiresAt) {
+        setTimeLeft(getExpiresAtTimeLeft(dealProduct.dealExpiresAt));
+      } else {
+        setTimeLeft(prev => {
+          if (prev.seconds > 0) {
+            return { ...prev, seconds: prev.seconds - 1 };
+          } else if (prev.minutes > 0) {
+            return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
+          } else if (prev.hours > 0) {
+            return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
+          } else if (prev.days > 0) {
+            return { days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
+          } else {
+            return { days: 0, hours: 24, minutes: 0, seconds: 0 }; // Reset
+          }
+        });
+      }
     }, 1000);
 
     // Testimonials auto slide
@@ -113,7 +135,7 @@ export default function HomeClient() {
       clearInterval(testimonialsTimer);
       clearTimeout(mountTimer);
     };
-  }, [activeTestimonials.length]);
+  }, [activeTestimonials.length, dealProduct?.dealExpiresAt]);
 
   if (!mounted) return null;
 

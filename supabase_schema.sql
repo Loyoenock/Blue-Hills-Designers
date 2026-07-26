@@ -723,3 +723,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.create_checkout_order TO anon, authenticated, service_role;
 
+-- Additive migration for Deal of the Day real expiration timestamp
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_expires_at TIMESTAMP WITH TIME ZONE NULL;
+

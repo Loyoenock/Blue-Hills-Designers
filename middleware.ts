@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { isBootstrapAdminEmail } from './lib/adminBootstrap';
+import { logger } from './lib/apiUtils';
 
 export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
@@ -18,7 +19,7 @@ export async function middleware(request: NextRequest) {
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn('[MIDDLEWARE] Supabase environment keys missing. Blocking protected route and redirecting to login.');
+      logger.warn('[MIDDLEWARE] Supabase environment keys missing. Blocking protected route and redirecting to login.');
       url.pathname = '/login';
       url.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(url);
@@ -44,16 +45,16 @@ export async function middleware(request: NextRequest) {
         if (response.ok) {
           user = await response.json();
         } else {
-          console.warn(`[MIDDLEWARE] Access token validation returned status: ${response.status}`);
+          logger.warn(`[MIDDLEWARE] Access token validation returned status: ${response.status}`);
         }
       } catch (err) {
-        console.error('[MIDDLEWARE] Direct token validation fetch error:', err);
+        logger.error('[MIDDLEWARE] Direct token validation fetch error:', err);
       }
     }
 
     // 2. If token is invalid/expired/missing but refresh token exists, attempt silent refresh
     if ((!user || !user.id) && refreshToken) {
-      console.log('[MIDDLEWARE] Access token missing or invalid. Attempting silent token refresh.');
+      logger.info('[MIDDLEWARE] Access token missing or invalid. Attempting silent token refresh.');
       try {
         const refreshResponse = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/token?grant_type=refresh_token`, {
           method: 'POST',
@@ -73,19 +74,19 @@ export async function middleware(request: NextRequest) {
             newAccessToken = refreshData.access_token;
             newRefreshToken = refreshData.refresh_token;
             expiresIn = refreshData.expires_in || 3600;
-            console.log('[MIDDLEWARE] Silent token refresh successful.');
+            logger.info('[MIDDLEWARE] Silent token refresh successful.');
           }
         } else {
-          console.warn(`[MIDDLEWARE] Silent token refresh failed: status ${refreshResponse.status}`);
+          logger.warn(`[MIDDLEWARE] Silent token refresh failed: status ${refreshResponse.status}`);
         }
       } catch (refreshErr) {
-        console.error('[MIDDLEWARE] Silent token refresh exception:', refreshErr);
+        logger.error('[MIDDLEWARE] Silent token refresh exception:', refreshErr);
       }
     }
 
     // 3. If still unauthenticated, redirect to sign-in portal
     if (!user || !user.id) {
-      console.warn('[MIDDLEWARE] Unauthenticated access intercept: redirecting to login');
+      logger.warn('[MIDDLEWARE] Unauthenticated access intercept: redirecting to login');
       url.pathname = '/login';
       url.searchParams.set('redirect', request.nextUrl.pathname);
       const redirectResponse = NextResponse.redirect(url);
@@ -124,11 +125,11 @@ export async function middleware(request: NextRequest) {
               userRole = user.user_metadata?.role || 'Customer';
             }
           } else {
-            console.warn(`[MIDDLEWARE] Profile DB lookup failed with status: ${profileRes.status}, falling back to auth metadata`);
+            logger.warn(`[MIDDLEWARE] Profile DB lookup failed with status: ${profileRes.status}, falling back to auth metadata`);
             userRole = user.user_metadata?.role || 'Customer';
           }
         } catch (dbErr) {
-          console.error('[MIDDLEWARE] Direct DB profile fetch exception, falling back:', dbErr);
+          logger.error('[MIDDLEWARE] Direct DB profile fetch exception, falling back:', dbErr);
           userRole = user.user_metadata?.role || 'Customer';
         }
       }
@@ -137,7 +138,7 @@ export async function middleware(request: NextRequest) {
       const authorizedRoles = ['super admin', 'admin', 'manager', 'staff'];
       
       if (!authorizedRoles.includes(normalizedRole)) {
-        console.warn(`[MIDDLEWARE] Intercepted unauthorized access attempt by ${user.email} with role: ${userRole}`);
+        logger.warn(`[MIDDLEWARE] Intercepted unauthorized access attempt by ${user.email} with role: ${userRole}`);
         // Redirect unauthorized users to standard account portal
         url.pathname = '/account';
         response = NextResponse.redirect(url);

@@ -596,6 +596,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         deal_hours: fullProd.dealHours !== undefined && fullProd.dealHours !== null ? Number(fullProd.dealHours) : null,
         deal_mins: fullProd.dealMins !== undefined && fullProd.dealMins !== null ? Number(fullProd.dealMins) : null,
         deal_secs: fullProd.dealSecs !== undefined && fullProd.dealSecs !== null ? Number(fullProd.dealSecs) : null,
+        deal_expires_at: fullProd.dealExpiresAt ? new Date(fullProd.dealExpiresAt).toISOString() : null,
         rating: Number(fullProd.rating) || 0,
         stock: Number(fullProd.stock) || 0,
         status: 'Active'
@@ -1306,6 +1307,7 @@ export const useStore = create<StoreState>()(
             dealHours,
             dealMins,
             dealSecs,
+            dealExpiresAt: p.deal_expires_at !== undefined ? p.deal_expires_at : (localProd?.dealExpiresAt || null),
             reviews: prodReviews
           };
         });
@@ -1622,6 +1624,7 @@ export const useStore = create<StoreState>()(
             dealHours,
             dealMins,
             dealSecs,
+            dealExpiresAt: newRow.deal_expires_at !== undefined ? newRow.deal_expires_at : (existing?.dealExpiresAt || null),
             reviews: existing?.reviews || []
           };
 

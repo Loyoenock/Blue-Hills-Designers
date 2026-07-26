@@ -2,6 +2,7 @@ export const revalidate = 60;
 
 import type { Metadata } from 'next';
 import { getSupabaseClient } from '../../../lib/supabase';
+import { logger } from '../../../lib/apiUtils';
 import ProductClientWrapper from './ProductClientWrapper';
 
 interface ProductPageProps {
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       }
     }
   } catch (err) {
-    console.warn('[METADATA] Failed to generate dynamic metadata:', err);
+    logger.warn('[METADATA] Failed to generate dynamic metadata:', { error: err });
   }
 
   return {
@@ -98,7 +99,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             .eq('product_id', p.id);
           dbImages = imgData;
         } catch (e) {
-          console.warn('Could not query product_images:', e);
+          logger.warn('Could not query product_images:', { error: e });
         }
 
         const productImages = dbImages
@@ -148,7 +149,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       }
     }
   } catch (err) {
-    console.error('Error fetching initial product on server details page:', err);
+    logger.error('Error fetching initial product on server details page:', err);
   }
 
   const jsonLd = initialProduct ? {

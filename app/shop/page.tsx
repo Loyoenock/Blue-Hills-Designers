@@ -2,6 +2,7 @@ export const revalidate = 60;
 
 import type { Metadata } from 'next';
 import { getSupabaseClient } from '../../lib/supabase';
+import { logger } from '../../lib/apiUtils';
 import ShopClientWrapper from './ShopClientWrapper';
 
 export const metadata: Metadata = {
@@ -43,7 +44,7 @@ export default async function ShopPage() {
             dbImages = imgData;
           }
         } catch (e) {
-          console.warn('Could not query product_images:', e);
+          logger.warn('Could not query product_images:', { error: e });
         }
 
         const reviewsWithProfiles = dbReviews ? dbReviews.map((r: any) => ({
@@ -108,7 +109,7 @@ export default async function ShopPage() {
       }
     }
   } catch (err) {
-    console.error('Error fetching initial products on shop page server:', err);
+    logger.error('Error fetching initial products on shop page server:', err);
   }
 
   const jsonLd = {

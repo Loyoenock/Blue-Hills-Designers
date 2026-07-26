@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
+import { logger } from './apiUtils';
 
 export interface RateLimitResult {
   success: boolean;
@@ -41,7 +42,7 @@ function getUpstashRatelimit(limit: number, windowMs: number): Ratelimit | null 
 
   if (!url || !token) {
     if (!hasWarnedInMemoryFallback) {
-      console.warn(
+      logger.warn(
         '[RateLimiter] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not configured. Falling back to local in-memory rate limiting. WARNING: In-memory rate limiting is isolated per process and NOT safe for multi-instance production deployments.'
       );
       hasWarnedInMemoryFallback = true;
@@ -98,7 +99,7 @@ export async function checkRateLimit(
         reset: resetSeconds,
       };
     } catch (err) {
-      console.error('[RateLimiter] Distributed Redis request failed during rate limit check:', err);
+      logger.error('[RateLimiter] Distributed Redis request failed during rate limit check:', err);
 
       /*
        * UNREACHABLE / NETWORK ERROR FAILURE POLICY:

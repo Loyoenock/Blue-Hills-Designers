@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { logger } from "./apiUtils"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -46,7 +47,7 @@ export function getSafeImageSrc(src: any): string {
       return `${baseUrl}/storage/v1/object/public/app-file/${cleanPath}`;
     }
   } catch (err) {
-    console.error('Error generating Supabase public URL in getSafeImageSrc:', err);
+    logger.error('Error generating Supabase public URL in getSafeImageSrc:', err);
   }
 
   return 'https://picsum.photos/seed/suit/600/600';

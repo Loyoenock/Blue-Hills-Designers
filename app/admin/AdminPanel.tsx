@@ -301,6 +301,7 @@ export default function Admin() {
   const [pSecretHours, setPSecretHours] = useState(14);
   const [pSecretMins, setPSecretMins] = useState(42);
   const [pSecretSecs, setPSecretSecs] = useState(19);
+  const [pDealExpiresAt, setPDealExpiresAt] = useState('');
 
   // Delete product safety confirmation modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -607,6 +608,7 @@ export default function Admin() {
       setPSecretHours(prod.dealHours !== undefined ? prod.dealHours : 14);
       setPSecretMins(prod.dealMins !== undefined ? prod.dealMins : 42);
       setPSecretSecs(prod.dealSecs !== undefined ? prod.dealSecs : 19);
+      setPDealExpiresAt(prod.dealExpiresAt ? new Date(prod.dealExpiresAt).toISOString().slice(0, 16) : '');
       
       // Auto-detect mode based on image type
       if (prod.images && prod.images[0] && prod.images[0].startsWith('data:')) {
@@ -634,6 +636,7 @@ export default function Admin() {
       setPSecretHours(14);
       setPSecretMins(42);
       setPSecretSecs(19);
+      setPDealExpiresAt('');
       setImageSourceMode('url');
     }
     setIsProductModalOpen(true);
@@ -744,7 +747,8 @@ export default function Admin() {
         dealDays: pIsDeal ? Number(pSecretDays) : undefined,
         dealHours: pIsDeal ? Number(pSecretHours) : undefined,
         dealMins: pIsDeal ? Number(pSecretMins) : undefined,
-        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined
+        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined,
+        dealExpiresAt: pIsDeal && pDealExpiresAt ? pDealExpiresAt : undefined
       }, operatorName, operatorRole);
     } else {
       addProduct({
@@ -763,7 +767,8 @@ export default function Admin() {
         dealDays: pIsDeal ? Number(pSecretDays) : undefined,
         dealHours: pIsDeal ? Number(pSecretHours) : undefined,
         dealMins: pIsDeal ? Number(pSecretMins) : undefined,
-        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined
+        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined,
+        dealExpiresAt: pIsDeal && pDealExpiresAt ? pDealExpiresAt : undefined
       }, operatorName, operatorRole);
     }
     setIsProductModalOpen(false);
@@ -2908,7 +2913,19 @@ export default function Admin() {
 
                       <div className="space-y-2">
                         <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono block">
-                          Atelier reservation lines close in
+                          Target Expiration Date/Time (Optional, overrides static counters)
+                        </label>
+                        <input 
+                          type="datetime-local" 
+                          value={pDealExpiresAt} 
+                          onChange={(e) => setPDealExpiresAt(e.target.value)} 
+                          className="w-full bg-black/60 border border-white/10 rounded px-3 py-2 text-[#C6A15B] font-bold outline-none font-mono text-xs cursor-pointer focus:border-[#C6A15B]/50"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[9px] uppercase tracking-widest text-white/40 font-mono block">
+                          Atelier reservation lines close in (Static Fallback)
                         </label>
                         
                         <div className="flex gap-4">
