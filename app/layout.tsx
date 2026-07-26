@@ -21,6 +21,18 @@ const cormorant = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: 'Blue Hills Designers | Luxury Corporate Menswear',
   description: 'Lubowa Shopping Mall, Uganda. Premier corporate ready-to-wear boutique featuring premium clothing imported from Turkey, Egypt, China, and the UK.',
+  openGraph: {
+    title: 'Blue Hills Designers | Luxury Corporate Menswear',
+    description: 'Lubowa Shopping Mall, Uganda. Premier corporate ready-to-wear boutique featuring premium clothing imported from Turkey, Egypt, China, and the UK.',
+    siteName: 'Blue Hills Designers',
+    type: 'website',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Blue Hills Designers | Luxury Corporate Menswear',
+    description: 'Lubowa Shopping Mall, Uganda. Premier corporate ready-to-wear boutique featuring premium clothing imported from Turkey, Egypt, China, and the UK.',
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
