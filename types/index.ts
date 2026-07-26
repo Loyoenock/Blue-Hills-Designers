@@ -155,6 +155,12 @@ export interface AppSettings {
   enableNewsBanner: boolean;
   maintenanceMode: boolean;
   currencySymbol: string;
+  enableSecretOffer: boolean;
+  paymentMethods: {
+    mobileMoney: boolean;
+    visa: boolean;
+    cashOnDelivery: boolean;
+  };
 }
 
 export interface Testimonial {

@@ -556,7 +556,7 @@ export default function HomeClient() {
       </section>
 
       {/* DEAL OF THE DAY (Lubowa Camel Hair Overcoat) */}
-      {dealProduct ? (
+      {(settings?.enableSecretOffer !== false && dealProduct) ? (
         <section className="py-24 bg-[#1D2B3F] border-t border-[#657892]/20 relative overflow-hidden">
           {/* Visual embellishment */}
           <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#B9CDE5]/10 rounded-full blur-3xl -z-10 animate-pulse"></div>

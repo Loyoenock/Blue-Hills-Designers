@@ -45,6 +45,25 @@ export async function POST(req: NextRequest) {
       throw new ApiError('Database service is currently unavailable.', 500);
     }
 
+    // Verify payment method against app_settings singleton
+    const { data: dbSettings } = await supabase
+      .from('app_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+
+    if (dbSettings) {
+      if (paymentMethod === 'Mobile Money' && dbSettings.payment_method_mobile_money === false) {
+        throw new ApiError('This payment method is currently unavailable.', 400);
+      }
+      if (paymentMethod === 'Visa' && dbSettings.payment_method_visa === false) {
+        throw new ApiError('This payment method is currently unavailable.', 400);
+      }
+      if (paymentMethod === 'Cash on Delivery' && dbSettings.payment_method_cash_on_delivery === false) {
+        throw new ApiError('This payment method is currently unavailable.', 400);
+      }
+    }
+
     // 3. User Authentication Verification (via Bearer token in request header)
     const authUser = await authenticate(req);
     const authenticatedUserId = authUser?.id || null;

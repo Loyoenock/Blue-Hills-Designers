@@ -56,6 +56,28 @@ export default function CheckoutClient() {
   const [showInvoiceHtml, setShowInvoiceHtml] = useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
 
+  const payMomoEnabled = settings?.paymentMethods?.mobileMoney !== false;
+  const payVisaEnabled = settings?.paymentMethods?.visa !== false;
+  const payCodEnabled = settings?.paymentMethods?.cashOnDelivery !== false;
+
+  const allPaymentOptions = [
+    { id: 'Mobile Money', title: 'MoMo', fullTitle: 'Mobile Money', icon: Landmark, desc: 'Instant MTN/Airtel Wallet', enabled: payMomoEnabled },
+    { id: 'Visa', title: 'Visa', fullTitle: 'Visa / MasterCard', icon: CreditCard, desc: 'Secure Bank Portal', enabled: payVisaEnabled },
+    { id: 'Cash on Delivery', title: 'Cash on Del.', fullTitle: 'Cash on Delivery', icon: Truck, desc: 'Settle at Fitting', enabled: payCodEnabled }
+  ];
+
+  const availablePaymentOptions = allPaymentOptions.filter(p => p.enabled);
+
+  useEffect(() => {
+    const valid = allPaymentOptions.filter(p => p.enabled);
+    if (valid.length > 0) {
+      const isCurrentValid = valid.some(p => p.id === paymentMethod);
+      if (!isCurrentValid) {
+        setPaymentMethod(valid[0].id as any);
+      }
+    }
+  }, [payMomoEnabled, payVisaEnabled, payCodEnabled, paymentMethod]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
@@ -441,11 +463,7 @@ export default function CheckoutClient() {
                       <div className="space-y-2 pt-2 border-t border-[#657892]/10">
                         <label className="text-[9px] text-[#657892] uppercase tracking-widest font-mono font-bold block">Payment Method</label>
                         <div className="grid grid-cols-3 gap-2">
-                          {[
-                            { id: 'Mobile Money', title: 'MoMo', icon: Landmark },
-                            { id: 'Visa', title: 'Visa', icon: CreditCard },
-                            { id: 'Cash on Delivery', title: 'Cash on Del.', icon: Truck }
-                          ].map((pay) => {
+                          {availablePaymentOptions.map((pay) => {
                             const Icon = pay.icon;
                             const selected = paymentMethod === pay.id;
                             return (
@@ -725,11 +743,7 @@ export default function CheckoutClient() {
 
                       {/* Payment custom cards list */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {[
-                          { id: 'Mobile Money', title: 'Mobile Money', icon: Landmark, desc: 'Instant MTN/Airtel Wallet' },
-                          { id: 'Visa', title: 'Visa / MasterCard', icon: CreditCard, desc: 'Secure Bank Portal' },
-                          { id: 'Cash on Delivery', title: 'Cash on Delivery', icon: Truck, desc: 'Settle at Fitting' }
-                        ].map((pay) => {
+                        {availablePaymentOptions.map((pay) => {
                           const Icon = pay.icon;
                           const selected = paymentMethod === pay.id;
                           return (
@@ -752,7 +766,7 @@ export default function CheckoutClient() {
                                 </div>
                               </div>
                               <div>
-                                <h4 className="text-xs font-bold text-[#1D2B3F] font-serif uppercase tracking-wide">{pay.title}</h4>
+                                <h4 className="text-xs font-bold text-[#1D2B3F] font-serif uppercase tracking-wide">{pay.fullTitle}</h4>
                                 <p className="text-[10px] text-[#657892] mt-1 leading-normal">{pay.desc}</p>
                               </div>
                             </button>

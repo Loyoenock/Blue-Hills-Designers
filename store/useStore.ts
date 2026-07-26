@@ -441,7 +441,13 @@ const INITIAL_SETTINGS: AppSettings = {
   aiGreetingPrefix: 'Good day, Executive.',
   enableNewsBanner: true,
   maintenanceMode: false,
-  currencySymbol: 'Ugx'
+  currencySymbol: 'Ugx',
+  enableSecretOffer: true,
+  paymentMethods: {
+    mobileMoney: true,
+    visa: true,
+    cashOnDelivery: true
+  }
 };
 
 export const INITIAL_TESTIMONIALS: Testimonial[] = [
@@ -777,6 +783,26 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         company: payload.company ? String(payload.company).trim() : null,
         display_order: typeof payload.displayOrder === 'number' ? payload.displayOrder : (typeof payload.display_order === 'number' ? payload.display_order : 1),
         is_active: payload.isActive !== undefined ? Boolean(payload.isActive) : (payload.is_active !== undefined ? Boolean(payload.is_active) : true),
+        updated_at: new Date().toISOString()
+      };
+    }
+
+    case 'app_settings': {
+      return {
+        id: 1,
+        showroom_hours: payload.showroomHours || payload.showroom_hours || '',
+        support_phone: payload.supportPhone || payload.support_phone || '',
+        concierge_phone: payload.conciergePhone || payload.concierge_phone || payload.supportPhone || '',
+        free_shipping_threshold: payload.freeShippingThreshold !== undefined && payload.freeShippingThreshold !== null ? Number(payload.freeShippingThreshold) : 0,
+        tax_rate: payload.taxRate !== undefined && payload.taxRate !== null ? Number(payload.taxRate) : 0,
+        ai_greeting_prefix: payload.aiGreetingPrefix || payload.ai_greeting_prefix || '',
+        enable_news_banner: payload.enableNewsBanner !== undefined ? !!payload.enableNewsBanner : (payload.enable_news_banner !== undefined ? !!payload.enable_news_banner : true),
+        maintenance_mode: payload.maintenanceMode !== undefined ? !!payload.maintenanceMode : (payload.maintenance_mode !== undefined ? !!payload.maintenance_mode : false),
+        currency_symbol: payload.currencySymbol || payload.currency_symbol || 'Ugx',
+        enable_secret_offer: payload.enableSecretOffer !== undefined ? !!payload.enableSecretOffer : (payload.enable_secret_offer !== undefined ? !!payload.enable_secret_offer : true),
+        payment_method_mobile_money: payload.paymentMethods?.mobileMoney !== undefined ? !!payload.paymentMethods.mobileMoney : (payload.payment_method_mobile_money !== undefined ? !!payload.payment_method_mobile_money : true),
+        payment_method_visa: payload.paymentMethods?.visa !== undefined ? !!payload.paymentMethods.visa : (payload.payment_method_visa !== undefined ? !!payload.payment_method_visa : true),
+        payment_method_cash_on_delivery: payload.paymentMethods?.cashOnDelivery !== undefined ? !!payload.paymentMethods.cashOnDelivery : (payload.payment_method_cash_on_delivery !== undefined ? !!payload.payment_method_cash_on_delivery : true),
         updated_at: new Date().toISOString()
       };
     }
@@ -1141,24 +1167,29 @@ export const useStore = create<StoreState>()(
           if (mappedCategories.length > 0) {
             set({ categories: mappedCategories });
           }
+        }
 
-          const settingsCat = dbCats.find((c: any) => c.slug === 'app-settings');
-          if (settingsCat && settingsCat.description) {
-            try {
-              const parsedSettings = JSON.parse(settingsCat.description);
-              if (parsedSettings) {
-                if (parsedSettings.conciergePhone && !parsedSettings.supportPhone) {
-                  parsedSettings.supportPhone = parsedSettings.conciergePhone;
-                }
-                if (!parsedSettings.supportPhone) {
-                  parsedSettings.supportPhone = INITIAL_SETTINGS.supportPhone;
-                }
+        const { data: dbSettings } = await supabase.from('app_settings').select('*').limit(1).maybeSingle();
+        if (dbSettings) {
+          set({
+            settings: {
+              showroomHours: dbSettings.showroom_hours || INITIAL_SETTINGS.showroomHours,
+              supportPhone: dbSettings.support_phone || dbSettings.concierge_phone || INITIAL_SETTINGS.supportPhone,
+              conciergePhone: dbSettings.concierge_phone || dbSettings.support_phone || INITIAL_SETTINGS.supportPhone,
+              freeShippingThreshold: dbSettings.free_shipping_threshold !== null && dbSettings.free_shipping_threshold !== undefined ? Number(dbSettings.free_shipping_threshold) : INITIAL_SETTINGS.freeShippingThreshold,
+              taxRate: dbSettings.tax_rate !== null && dbSettings.tax_rate !== undefined ? Number(dbSettings.tax_rate) : INITIAL_SETTINGS.taxRate,
+              aiGreetingPrefix: dbSettings.ai_greeting_prefix || INITIAL_SETTINGS.aiGreetingPrefix,
+              enableNewsBanner: dbSettings.enable_news_banner !== undefined && dbSettings.enable_news_banner !== null ? dbSettings.enable_news_banner : true,
+              maintenanceMode: dbSettings.maintenance_mode !== undefined && dbSettings.maintenance_mode !== null ? dbSettings.maintenance_mode : false,
+              currencySymbol: dbSettings.currency_symbol || INITIAL_SETTINGS.currencySymbol,
+              enableSecretOffer: dbSettings.enable_secret_offer !== undefined && dbSettings.enable_secret_offer !== null ? dbSettings.enable_secret_offer : true,
+              paymentMethods: {
+                mobileMoney: dbSettings.payment_method_mobile_money !== undefined && dbSettings.payment_method_mobile_money !== null ? dbSettings.payment_method_mobile_money : true,
+                visa: dbSettings.payment_method_visa !== undefined && dbSettings.payment_method_visa !== null ? dbSettings.payment_method_visa : true,
+                cashOnDelivery: dbSettings.payment_method_cash_on_delivery !== undefined && dbSettings.payment_method_cash_on_delivery !== null ? dbSettings.payment_method_cash_on_delivery : true
               }
-              set({ settings: parsedSettings });
-            } catch (e) {
-              console.warn('Failed to parse app-settings from categories:', e);
             }
-          }
+          });
         }
 
         // 2. Profiles / Users
@@ -2736,14 +2767,8 @@ export const useStore = create<StoreState>()(
           modifierRole as User['role']
         );
 
-        // Sync settings to Supabase categories table with slug 'app-settings'
-        const settingsPayload = {
-          id: toValidUUID('app-settings'),
-          name: 'App Settings',
-          slug: 'app-settings',
-          description: JSON.stringify(updated)
-        };
-        safeSupabaseUpsert('categories', settingsPayload);
+        // Sync settings to Supabase app_settings table
+        safeSupabaseUpsert('app_settings', updated);
       },
 
       addProduct: async (productData, creatorName, creatorRole) => {

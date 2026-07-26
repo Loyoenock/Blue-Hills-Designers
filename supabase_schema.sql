@@ -492,4 +492,69 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_hours INTEGER NULL;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_mins INTEGER NULL;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_secs INTEGER NULL;
 
+-- App Settings Singleton Table Migration
+CREATE TABLE IF NOT EXISTS public.app_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    showroom_hours TEXT,
+    support_phone TEXT,
+    concierge_phone TEXT,
+    free_shipping_threshold NUMERIC,
+    tax_rate NUMERIC,
+    ai_greeting_prefix TEXT,
+    enable_news_banner BOOLEAN NOT NULL DEFAULT true,
+    maintenance_mode BOOLEAN NOT NULL DEFAULT false,
+    currency_symbol TEXT,
+    enable_secret_offer BOOLEAN NOT NULL DEFAULT true,
+    payment_method_mobile_money BOOLEAN NOT NULL DEFAULT true,
+    payment_method_visa BOOLEAN NOT NULL DEFAULT true,
+    payment_method_cash_on_delivery BOOLEAN NOT NULL DEFAULT true,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
 
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read-access to app settings" ON public.app_settings;
+CREATE POLICY "Allow public read-access to app settings"
+    ON public.app_settings FOR SELECT
+    USING (true);
+
+DROP POLICY IF EXISTS "Allow administrative update to app settings" ON public.app_settings;
+CREATE POLICY "Allow administrative update to app settings"
+    ON public.app_settings FOR UPDATE
+    USING (public.is_admin_or_staff(auth.uid()));
+
+-- Seed initial default singleton row
+INSERT INTO public.app_settings (
+    id,
+    showroom_hours,
+    support_phone,
+    concierge_phone,
+    free_shipping_threshold,
+    tax_rate,
+    ai_greeting_prefix,
+    enable_news_banner,
+    maintenance_mode,
+    currency_symbol,
+    enable_secret_offer,
+    payment_method_mobile_money,
+    payment_method_visa,
+    payment_method_cash_on_delivery
+) VALUES (
+    1,
+    'Sunday to Friday: 9:00 AM to 7:00 PM (Saturdays Closed)',
+    '+256 772 123456',
+    '+256 772 123456',
+    2000,
+    18,
+    'Good day, Executive.',
+    true,
+    false,
+    'Ugx',
+    true,
+    true,
+    true,
+    true
+) ON CONFLICT (id) DO NOTHING;
+
+-- Cleanup legacy fake settings category row
+DELETE FROM public.categories WHERE slug = 'app-settings';

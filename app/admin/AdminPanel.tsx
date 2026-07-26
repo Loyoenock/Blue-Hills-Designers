@@ -344,6 +344,10 @@ export default function Admin() {
   const [sBanner, setSBanner] = useState(() => settings?.enableNewsBanner !== false);
   const [sMaintenance, setSMaintenance] = useState(() => !!settings?.maintenanceMode);
   const [sCurrency, setSCurrency] = useState(() => settings?.currencySymbol || 'Ugx');
+  const [sSecretOffer, setSSecretOffer] = useState(() => settings?.enableSecretOffer !== false);
+  const [sPayMomo, setSPayMomo] = useState(() => settings?.paymentMethods?.mobileMoney !== false);
+  const [sPayVisa, setSPayVisa] = useState(() => settings?.paymentMethods?.visa !== false);
+  const [sPayCod, setSPayCod] = useState(() => settings?.paymentMethods?.cashOnDelivery !== false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
@@ -358,6 +362,10 @@ export default function Admin() {
       setSBanner(settings.enableNewsBanner !== false);
       setSMaintenance(!!settings.maintenanceMode);
       setSCurrency(settings.currencySymbol || 'Ugx');
+      setSSecretOffer(settings.enableSecretOffer !== false);
+      setSPayMomo(settings.paymentMethods?.mobileMoney !== false);
+      setSPayVisa(settings.paymentMethods?.visa !== false);
+      setSPayCod(settings.paymentMethods?.cashOnDelivery !== false);
     }
   }, [settings]);
 
@@ -557,7 +565,13 @@ export default function Admin() {
       aiGreetingPrefix: sGreeting,
       enableNewsBanner: sBanner,
       maintenanceMode: sMaintenance,
-      currencySymbol: sCurrency
+      currencySymbol: sCurrency,
+      enableSecretOffer: sSecretOffer,
+      paymentMethods: {
+        mobileMoney: sPayMomo,
+        visa: sPayVisa,
+        cashOnDelivery: sPayCod
+      }
     }, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin');
 
     setSettingsSuccess(true);
@@ -2479,6 +2493,21 @@ export default function Admin() {
                         </div>
 
                         <div className="space-y-4 flex flex-col justify-center">
+                          {/* TOGGLE: SECRET OFFER */}
+                          <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
+                            <div>
+                              <span className="text-xs font-semibold text-white block">Secret Offer Section</span>
+                              <span className="text-[9px] text-white/40">Display Deal-of-the-Day countdown section on homepage.</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSSecretOffer(!sSecretOffer)}
+                              className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sSecretOffer ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                            >
+                              <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sSecretOffer ? 'translate-x-4' : 'translate-x-0'}`} />
+                            </button>
+                          </div>
+
                           {/* TOGGLE: BANNER */}
                           <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
                             <div>
@@ -2508,6 +2537,56 @@ export default function Admin() {
                               <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sMaintenance ? 'translate-x-4' : 'translate-x-0'}`} />
                             </button>
                           </div>
+
+                          {/* PAYMENT METHODS GROUP */}
+                          <div className="pt-2 border-t border-white/5 space-y-2">
+                            <span className="text-[10px] text-white/50 uppercase tracking-wider font-mono block">Accepted Payment Methods</span>
+                            
+                            {/* TOGGLE: MOBILE MONEY */}
+                            <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
+                              <div>
+                                <span className="text-xs font-semibold text-white block">Mobile Money</span>
+                                <span className="text-[9px] text-white/40">Allow MTN & Airtel Mobile Money checkout.</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSPayMomo(!sPayMomo)}
+                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sPayMomo ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                              >
+                                <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sPayMomo ? 'translate-x-4' : 'translate-x-0'}`} />
+                              </button>
+                            </div>
+
+                            {/* TOGGLE: VISA */}
+                            <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
+                              <div>
+                                <span className="text-xs font-semibold text-white block">Visa & Credit Card</span>
+                                <span className="text-[9px] text-white/40">Allow Visa and card payments at checkout.</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSPayVisa(!sPayVisa)}
+                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sPayVisa ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                              >
+                                <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sPayVisa ? 'translate-x-4' : 'translate-x-0'}`} />
+                              </button>
+                            </div>
+
+                            {/* TOGGLE: CASH ON DELIVERY */}
+                            <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
+                              <div>
+                                <span className="text-xs font-semibold text-white block">Cash on Delivery</span>
+                                <span className="text-[9px] text-white/40">Allow cash payment on concierge delivery.</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSPayCod(!sPayCod)}
+                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sPayCod ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                              >
+                                <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sPayCod ? 'translate-x-4' : 'translate-x-0'}`} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2527,6 +2606,10 @@ export default function Admin() {
                           setSBanner(settings.enableNewsBanner !== false);
                           setSMaintenance(!!settings.maintenanceMode);
                           setSCurrency(settings.currencySymbol || 'Ugx');
+                          setSSecretOffer(settings.enableSecretOffer !== false);
+                          setSPayMomo(settings.paymentMethods?.mobileMoney !== false);
+                          setSPayVisa(settings.paymentMethods?.visa !== false);
+                          setSPayCod(settings.paymentMethods?.cashOnDelivery !== false);
                         }
                       }}
                       className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-white/80 font-medium transition-colors"
