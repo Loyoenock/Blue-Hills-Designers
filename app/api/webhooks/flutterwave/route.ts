@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { logger } from '@/lib/apiUtils';
 
@@ -8,9 +9,14 @@ export async function POST(req: NextRequest) {
     const secretHash = process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH || process.env.FLUTTERWAVE_SECRET_KEY;
 
     // Verify webhook signature if secret hash is configured
-    if (secretHash && signature !== secretHash && process.env.NODE_ENV === 'production') {
-      logger.warn('Flutterwave webhook signature verification failed', { signatureReceived: !!signature });
-      return NextResponse.json({ error: 'Unauthorized webhook signature' }, { status: 401 });
+    if (secretHash && process.env.NODE_ENV === 'production') {
+      const sigBuf = signature ? Buffer.from(signature, 'utf8') : null;
+      const secretBuf = Buffer.from(secretHash, 'utf8');
+      const isValid = sigBuf && sigBuf.length === secretBuf.length && crypto.timingSafeEqual(sigBuf, secretBuf);
+      if (!isValid) {
+        logger.warn('Flutterwave webhook signature verification failed', { signatureReceived: !!signature });
+        return NextResponse.json({ error: 'Unauthorized webhook signature' }, { status: 401 });
+      }
     }
 
     const body = await req.json().catch(() => ({}));
