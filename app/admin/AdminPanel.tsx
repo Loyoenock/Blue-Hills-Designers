@@ -22,6 +22,7 @@ export default function Admin() {
   const router = useRouter();
   const { 
     currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons, categories, testimonials,
+    adminError, clearAdminError,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
     adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
     deleteReview, updateProductStockQuick, updateBookingStatus,
@@ -894,6 +895,25 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      {/* Non-blocking Admin Error Banner */}
+      {adminError && (
+        <div className="max-w-7xl mx-auto px-4 md:px-8 pt-6 w-full">
+          <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-4 flex items-center justify-between text-red-200 text-sm shadow-lg">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+              <span>{adminError}</span>
+            </div>
+            <button
+              onClick={clearAdminError}
+              className="text-red-400 hover:text-white p-1 rounded-lg transition-colors ml-4 shrink-0"
+              title="Dismiss error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
         

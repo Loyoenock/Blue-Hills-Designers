@@ -28,11 +28,13 @@ interface StoreState {
   subscribers: NewsletterSubscriber[];
   auditLogs: AuditLog[];
   wishlist: string[]; // array of product ids
+  adminError: string | null;
+  clearAdminError: () => void;
 
   // Testimonial management actions (Admin)
-  addTestimonial: (testimonialData: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<void>;
-  updateTestimonial: (id: string, updatedFields: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<void>;
-  deleteTestimonial: (id: string, adminName?: string, adminRole?: string) => Promise<void>;
+  addTestimonial: (testimonialData: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
+  updateTestimonial: (id: string, updatedFields: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
+  deleteTestimonial: (id: string, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
   
   // Auth actions
   login: (email: string, password?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
@@ -55,37 +57,37 @@ interface StoreState {
   setShippingMethod: (method: 'standard' | 'express' | 'pickup') => void;
 
   // Coupon management actions (Admin)
-  addCoupon: (couponData: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<void>;
-  updateCoupon: (id: string, updatedFields: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<void>;
-  deleteCoupon: (id: string, adminName?: string, adminRole?: string) => Promise<void>;
+  addCoupon: (couponData: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
+  updateCoupon: (id: string, updatedFields: Partial<Coupon>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
+  deleteCoupon: (id: string, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
 
   // Category management actions (Admin)
-  addCategory: (categoryData: Partial<Category>, adminName?: string, adminRole?: string) => Promise<void>;
-  updateCategory: (id: string, updatedFields: Partial<Category>, adminName?: string, adminRole?: string) => Promise<void>;
-  deleteCategory: (id: string, adminName?: string, adminRole?: string) => Promise<{ success: boolean; message?: string }>;
+  addCategory: (categoryData: Partial<Category>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
+  updateCategory: (id: string, updatedFields: Partial<Category>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
+  deleteCategory: (id: string, adminName?: string, adminRole?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
 
   // Checkout / Order actions
   placeOrder: (orderData: Omit<Order, 'id' | 'date'> & { id?: string; date?: string; paymentId?: string; paymentStatus?: Payment['status']; paymentTransactionId?: string; }, skipDbSync?: boolean) => Order;
-  updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => void;
-  updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => void;
-  updateSettings: (newSettings: Partial<AppSettings>, updaterName: string, updaterRole: string) => void;
+  updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
+  updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
+  updateSettings: (newSettings: Partial<AppSettings>, updaterName: string, updaterRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // Product management actions (Admin)
-  addProduct: (productData: Omit<Product, 'id' | 'reviews' | 'rating'>, creatorName: string, creatorRole: string) => void;
-  updateProduct: (id: string, updatedFields: Partial<Product>, updaterName: string, updaterRole: string) => void;
-  deleteProduct: (id: string, deleterName: string, deleterRole: string) => void; // Soft delete or remove
+  addProduct: (productData: Omit<Product, 'id' | 'reviews' | 'rating'>, creatorName: string, creatorRole: string) => Promise<{ success: boolean; error?: string }>;
+  updateProduct: (id: string, updatedFields: Partial<Product>, updaterName: string, updaterRole: string) => Promise<{ success: boolean; error?: string }>;
+  deleteProduct: (id: string, deleterName: string, deleterRole: string) => Promise<{ success: boolean; error?: string }>; // Soft delete or remove
   addReview: (productId: string, rating: number, comment: string, userName: string, userRole?: string) => void;
-  deleteReview: (productId: string, reviewId: string, modifierName: string, modifierRole: string) => void;
-  updateProductStockQuick: (productId: string, newStock: number, modifierName: string, modifierRole: string) => void;
+  deleteReview: (productId: string, reviewId: string, modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
+  updateProductStockQuick: (productId: string, newStock: number, modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // User management actions (Admin)
-  adminAddUser: (userData: Omit<User, 'id'>, adminName: string, adminRole: string) => void;
-  adminUpdateUser: (id: string, updatedFields: Partial<User>, adminName: string, adminRole: string) => void;
-  adminDeleteUser: (id: string, adminName: string, adminRole: string) => void;
+  adminAddUser: (userData: Omit<User, 'id'>, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
+  adminUpdateUser: (id: string, updatedFields: Partial<User>, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
+  adminDeleteUser: (id: string, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // Consultation Actions
   bookConsultation: (bookingData: Omit<ConsultationBooking, 'id' | 'status'>) => void;
-  updateBookingStatus: (bookingId: string, status: ConsultationBooking['status'], modifierName: string, modifierRole: string) => void;
+  updateBookingStatus: (bookingId: string, status: ConsultationBooking['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // Newsletter Actions
   subscribeNewsletter: (email: string) => { success: boolean; message: string };
@@ -932,10 +934,10 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
-async function safeSupabaseInsert(tableName: string, payload: any) {
+async function safeSupabaseInsert(tableName: string, payload: any): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unconfigured).`);
-    return;
+    return { success: true };
   }
 
   try {
@@ -949,22 +951,27 @@ async function safeSupabaseInsert(tableName: string, payload: any) {
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      console.warn(`Supabase insert failed on ${tableName}:`, errData.error || response.statusText);
+      const errorMsg = errData.error || response.statusText || `Database insert failed on ${tableName}`;
+      console.warn(`Supabase insert failed on ${tableName}:`, errorMsg);
+      return { success: false, error: errorMsg };
     }
+    return { success: true };
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
     if (isNetworkOrConnectionError(err)) {
       console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
+      return { success: true };
     } else {
       console.error(`Error in safeSupabaseInsert for ${tableName}:`, err);
+      return { success: false, error: errMsg };
     }
   }
 }
 
-async function safeSupabaseUpsert(tableName: string, payload: any, options?: any) {
+async function safeSupabaseUpsert(tableName: string, payload: any, options?: any): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unconfigured).`);
-    return;
+    return { success: true };
   }
 
   try {
@@ -978,22 +985,27 @@ async function safeSupabaseUpsert(tableName: string, payload: any, options?: any
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      console.warn(`Supabase upsert failed on ${tableName}:`, errData.error || response.statusText);
+      const errorMsg = errData.error || response.statusText || `Database update failed on ${tableName}`;
+      console.warn(`Supabase upsert failed on ${tableName}:`, errorMsg);
+      return { success: false, error: errorMsg };
     }
+    return { success: true };
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
     if (isNetworkOrConnectionError(err)) {
       console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
+      return { success: true };
     } else {
       console.error(`Error in safeSupabaseUpsert for ${tableName}:`, err);
+      return { success: false, error: errMsg };
     }
   }
 }
 
-async function safeSupabaseDelete(tableName: string, filters: Record<string, any>) {
+async function safeSupabaseDelete(tableName: string, filters: Record<string, any>): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unconfigured).`);
-    return;
+    return { success: true };
   }
 
   try {
@@ -1006,14 +1018,19 @@ async function safeSupabaseDelete(tableName: string, filters: Record<string, any
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      console.warn(`Supabase delete failed on ${tableName}:`, errData.error || response.statusText);
+      const errorMsg = errData.error || response.statusText || `Database delete failed on ${tableName}`;
+      console.warn(`Supabase delete failed on ${tableName}:`, errorMsg);
+      return { success: false, error: errorMsg };
     }
+    return { success: true };
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
     if (isNetworkOrConnectionError(err)) {
       console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
+      return { success: true };
     } else {
       console.error(`Error in safeSupabaseDelete for ${tableName}:`, err);
+      return { success: false, error: errMsg };
     }
   }
 }
@@ -1049,6 +1066,8 @@ export const useStore = create<StoreState>()(
       testimonials: INITIAL_TESTIMONIALS,
       selectedShippingMethod: 'standard',
       cartError: null,
+      adminError: null,
+      clearAdminError: () => set({ adminError: null }),
       orders: INITIAL_ORDERS,
       payments: INITIAL_PAYMENTS,
       settings: INITIAL_SETTINGS,
@@ -2348,6 +2367,7 @@ export const useStore = create<StoreState>()(
       },
 
       addCoupon: async (couponData, adminName, adminRole) => {
+        const previousCoupons = get().coupons;
         const code = (couponData.code || '').trim().toUpperCase();
         const newCoupon: Coupon = {
           id: couponData.id || `cpn-${Math.random().toString(36).substring(2, 11)}`,
@@ -2377,12 +2397,18 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseInsert('coupons', newCoupon);
+        const dbRes = await safeSupabaseInsert('coupons', newCoupon);
+        if (dbRes && !dbRes.success) {
+          set({ coupons: previousCoupons, adminError: `Failed to save coupon '${newCoupon.code}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         get().syncFromSupabase();
+        return { success: true };
       },
 
       updateCoupon: async (id, updatedFields, adminName, adminRole) => {
-        const existing = get().coupons.find(c => c.id === id || c.code === id);
+        const previousCoupons = get().coupons;
+        const existing = previousCoupons.find(c => c.id === id || c.code === id);
         const updatedCoupon: Coupon = {
           ...(existing || {}),
           ...updatedFields,
@@ -2405,12 +2431,18 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseUpsert('coupons', updatedCoupon);
+        const dbRes = await safeSupabaseUpsert('coupons', updatedCoupon);
+        if (dbRes && !dbRes.success) {
+          set({ coupons: previousCoupons, adminError: `Failed to update coupon '${updatedCoupon.code}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         get().syncFromSupabase();
+        return { success: true };
       },
 
       deleteCoupon: async (id, adminName, adminRole) => {
-        const couponToDelete = get().coupons.find(c => c.id === id || c.code === id);
+        const previousCoupons = get().coupons;
+        const couponToDelete = previousCoupons.find(c => c.id === id || c.code === id);
 
         set(state => ({
           coupons: state.coupons.filter(c => c.id !== id && c.code !== id)
@@ -2426,13 +2458,18 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseDelete('coupons', { id: couponToDelete?.id || id });
+        const dbRes = await safeSupabaseDelete('coupons', { id: couponToDelete?.id || id });
+        if (dbRes && !dbRes.success) {
+          set({ coupons: previousCoupons, adminError: `Failed to delete coupon '${couponToDelete?.code || id}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         get().syncFromSupabase();
+        return { success: true };
       },
 
       addCategory: async (categoryData, adminName, adminRole) => {
         const name = (categoryData.name || '').trim();
-        if (!name) return;
+        if (!name) return { success: false, error: 'Category name is required.' };
         const slug = categoryData.slug?.trim().toLowerCase() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
         const newCat: Category = {
           name,
@@ -2441,6 +2478,8 @@ export const useStore = create<StoreState>()(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
+
+        const previousCategories = get().categories;
 
         // Optimistic state update
         set(state => ({
@@ -2457,13 +2496,19 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseUpsert('categories', newCat);
+        const dbRes = await safeSupabaseUpsert('categories', newCat);
+        if (dbRes && !dbRes.success) {
+          set({ categories: previousCategories, adminError: `Failed to save category '${newCat.name}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         await get().fetchLatestState();
+        return { success: true };
       },
 
       updateCategory: async (id, updatedFields, adminName, adminRole) => {
-        const existingCat = (get().categories || []).find(c => c.id === id || c.slug === id);
-        if (!existingCat) return;
+        const previousCategories = get().categories || [];
+        const existingCat = previousCategories.find(c => c.id === id || c.slug === id);
+        if (!existingCat) return { success: false, error: 'Category not found.' };
         const name = updatedFields.name?.trim() || existingCat.name;
         const slug = updatedFields.slug?.trim().toLowerCase() || existingCat.slug;
         const updatedCat: Category = {
@@ -2489,13 +2534,19 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseUpsert('categories', updatedCat);
+        const dbRes = await safeSupabaseUpsert('categories', updatedCat);
+        if (dbRes && !dbRes.success) {
+          set({ categories: previousCategories, adminError: `Failed to update category '${updatedCat.name}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         await get().fetchLatestState();
+        return { success: true };
       },
 
       deleteCategory: async (id, adminName, adminRole) => {
-        const categoryToDelete = (get().categories || []).find(c => c.id === id || c.slug === id);
-        if (!categoryToDelete) return { success: false, message: 'Category not found.' };
+        const previousCategories = get().categories || [];
+        const categoryToDelete = previousCategories.find(c => c.id === id || c.slug === id);
+        if (!categoryToDelete) return { success: false, message: 'Category not found.', error: 'Category not found.' };
 
         // Block deletion if products reference this category
         const referencingProducts = (get().products || []).filter(p => p.category?.toLowerCase() === categoryToDelete.name.toLowerCase() || p.category?.toLowerCase() === categoryToDelete.slug.toLowerCase());
@@ -2517,8 +2568,13 @@ export const useStore = create<StoreState>()(
           );
         }
 
+        let dbRes: { success: boolean; error?: string } = { success: true };
         if (categoryToDelete.id) {
-          await safeSupabaseDelete('categories', { id: categoryToDelete.id });
+          dbRes = await safeSupabaseDelete('categories', { id: categoryToDelete.id });
+        }
+        if (!dbRes.success) {
+          set({ categories: previousCategories, adminError: `Failed to delete category '${categoryToDelete.name}': ${dbRes.error}` });
+          return { success: false, message: `Failed to delete category: ${dbRes.error}`, error: dbRes.error };
         }
         await get().fetchLatestState();
         return { success: true };
@@ -2527,7 +2583,7 @@ export const useStore = create<StoreState>()(
       addTestimonial: async (testimonialData, adminName, adminRole) => {
         const quote = (testimonialData.quote || '').trim();
         const name = (testimonialData.name || '').trim();
-        if (!quote || !name) return;
+        if (!quote || !name) return { success: false, error: 'Quote and name are required.' };
         const newTestimonial: Testimonial = {
           quote,
           name,
@@ -2538,6 +2594,8 @@ export const useStore = create<StoreState>()(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
+
+        const previousTestimonials = get().testimonials || [];
 
         set(state => ({
           testimonials: [...(state.testimonials || []), newTestimonial]
@@ -2553,12 +2611,18 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseInsert('testimonials', newTestimonial);
+        const dbRes = await safeSupabaseInsert('testimonials', newTestimonial);
+        if (dbRes && !dbRes.success) {
+          set({ testimonials: previousTestimonials, adminError: `Failed to save testimonial for '${name}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         await get().fetchLatestState();
+        return { success: true };
       },
 
       updateTestimonial: async (id, updatedFields, adminName, adminRole) => {
-        const existing = (get().testimonials || []).find(t => t.id === id);
+        const previousTestimonials = get().testimonials || [];
+        const existing = previousTestimonials.find(t => t.id === id);
         const updatedTestimonial: Testimonial = {
           ...(existing || {}),
           ...updatedFields,
@@ -2580,12 +2644,18 @@ export const useStore = create<StoreState>()(
           );
         }
 
-        await safeSupabaseUpsert('testimonials', updatedTestimonial);
+        const dbRes = await safeSupabaseUpsert('testimonials', updatedTestimonial);
+        if (dbRes && !dbRes.success) {
+          set({ testimonials: previousTestimonials, adminError: `Failed to update testimonial for '${updatedTestimonial.name}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
         await get().fetchLatestState();
+        return { success: true };
       },
 
       deleteTestimonial: async (id, adminName, adminRole) => {
-        const testimonialToDelete = (get().testimonials || []).find(t => t.id === id);
+        const previousTestimonials = get().testimonials || [];
+        const testimonialToDelete = previousTestimonials.find(t => t.id === id);
 
         set(state => ({
           testimonials: (state.testimonials || []).filter(t => t.id !== id)
@@ -2601,10 +2671,16 @@ export const useStore = create<StoreState>()(
           );
         }
 
+        let dbRes: { success: boolean; error?: string } = { success: true };
         if (testimonialToDelete?.id) {
-          await safeSupabaseDelete('testimonials', { id: testimonialToDelete.id });
+          dbRes = await safeSupabaseDelete('testimonials', { id: testimonialToDelete.id });
+        }
+        if (!dbRes.success) {
+          set({ testimonials: previousTestimonials, adminError: `Failed to delete testimonial: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
         }
         await get().fetchLatestState();
+        return { success: true };
       },
 
       removeCoupon: () => {
@@ -2718,7 +2794,8 @@ export const useStore = create<StoreState>()(
         return newOrder;
       },
 
-      updateOrderStatus: (orderId, status, modifierName, modifierRole) => {
+      updateOrderStatus: async (orderId, status, modifierName, modifierRole) => {
+        const previousOrders = get().orders;
         set(state => ({
           orders: state.orders.map(o => o.id === orderId ? { ...o, status } : o)
         }));
@@ -2732,10 +2809,16 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync status with Supabase
-        safeSupabaseUpsert('orders', { id: orderId, status });
+        const dbRes = await safeSupabaseUpsert('orders', { id: orderId, status });
+        if (dbRes && !dbRes.success) {
+          set({ orders: previousOrders, adminError: `Failed to update order status: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
-      updatePaymentStatus: (paymentId, status, modifierName, modifierRole) => {
+      updatePaymentStatus: async (paymentId, status, modifierName, modifierRole) => {
+        const previousPayments = get().payments;
         set(state => ({
           payments: (state.payments || []).map(p => p.id === paymentId ? { ...p, status } : p)
         }));
@@ -2752,11 +2835,17 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync status with Supabase
-        safeSupabaseUpsert('payments', { id: paymentId, status });
+        const dbRes = await safeSupabaseUpsert('payments', { id: paymentId, status });
+        if (dbRes && !dbRes.success) {
+          set({ payments: previousPayments, adminError: `Failed to update payment status: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
-      updateSettings: (newSettings, modifierName, modifierRole) => {
-        const updated = { ...get().settings, ...newSettings };
+      updateSettings: async (newSettings, modifierName, modifierRole) => {
+        const previousSettings = get().settings;
+        const updated = { ...previousSettings, ...newSettings };
         set({ settings: updated });
 
         get().addAuditLog(
@@ -2768,10 +2857,16 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync settings to Supabase app_settings table
-        safeSupabaseUpsert('app_settings', updated);
+        const dbRes = await safeSupabaseUpsert('app_settings', updated);
+        if (dbRes && !dbRes.success) {
+          set({ settings: previousSettings, adminError: `Failed to update settings: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
       addProduct: async (productData, creatorName, creatorRole) => {
+        const previousProducts = get().products;
         const productId = `prod-${Date.now()}`;
         const userId = get().currentUser?.id || 'admin';
 
@@ -2811,7 +2906,11 @@ export const useStore = create<StoreState>()(
 
         // Sync product payload (excluding client-side only array nested reviews)
         const { reviews, ...prodPayload } = newProduct;
-        await safeSupabaseInsert('products', prodPayload);
+        const dbRes = await safeSupabaseInsert('products', prodPayload);
+        if (dbRes && !dbRes.success) {
+          set({ products: previousProducts, adminError: `Failed to add product '${newProduct.name}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
 
         // Sync images in product_images table
         if (finalImages && finalImages.length > 0) {
@@ -2826,9 +2925,11 @@ export const useStore = create<StoreState>()(
 
         // Re-sync from Supabase to resolve signed URLs
         get().syncFromSupabase();
+        return { success: true };
       },
 
       updateProduct: async (id, updatedFields, updaterName, updaterRole) => {
+        const previousProducts = get().products;
         const userId = get().currentUser?.id || 'admin';
 
         // Upload any new base64 images to Supabase Storage
@@ -2850,7 +2951,7 @@ export const useStore = create<StoreState>()(
           : updatedFields;
 
         // Check for deleted images to remove from Supabase Storage
-        const originalProduct = get().products.find(p => p.id === id || toValidUUID(p.id) === toValidUUID(id));
+        const originalProduct = previousProducts.find(p => p.id === id || toValidUUID(p.id) === toValidUUID(id));
         if (originalProduct && originalProduct.images && updatedFields.images) {
           const removedImages = originalProduct.images.filter(
             (img: string) => isPrivateStoragePath(img) && !finalImages.includes(img)
@@ -2888,7 +2989,11 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync updated fields with Supabase
-        await safeSupabaseUpsert('products', fullUpdatedProduct);
+        const dbRes = await safeSupabaseUpsert('products', fullUpdatedProduct);
+        if (dbRes && !dbRes.success) {
+          set({ products: previousProducts, adminError: `Failed to update product '${fullUpdatedProduct.name || id}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
 
         // Update product_images table
         if (updatedFields.images) {
@@ -2907,10 +3012,12 @@ export const useStore = create<StoreState>()(
 
         // Re-sync from Supabase to resolve signed URLs
         get().syncFromSupabase();
+        return { success: true };
       },
 
       deleteProduct: async (id, deleterName, deleterRole) => {
-        const productToDelete = get().products.find(p => p.id === id);
+        const previousProducts = get().products;
+        const productToDelete = previousProducts.find(p => p.id === id);
 
         // Delete all images associated with this product from Supabase Storage
         if (productToDelete && productToDelete.images) {
@@ -2945,10 +3052,16 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync product delete with Supabase
-        await safeSupabaseDelete('products', { id });
+        const dbRes = await safeSupabaseDelete('products', { id });
+        if (dbRes && !dbRes.success) {
+          set({ products: previousProducts, adminError: `Failed to delete product '${productToDelete?.name || id}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
-      adminAddUser: (userData, adminName, adminRole) => {
+      adminAddUser: async (userData, adminName, adminRole) => {
+        const previousUsers = get().users;
         const id = 'usr-' + Math.random().toString(36).substring(2, 11);
         const newUser: User = {
           id,
@@ -2972,10 +3085,17 @@ export const useStore = create<StoreState>()(
           adminRole as User['role']
         );
 
-        safeSupabaseUpsert('profiles', newUser);
+        const dbRes = await safeSupabaseUpsert('profiles', newUser);
+        if (dbRes && !dbRes.success) {
+          set({ users: previousUsers, adminError: `Failed to add user '${newUser.name}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
-      adminUpdateUser: (id, updatedFields, adminName, adminRole) => {
+      adminUpdateUser: async (id, updatedFields, adminName, adminRole) => {
+        const previousUsers = get().users;
+        const previousCurrentUser = get().currentUser;
         set(state => {
           const updatedUsers = state.users.map(u => u.id === id ? { ...u, ...updatedFields } : u);
           const currentUser = state.currentUser && state.currentUser.id === id 
@@ -2997,12 +3117,18 @@ export const useStore = create<StoreState>()(
             adminRole as User['role']
           );
 
-          safeSupabaseUpsert('profiles', targetUser);
+          const dbRes = await safeSupabaseUpsert('profiles', targetUser);
+          if (dbRes && !dbRes.success) {
+            set({ users: previousUsers, currentUser: previousCurrentUser, adminError: `Failed to update user '${targetUser.name}': ${dbRes.error}` });
+            return { success: false, error: dbRes.error };
+          }
         }
+        return { success: true };
       },
 
-      adminDeleteUser: (id, adminName, adminRole) => {
-        const userToDelete = get().users.find(u => u.id === id);
+      adminDeleteUser: async (id, adminName, adminRole) => {
+        const previousUsers = get().users;
+        const userToDelete = previousUsers.find(u => u.id === id);
         set(state => ({
           users: state.users.filter(u => u.id !== id)
         }));
@@ -3015,7 +3141,12 @@ export const useStore = create<StoreState>()(
           adminRole as User['role']
         );
 
-        safeSupabaseDelete('profiles', { id });
+        const dbRes = await safeSupabaseDelete('profiles', { id });
+        if (dbRes && !dbRes.success) {
+          set({ users: previousUsers, adminError: `Failed to delete user '${userToDelete?.name || id}': ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
       addReview: (productId, rating, comment, userName, userRole = 'Executive Client') => {
@@ -3068,6 +3199,7 @@ export const useStore = create<StoreState>()(
       },
 
       deleteReview: async (productId, reviewId, modifierName, modifierRole) => {
+        const previousProducts = get().products;
         set(state => ({
           products: state.products.map(p => {
             if (p.id === productId) {
@@ -3094,7 +3226,11 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync review deletion in Supabase
-        await safeSupabaseDelete('reviews', { id: reviewId });
+        const dbRes = await safeSupabaseDelete('reviews', { id: reviewId });
+        if (dbRes && !dbRes.success) {
+          set({ products: previousProducts, adminError: `Failed to delete review: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
 
         // Update overall product rating in products table
         const matched = get().products.find(p => p.id === productId);
@@ -3105,9 +3241,11 @@ export const useStore = create<StoreState>()(
             : 5.0;
           await safeSupabaseUpsert('products', { id: productId, rating: avgRating });
         }
+        return { success: true };
       },
 
       updateProductStockQuick: async (productId, newStock, modifierName, modifierRole) => {
+        const previousProducts = get().products;
         set(state => ({
           products: state.products.map(p => p.id === productId ? { ...p, stock: newStock } : p)
         }));
@@ -3121,7 +3259,12 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync to Supabase
-        await safeSupabaseUpsert('products', { id: productId, stock: newStock });
+        const dbRes = await safeSupabaseUpsert('products', { id: productId, stock: newStock });
+        if (dbRes && !dbRes.success) {
+          set({ products: previousProducts, adminError: `Failed to update product stock: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
       bookConsultation: (bookingData) => {
@@ -3147,7 +3290,8 @@ export const useStore = create<StoreState>()(
         safeSupabaseInsert('consultations', newBooking);
       },
 
-      updateBookingStatus: (bookingId, status, modifierName, modifierRole) => {
+      updateBookingStatus: async (bookingId, status, modifierName, modifierRole) => {
+        const previousBookings = get().bookings;
         set(state => ({
           bookings: state.bookings.map(b => b.id === bookingId ? { ...b, status } : b)
         }));
@@ -3164,7 +3308,12 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync booking status with Supabase (must be lowercase)
-        safeSupabaseUpsert('consultations', { id: bookingId, status: status.toLowerCase() });
+        const dbRes = await safeSupabaseUpsert('consultations', { id: bookingId, status: status.toLowerCase() });
+        if (dbRes && !dbRes.success) {
+          set({ bookings: previousBookings, adminError: `Failed to update booking status: ${dbRes.error}` });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
       subscribeNewsletter: (email) => {

@@ -306,124 +306,44 @@ export async function POST(req: NextRequest) {
         rolledBackItems.push({ productId: item.product.id, originalStock: item.product.stock });
       }
 
-      // Step B: Insert shipping order details
-      const { error: orderErr } = await supabase
-        .from('orders')
-        .insert({
-          id: orderUUID,
-          user_id: authenticatedUserId,
-          order_number: orderNumber,
-          amount: total,
-          status: 'pending',
-          payment_method: paymentMethod,
-          idempotency_key: idempotencyKey || null,
-          notes: paymentMethod === 'Mobile Money' 
-            ? `MoMo Operator: ${paymentDetails?.momoProvider || 'MTN'}, Wallet: ${paymentDetails?.momoNumber || 'N/A'}` 
-            : paymentMethod === 'Visa' 
-              ? `Visa card ending with ${paymentDetails?.cardLast4 || 'xxxx'}` 
-              : 'Settle in cash/mobile money upon showroom delivery fitting.'
-        });
+      // Steps B through H: Execute atomic order creation transaction in PL/pgSQL
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+      const orderNotes = paymentMethod === 'Mobile Money' 
+        ? `MoMo Operator: ${paymentDetails?.momoProvider || 'MTN'}, Wallet: ${paymentDetails?.momoNumber || 'N/A'}` 
+        : paymentMethod === 'Visa' 
+          ? `Visa card ending with ${paymentDetails?.cardLast4 || 'xxxx'}` 
+          : 'Settle in cash/mobile money upon showroom delivery fitting.';
 
-      if (orderErr) {
-        throw new Error(`Failed to log checkout order details: ${orderErr.message}`);
-      }
-
-      // Step C: Insert individual ordered items
-      for (const item of validatedCartItems) {
-        const { error: itemErr } = await supabase
-          .from('order_items')
-          .insert({
-            order_id: orderUUID,
-            product_id: item.product.id,
-            quantity: item.quantity,
-            price: item.price
-          });
-
-        if (itemErr) {
-          throw new Error(`Failed to log checkout order item "${item.product.name}": ${itemErr.message}`);
-        }
-      }
-
-      // Step D: Insert physical shipping details
-      const { error: addressErr } = await supabase
-        .from('order_addresses')
-        .insert({
-          order_id: orderUUID,
+      const { error: orderTxErr } = await supabase.rpc('create_checkout_order', {
+        p_order_id: orderUUID,
+        p_user_id: authenticatedUserId || null,
+        p_order_number: orderNumber,
+        p_amount: total,
+        p_payment_method: paymentMethod,
+        p_idempotency_key: idempotencyKey || null,
+        p_notes: orderNotes,
+        p_items: validatedCartItems.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        p_shipping: {
           country: shippingAddress.country || 'Uganda',
           district: shippingAddress.district || shippingAddress.city,
           city: shippingAddress.city,
           address: shippingAddress.address
-        });
+        },
+        p_payment_provider: paymentProvider || paymentMethod,
+        p_transaction_id: transactionId,
+        p_payment_status: paymentStatus,
+        p_points_earned: Math.floor(taxableAmount * 0.1),
+        p_coupon_id: (validatedCoupon && validatedCoupon.id) ? validatedCoupon.id : null,
+        p_ip_address: ip
+      });
 
-      if (addressErr) {
-        throw new Error(`Failed to log checkout shipping address: ${addressErr.message}`);
+      if (orderTxErr) {
+        throw new Error(`Failed to log checkout order details: ${orderTxErr.message}`);
       }
-
-      // Step E: Insert payment transaction record with genuine provider transaction ID
-      const { error: paymentErr } = await supabase
-        .from('payments')
-        .insert({
-          order_id: orderUUID,
-          provider: paymentProvider || paymentMethod,
-          transaction_id: transactionId,
-          amount: total,
-          status: paymentStatus === 'Paid' ? 'success' : 'pending'
-        });
-
-      if (paymentErr) {
-        throw new Error(`Failed to log checkout transaction payment: ${paymentErr.message}`);
-      }
-
-      // Step F: If user is authenticated, update profile loyalty metrics
-      if (authenticatedUserId) {
-        const { data: profile, error: profErr } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authenticatedUserId)
-          .single();
-
-        if (!profErr && profile) {
-          const currentSpending = Number(profile.lifetime_spending) || 0;
-          const currentPoints = Number(profile.reward_points) || 0;
-          const pointsEarned = Math.floor(taxableAmount * 0.1);
-
-          await supabase
-            .from('profiles')
-            .update({
-              lifetime_spending: currentSpending + total,
-              reward_points: currentPoints + pointsEarned,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', authenticatedUserId);
-        }
-      }
-
-      // Step G: Increment times_used if a coupon was used
-      if (validatedCoupon && validatedCoupon.id) {
-        try {
-          const currentTimesUsed = Number(validatedCoupon.times_used) || 0;
-          await supabase
-            .from('coupons')
-            .update({
-              times_used: currentTimesUsed + 1,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', validatedCoupon.id);
-        } catch (couponIncErr) {
-          logger.warn('Failed to increment coupon times_used', { couponIncErr, couponId: validatedCoupon.id });
-        }
-      }
-
-      // Step H: Log checkout security audit telemetry
-      const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: authenticatedUserId,
-          action: 'Checkout Success',
-          details: `Checkout successfully processed for Order ${orderNumber} totaling Ugx ${total}. Payment: ${paymentMethod}, TxnID: ${transactionId}, Status: ${paymentStatus}.`,
-          ip_address: ip
-        });
 
     } catch (dbErr: any) {
       logger.error('Checkout transactional DB failure, initiating stock rollbacks', dbErr);
