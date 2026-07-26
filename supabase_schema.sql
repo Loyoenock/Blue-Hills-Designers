@@ -376,7 +376,7 @@ VALUES (
     'app-file', 
     true, 
     52428800, -- 50MB limit
-    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'application/pdf']
+    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
 )
 ON CONFLICT (id) DO UPDATE
 SET public = true,
@@ -582,3 +582,8 @@ SELECT id, full_name, role
 FROM public.profiles;
 
 GRANT SELECT ON public.public_profile_names TO anon, authenticated, service_role;
+
+-- Storage bucket allowed_mime_types update (remove image/svg+xml)
+UPDATE storage.buckets
+SET allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+WHERE id = 'app-file';

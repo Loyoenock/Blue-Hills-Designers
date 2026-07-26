@@ -4,7 +4,7 @@ import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError
 import crypto from 'crypto';
 
 // Whitelist of allowed extensions for media storage uploads to prevent malicious scripts
-const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'pdf', 'mp4', 'mov'];
+const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf', 'mp4', 'mov'];
 
 async function getBucketName(supabase: any): Promise<string> {
   try {
