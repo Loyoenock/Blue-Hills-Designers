@@ -187,7 +187,7 @@ export default function Header() {
                     <div className="text-[10px] uppercase tracking-widest text-[#F7F5F0]/40 px-3 py-1.5 border-b border-[#657892]/10 mb-1 font-semibold font-mono">
                       Validation Personas
                     </div>
-                    {users.map((u) => (
+                    {users.filter(u => currentUser && u.id === currentUser.id).map((u) => (
                       <button
                         key={u.id}
                         onClick={() => handleQuickLogin(u.email)}
