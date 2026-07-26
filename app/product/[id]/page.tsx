@@ -71,7 +71,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         let dbProfilesList: any[] = [];
         if (userIds.length > 0) {
           const { data: profilesData } = await supabase
-            .from('profiles')
+            .from('public_profile_names')
             .select('id, full_name, role')
             .in('id', userIds);
           dbProfilesList = profilesData || [];

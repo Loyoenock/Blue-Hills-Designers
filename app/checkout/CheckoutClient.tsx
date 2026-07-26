@@ -76,7 +76,7 @@ export default function CheckoutClient() {
         setPaymentMethod(valid[0].id as any);
       }
     }
-  }, [payMomoEnabled, payVisaEnabled, payCodEnabled, paymentMethod]);
+  }, [payMomoEnabled, payVisaEnabled, payCodEnabled, paymentMethod, setPaymentMethod]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

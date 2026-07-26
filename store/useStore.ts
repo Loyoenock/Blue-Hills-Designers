@@ -1210,7 +1210,7 @@ export const useStore = create<StoreState>()(
         // 3. Products & Reviews & Product Images
         const { data: dbProducts } = await supabase.from('products').select('*');
         const { data: dbReviews } = await supabase.from('reviews').select('*');
-        const { data: dbProfilesList } = await supabase.from('profiles').select('*');
+        const { data: dbProfilesList } = await supabase.from('public_profile_names').select('id, full_name, role');
         let dbImages: any[] | null = null;
         try {
           const { data: imgData } = await supabase.from('product_images').select('*');
@@ -1351,7 +1351,7 @@ export const useStore = create<StoreState>()(
         const { data: dbAddresses } = await supabase.from('order_addresses').select('*');
 
         const formattedOrders = (dbOrders || []).map(o => {
-          const profile = dbProfilesList?.find((p: any) => p.id === o.user_id);
+          const profile: any = dbProfiles?.find((p: any) => p.id === o.user_id) || dbProfilesList?.find((p: any) => p.id === o.user_id);
           const addr = dbAddresses?.find((a: any) => a.order_id === o.id) || {
             country: 'Uganda', district: 'Kampala', city: 'Lubowa', address: 'Lubowa Shopping Mall'
           };

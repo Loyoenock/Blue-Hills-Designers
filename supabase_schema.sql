@@ -234,9 +234,20 @@ CREATE POLICY "Allow public read-access to categories" ON public.categories FOR 
 CREATE POLICY "Allow administrative changes to categories" ON public.categories FOR ALL USING (public.is_admin_or_staff(auth.uid()));
 
 -- 3.2 PROFILES
-CREATE POLICY "Allow public read-access to profiles" ON public.profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read-access to profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow users to view own profile or admin view all" ON public.profiles;
+CREATE POLICY "Allow users to view own profile or admin view all" ON public.profiles FOR SELECT USING (
+    auth.uid() = id OR public.is_admin_or_staff(auth.uid())
+);
 CREATE POLICY "Allow users to update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Allow full access to profiles for admin" ON public.profiles FOR ALL USING (public.is_admin_or_staff(auth.uid()));
+
+-- PUBLIC PROFILE NAMES VIEW (for public display of review authors without exposing email/phone/spending)
+CREATE OR REPLACE VIEW public.public_profile_names WITH (security_invoker = false) AS
+SELECT id, full_name, role
+FROM public.profiles;
+
+GRANT SELECT ON public.public_profile_names TO anon, authenticated, service_role;
 
 -- 3.3 PRODUCTS
 CREATE POLICY "Allow public read-access to products" ON public.products FOR SELECT USING (true);
@@ -558,3 +569,16 @@ INSERT INTO public.app_settings (
 
 -- Cleanup legacy fake settings category row
 DELETE FROM public.categories WHERE slug = 'app-settings';
+
+-- Profiles RLS Scoping & Public Profile Names View Migration
+DROP POLICY IF EXISTS "Allow public read-access to profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow users to view own profile or admin view all" ON public.profiles;
+CREATE POLICY "Allow users to view own profile or admin view all"
+    ON public.profiles FOR SELECT
+    USING (auth.uid() = id OR public.is_admin_or_staff(auth.uid()));
+
+CREATE OR REPLACE VIEW public.public_profile_names WITH (security_invoker = false) AS
+SELECT id, full_name, role
+FROM public.profiles;
+
+GRANT SELECT ON public.public_profile_names TO anon, authenticated, service_role;

@@ -97,7 +97,7 @@ export default function ProductClient({ productId: propProductId, initialProduct
                 .select('*')
                 .eq('product_id', productId);
               
-              const { data: dbProfilesList } = await supabase.from('profiles').select('*');
+              const { data: dbProfilesList } = await supabase.from('public_profile_names').select('id, full_name, role');
 
               const mappedReviews = dbReviews ? dbReviews.map((r: any) => {
                 const profile = dbProfilesList?.find((prof: any) => prof.id === r.user_id);
