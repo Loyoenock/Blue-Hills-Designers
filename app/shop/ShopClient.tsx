@@ -713,6 +713,7 @@ function ShopContent({ initialProducts, initialCategories }: { initialProducts?:
                               </button>
                               <button 
                                 onClick={() => handleQuickAdd(p)}
+                                data-testid="add-to-cart-button"
                                 className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-90 px-4 py-2 rounded text-[10px] font-semibold uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer font-sans"
                               >
                                 <ShoppingCart className="w-3.5 h-3.5" />
