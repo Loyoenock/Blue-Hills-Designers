@@ -174,8 +174,68 @@ function ShopContent({ initialProducts, initialCategories }: { initialProducts?:
       .map(item => item.id);
   }, [search, searchIndex]);
 
-  // Filtering Logic
-  const filteredProducts = useMemo(() => {
+  // Server products state for paginated API query
+  const [serverProducts, setServerProducts] = useState<Product[]>([]);
+  const [serverTotalCount, setServerTotalCount] = useState<number | null>(null);
+  const [isLoadingServerProducts, setIsLoadingServerProducts] = useState<boolean>(true);
+  const [serverError, setServerError] = useState<boolean>(false);
+
+  // Fetch paginated products from API endpoint
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingServerProducts(true);
+    setServerError(false);
+
+    const params = new URLSearchParams();
+    if (selectedCategory && selectedCategory !== 'All' && selectedCategory !== 'Wishlist') {
+      params.set('category', selectedCategory);
+    }
+    if (priceRange < maxPriceLimit) {
+      params.set('maxPrice', priceRange.toString());
+    }
+    if (sortBy) {
+      params.set('sort', sortBy);
+    }
+    if (search.trim()) {
+      params.set('search', search.trim());
+    }
+    params.set('page', currentPage.toString());
+    params.set('pageSize', itemsPerPage.toString());
+
+    fetch(`/api/products?${params.toString()}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (!isMounted) return;
+        if (Array.isArray(data.data)) {
+          setServerProducts(data.data);
+          setServerTotalCount(typeof data.totalCount === 'number' ? data.totalCount : data.data.length);
+          setServerError(false);
+        } else {
+          throw new Error('Invalid response structure');
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch paginated products from API, falling back to local store:', err);
+        if (isMounted) {
+          setServerError(true);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingServerProducts(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [search, selectedCategory, priceRange, sortBy, currentPage, maxPriceLimit, itemsPerPage]);
+
+  // Fallback Filtering Logic (for offline/error or Wishlist/client filters)
+  const fallbackFilteredProducts = useMemo(() => {
     let result = [...products];
 
     // Search filter via index
@@ -217,13 +277,35 @@ function ShopContent({ initialProducts, initialCategories }: { initialProducts?:
     return result;
   }, [products, searchedProductIds, selectedCategory, selectedSize, selectedColor, priceRange, sortBy, wishlist]);
 
-  // Paginated chunk
-  const paginatedProducts = useMemo(() => {
+  const fallbackPaginatedProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredProducts, currentPage]);
+    return fallbackFilteredProducts.slice(startIndex, startIndex + itemsPerPage);
+  }, [fallbackFilteredProducts, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const filteredProducts = fallbackFilteredProducts;
+
+  const paginatedProducts = useMemo(() => {
+    if (serverError || selectedCategory === 'Wishlist') {
+      return fallbackPaginatedProducts;
+    }
+    let list = serverProducts;
+    if (selectedSize !== 'All') {
+      list = list.filter(p => p.sizes.includes(selectedSize));
+    }
+    if (selectedColor !== 'All') {
+      list = list.filter(p => p.colors.some(c => c.toLowerCase().includes(selectedColor.toLowerCase())));
+    }
+    return list;
+  }, [serverError, selectedCategory, fallbackPaginatedProducts, serverProducts, selectedSize, selectedColor]);
+
+  const totalCount = useMemo(() => {
+    if (serverError || selectedCategory === 'Wishlist') {
+      return fallbackFilteredProducts.length;
+    }
+    return serverTotalCount !== null ? serverTotalCount : fallbackFilteredProducts.length;
+  }, [serverError, selectedCategory, fallbackFilteredProducts.length, serverTotalCount]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
 
   const handleResetFilters = () => {
     setSearch('');
@@ -540,12 +622,12 @@ function ShopContent({ initialProducts, initialCategories }: { initialProducts?:
 
             {/* Product count display */}
             <p className="text-xs text-[#657892] font-mono">
-              Displaying {filteredProducts.length} premium curated ready-to-wear styles.
+              Displaying {totalCount} premium curated ready-to-wear styles.
             </p>
 
             {/* Shelf Grid container */}
             <AnimatePresence mode="wait">
-              {isSyncing && products.length === 0 ? (
+              {(isSyncing && products.length === 0) || (isLoadingServerProducts && serverProducts.length === 0) ? (
                 <motion.div
                   key="loading-skeletons"
                   initial={{ opacity: 0 }}
@@ -731,36 +813,48 @@ function ShopContent({ initialProducts, initialCategories }: { initialProducts?:
 
             {/* Animated Pagination Footer */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 pt-8 border-t border-[#657892]/10 font-mono">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3.5 py-1.5 rounded border border-[#657892]/20 text-xs text-[#1D2B3F]/60 hover:text-[#1D2B3F] disabled:opacity-40 disabled:hover:text-[#1D2B3F]/60 transition-colors bg-[#F7F5F0]"
-                >
-                  Previous
-                </button>
-                
-                {Array.from({ length: totalPages }).map((_, i) => (
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-8 border-t border-[#657892]/10 font-mono">
+                <div className="flex items-center gap-2">
                   <button
-                    key={i}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`w-8 h-8 rounded text-xs flex items-center justify-center border transition-all ${
-                      currentPage === i + 1 
-                        ? 'bg-[#1C4D8D] text-[#F7F5F0] border-[#1C4D8D] font-bold' 
-                        : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1D2B3F] bg-[#F7F5F0]'
-                    }`}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3.5 py-1.5 rounded border border-[#657892]/20 text-xs text-[#1D2B3F]/60 hover:text-[#1D2B3F] disabled:opacity-40 disabled:hover:text-[#1D2B3F]/60 transition-colors bg-[#F7F5F0] cursor-pointer"
                   >
-                    {i + 1}
+                    Previous
                   </button>
-                ))}
+                  
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`w-8 h-8 rounded text-xs flex items-center justify-center border transition-all cursor-pointer ${
+                        currentPage === i + 1 
+                          ? 'bg-[#1C4D8D] text-[#F7F5F0] border-[#1C4D8D] font-bold' 
+                          : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1D2B3F] bg-[#F7F5F0]'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
 
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3.5 py-1.5 rounded border border-[#657892]/20 text-xs text-[#1D2B3F]/60 hover:text-[#1D2B3F] disabled:opacity-40 disabled:hover:text-[#1D2B3F]/60 transition-colors bg-[#F7F5F0]"
-                >
-                  Next
-                </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3.5 py-1.5 rounded border border-[#657892]/20 text-xs text-[#1D2B3F]/60 hover:text-[#1D2B3F] disabled:opacity-40 disabled:hover:text-[#1D2B3F]/60 transition-colors bg-[#F7F5F0] cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                {currentPage < totalPages && (
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    className="bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-90 px-5 py-2 rounded text-xs font-semibold uppercase tracking-widest font-sans transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <span>Load More Styles</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </section>
