@@ -4,7 +4,8 @@ import { VALID_COUPONS } from '@/lib/coupons';
 
 describe('useStore - applyCoupon Smoke Test', () => {
   beforeEach(() => {
-    // Reset store coupon state before each test
+    // Seed store coupons state with fixture coupons and reset applied coupon before each test
+    useStore.setState({ coupons: VALID_COUPONS });
     useStore.getState().removeCoupon();
   });
 

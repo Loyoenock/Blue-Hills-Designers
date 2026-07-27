@@ -5,6 +5,16 @@ import { sendTransactionalEmail } from '@/lib/email';
 import { chargeMobileMoney, chargeCard } from '@/lib/payment';
 import crypto from 'crypto';
 
+function escapeHtml(str: string | undefined | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting Check (60 checkout attempts per minute max)
@@ -376,7 +386,7 @@ export async function POST(req: NextRequest) {
 
         <p style="font-size: 14px; font-style: italic; text-align: center;">Dear Distinguished Client,</p>
         <p style="font-size: 13px; line-height: 1.6; text-align: center; font-weight: 300;">
-          We are pleased to confirm your sartorial purchase details. Your order has been registered under <strong>${orderNumber}</strong> and is currently being hand-bagged and processed for white-glove delivery dispatch.
+          We are pleased to confirm your sartorial purchase details. Your order has been registered under <strong>${escapeHtml(orderNumber)}</strong> and is currently being hand-bagged and processed for white-glove delivery dispatch.
         </p>
 
         <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #65789215;">
@@ -393,8 +403,8 @@ export async function POST(req: NextRequest) {
               ${validatedCartItems.map(item => `
                 <tr style="border-bottom: 1px solid #65789208;">
                   <td style="padding: 10px 0;">
-                    <div style="font-weight: 600;">${item.product.name}</div>
-                    <div style="font-size: 10px; color: #657892;">Size: ${item.selectedSize} / Color: ${item.selectedColor}</div>
+                    <div style="font-weight: 600;">${escapeHtml(item.product.name)}</div>
+                    <div style="font-size: 10px; color: #657892;">Size: ${escapeHtml(item.selectedSize)} / Color: ${escapeHtml(item.selectedColor)}</div>
                   </td>
                   <td style="text-align: center; padding: 10px 0;">${item.quantity}</td>
                   <td style="text-align: right; padding: 10px 0; font-family: monospace;">Ugx ${item.price}</td>
@@ -410,7 +420,7 @@ export async function POST(req: NextRequest) {
             </div>
             ${validatedCoupon ? `
               <div style="display: flex; justify-content: space-between; margin-bottom: 5px; color: #10b981;">
-                <span>Atelier Code Discount (${validatedCoupon.code}):</span>
+                <span>Atelier Code Discount (${escapeHtml(validatedCoupon.code)}):</span>
                 <strong style="margin-left: auto; font-family: monospace;">-Ugx ${couponDiscount}</strong>
               </div>
             ` : ''}
@@ -431,9 +441,9 @@ export async function POST(req: NextRequest) {
 
         <div style="font-size: 11px; line-height: 1.5; color: #657892; background-color: #B9CDE510; padding: 15px; border-radius: 8px; border: 1px dashed #65789220; margin-bottom: 25px;">
           <h4 style="margin: 0 0 5px 0; color: #1D2B3F; font-size: 11px; text-transform: uppercase;">Delivery & Escrow Details</h4>
-          <p style="margin: 0;"><strong>Recipient Contact:</strong> ${phone}</p>
-          <p style="margin: 3px 0 0 0;"><strong>Destination:</strong> ${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.district || shippingAddress.city}, ${shippingAddress.country}</p>
-          <p style="margin: 3px 0 0 0;"><strong>Settlement Method:</strong> ${paymentMethod} (${paymentStatus === 'Paid' ? `Authorized under ID: ${transactionId}` : 'Pay upon showroom physical fitting confirmation'})</p>
+          <p style="margin: 0;"><strong>Recipient Contact:</strong> ${escapeHtml(phone)}</p>
+          <p style="margin: 3px 0 0 0;"><strong>Destination:</strong> ${escapeHtml(shippingAddress.address)}, ${escapeHtml(shippingAddress.city)}, ${escapeHtml(shippingAddress.district || shippingAddress.city)}, ${escapeHtml(shippingAddress.country)}</p>
+          <p style="margin: 3px 0 0 0;"><strong>Settlement Method:</strong> ${escapeHtml(paymentMethod)} (${paymentStatus === 'Paid' ? `Authorized under ID: ${escapeHtml(transactionId)}` : 'Pay upon showroom physical fitting confirmation'})</p>
         </div>
 
         <div style="text-align: center; font-size: 11px; color: #657892; border-top: 1px solid #65789215; padding-top: 20px; margin-top: 30px;">
