@@ -45,6 +45,10 @@ export async function POST(req: NextRequest) {
       .or(`transaction_id.eq.${flwRef},transaction_id.eq.${txRef}`)
       .single();
 
+    if (searchErr) {
+      logger.warn('Flutterwave webhook payment lookup error or unmatched record:', { searchErr, flwRef, txRef });
+    }
+
     if (paymentRecord) {
       // Update payment status
       await supabase

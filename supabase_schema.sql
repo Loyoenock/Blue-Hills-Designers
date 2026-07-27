@@ -726,3 +726,23 @@ GRANT EXECUTE ON FUNCTION public.create_checkout_order TO anon, authenticated, s
 -- Additive migration for Deal of the Day real expiration timestamp
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS deal_expires_at TIMESTAMP WITH TIME ZONE NULL;
 
+-- Additive migration for payment reconciliation flags
+CREATE TABLE IF NOT EXISTS public.reconciliation_flags (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transaction_id TEXT,
+    email TEXT,
+    amount NUMERIC,
+    payment_provider TEXT,
+    raw_error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.reconciliation_flags ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow staff and admin to view reconciliation_flags" ON public.reconciliation_flags;
+CREATE POLICY "Allow staff and admin to view reconciliation_flags" ON public.reconciliation_flags
+    FOR SELECT USING (public.is_admin_or_staff(auth.uid()));
+
+GRANT SELECT ON public.reconciliation_flags TO authenticated, service_role;
+GRANT INSERT, UPDATE, DELETE ON public.reconciliation_flags TO service_role;
+

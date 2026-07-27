@@ -380,6 +380,22 @@ export async function POST(req: NextRequest) {
     } catch (dbErr: any) {
       logger.error('Checkout transactional DB failure, initiating stock rollbacks', dbErr);
 
+      // Best-effort insert into reconciliation_flags for manual payment reconciliation
+      try {
+        await supabase
+          .from('reconciliation_flags')
+          .insert({
+            transaction_id: transactionId,
+            email,
+            amount: total,
+            payment_provider: paymentProvider,
+            raw_error: String(dbErr?.message || dbErr)
+          });
+        logger.info('Logged payment reconciliation flag for checkout failure', { transactionId, email });
+      } catch (recErr) {
+        logger.error('Failed to log reconciliation flag during checkout error handling', recErr);
+      }
+
       // Rollback: Restore original stock levels on failure
       for (const rollback of rolledBackItems) {
         try {
