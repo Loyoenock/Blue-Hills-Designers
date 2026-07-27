@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from './supabase';
 import { checkRateLimit, RateLimitResult } from './rateLimit';
+import { isBootstrapAdminEmail } from './adminBootstrap';
+
+interface RoleCacheRecord {
+  role: string;
+  expiresAt: number;
+}
+
+/**
+ * Short-TTL in-memory cache for user role profile lookups.
+ * TTL: 60 seconds (60,000 ms).
+ */
+const ROLE_CACHE_TTL_MS = 60 * 1000;
+const roleCacheMap = new Map<string, RoleCacheRecord>();
+
+export function clearRoleCache(): void {
+  roleCacheMap.clear();
+}
+
+// Clean up expired role cache entries periodically to prevent memory leaks
+if (typeof global !== 'undefined') {
+  const intervalId = (global as any).__roleCacheCleanupIntervalApiUtils;
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
+  (global as any).__roleCacheCleanupIntervalApiUtils = setInterval(() => {
+    const now = Date.now();
+    for (const [userId, record] of roleCacheMap.entries()) {
+      if (now > record.expiresAt) {
+        roleCacheMap.delete(userId);
+      }
+    }
+  }, 5 * 60 * 1000);
+}
 
 // ==========================================
 // 1. RESPONSE TYPING
@@ -212,10 +245,44 @@ export async function authenticate(req: NextRequest): Promise<AuthenticatedUser 
     return null;
   }
 
+  let userRole: string;
+
+  if (user.email && isBootstrapAdminEmail(user.email)) {
+    userRole = 'Super Admin';
+  } else {
+    const now = Date.now();
+    const cached = roleCacheMap.get(user.id);
+    if (cached && now < cached.expiresAt) {
+      userRole = cached.role;
+    } else {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (profile && profile.role) {
+          userRole = profile.role;
+        } else {
+          userRole = user.user_metadata?.role || 'Customer';
+        }
+      } catch (profileErr) {
+        logger.error('[AUTHENTICATE] Profile DB lookup failed, falling back to user_metadata:', profileErr);
+        userRole = user.user_metadata?.role || 'Customer';
+      }
+
+      roleCacheMap.set(user.id, {
+        role: userRole,
+        expiresAt: now + ROLE_CACHE_TTL_MS,
+      });
+    }
+  }
+
   return {
     id: user.id,
     email: user.email || '',
-    role: user.user_metadata?.role || 'Customer',
+    role: userRole,
     metadata: user.user_metadata || {},
   };
 }

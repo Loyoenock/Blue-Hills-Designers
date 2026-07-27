@@ -9,8 +9,7 @@ import {
   Heart, ShoppingCart, Clock, Sparkles, CheckCircle2, Eye, Calendar
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import dynamic from 'next/dynamic';
-const AIStylist = dynamic(() => import('../components/AIStylist'), { ssr: false });
+import AIStylist from '@/components/AIStylist';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../types';
 import { getSafeImageSrc } from '../lib/utils';
