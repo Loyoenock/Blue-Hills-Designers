@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { 
   User, ShoppingBag, MapPin, Key, ChevronRight, Award, 
-  Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut, Heart
+  Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut, Heart, Plus, Trash2
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getSafeImageSrc } from '../../lib/utils';
@@ -16,7 +16,8 @@ export default function AccountClient() {
   const router = useRouter();
   const { 
     currentUser, orders, updateProfile, updateAddress, updatePassword, logout, login, users,
-    wishlist, toggleWishlist, products, addToCart
+    wishlist, toggleWishlist, products, addToCart,
+    savedAddresses, addSavedAddress, updateSavedAddress, deleteSavedAddress, setDefaultAddress
   } = useStore();
   
   const [mounted, setMounted] = useState(false);
@@ -35,6 +36,7 @@ export default function AccountClient() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Saved Address form inputs
+  const [addressLabel, setAddressLabel] = useState('Home');
   const [addressCountry, setAddressCountry] = useState('Uganda');
   const [addressDistrict, setAddressDistrict] = useState('');
   const [addressCity, setAddressCity] = useState('');
@@ -42,6 +44,7 @@ export default function AccountClient() {
   const [addressSuccess, setAddressSuccess] = useState(false);
   const [addressError, setAddressError] = useState('');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -462,14 +465,83 @@ export default function AccountClient() {
                   exit={{ opacity: 0, y: 10 }}
                   className="space-y-6"
                 >
-                  <h3 className="font-serif text-xl text-[#1D2B3F] font-bold border-b border-[#657892]/20 pb-3">Saved Addresses</h3>
+                  <div className="flex items-center justify-between border-b border-[#657892]/20 pb-3">
+                    <h3 className="font-serif text-xl text-[#1D2B3F] font-bold">Saved Addresses</h3>
+                    {!isEditingAddress && (
+                      <button 
+                        onClick={() => {
+                          setEditingAddressId(null);
+                          setAddressLabel('Home');
+                          setAddressCountry('Uganda');
+                          setAddressDistrict('');
+                          setAddressCity('');
+                          setAddressLine('');
+                          setIsEditingAddress(true);
+                        }} 
+                        className="inline-flex items-center gap-1.5 bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest font-sans transition-all cursor-pointer shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add New Address
+                      </button>
+                    )}
+                  </div>
                   
                   {!isEditingAddress ? (
                     <div className="space-y-4">
-                      {addressLine ? (
+                      {savedAddresses && savedAddresses.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {savedAddresses.map((addr) => (
+                            <div key={addr.id} className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl p-6 flex items-start gap-4 relative shadow-sm">
+                              <MapPin className="w-6 h-6 text-[#C6A15B] shrink-0 mt-1" />
+                              <div className="space-y-2 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <h4 className="font-serif text-base text-[#1D2B3F] font-semibold">{addr.label || 'Saved Address'}</h4>
+                                  {addr.is_default ? (
+                                    <span className="bg-[#1C4D8D]/15 text-[#1C4D8D] text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-[#1C4D8D]/30">Default</span>
+                                  ) : (
+                                    <button 
+                                      onClick={() => setDefaultAddress(addr.id)}
+                                      className="text-[9px] font-mono text-[#657892] hover:text-[#1C4D8D] underline uppercase tracking-wider cursor-pointer"
+                                    >
+                                      Make Default
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="text-[#657892] text-xs leading-relaxed font-light">
+                                  {addr.address}<br />
+                                  {addr.city}{addr.district ? `, ${addr.district}` : ''}, {addr.country}
+                                </p>
+                                <div className="flex items-center gap-4 pt-1">
+                                  <button 
+                                    onClick={() => {
+                                      setEditingAddressId(addr.id);
+                                      setAddressLabel(addr.label || 'Home');
+                                      setAddressCountry(addr.country || 'Uganda');
+                                      setAddressDistrict(addr.district || '');
+                                      setAddressCity(addr.city || '');
+                                      setAddressLine(addr.address || '');
+                                      setIsEditingAddress(true);
+                                    }} 
+                                    className="text-[10px] font-mono font-bold uppercase text-[#1C4D8D] hover:text-[#1C4D8D]/80 flex items-center gap-1.5 transition-colors cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" /> Edit
+                                  </button>
+                                  <button 
+                                    onClick={async () => {
+                                      await deleteSavedAddress(addr.id);
+                                    }} 
+                                    className="text-[10px] font-mono font-bold uppercase text-red-600 hover:text-red-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : addressLine ? (
                         <div className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl p-6 flex items-start gap-4 max-w-md relative shadow-sm">
                           <MapPin className="w-6 h-6 text-[#C6A15B] shrink-0 mt-1" />
-                          <div className="space-y-2">
+                          <div className="space-y-2 flex-1">
                             <div className="flex items-center gap-2">
                               <h4 className="font-serif text-base text-[#1D2B3F] font-semibold">Primary Address</h4>
                               <span className="bg-[#1C4D8D]/15 text-[#1C4D8D] text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-[#1C4D8D]/30">Active</span>
@@ -479,7 +551,10 @@ export default function AccountClient() {
                               {addressCity}{addressDistrict ? `, ${addressDistrict}` : ''}, {addressCountry}
                             </p>
                             <button 
-                              onClick={() => setIsEditingAddress(true)} 
+                              onClick={() => {
+                                setEditingAddressId(null);
+                                setIsEditingAddress(true);
+                              }} 
                               className="text-[10px] font-mono font-bold uppercase text-[#1C4D8D] hover:text-[#1C4D8D]/80 flex items-center gap-1.5 transition-colors cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" /> Edit Registry
@@ -491,7 +566,15 @@ export default function AccountClient() {
                           <MapPin className="w-8 h-8 text-[#657892]/50 mx-auto" />
                           <p className="text-xs text-[#657892] font-mono">No delivery addresses currently registered.</p>
                           <button 
-                            onClick={() => setIsEditingAddress(true)} 
+                            onClick={() => {
+                              setEditingAddressId(null);
+                              setAddressLabel('Home');
+                              setAddressCountry('Uganda');
+                              setAddressDistrict('');
+                              setAddressCity('');
+                              setAddressLine('');
+                              setIsEditingAddress(true);
+                            }} 
                             className="inline-block bg-[#1C4D8D] text-[#F7F5F0] hover:bg-opacity-95 px-5 py-2.5 rounded text-xs font-semibold uppercase tracking-widest font-sans transition-all cursor-pointer"
                           >
                             Add Shipping Address
@@ -509,10 +592,33 @@ export default function AccountClient() {
                         e.preventDefault();
                         setAddressError('');
                         setAddressSuccess(false);
-                        const res = await updateAddress(addressCountry, addressDistrict, addressCity, addressLine);
+
+                        // Always sync legacy single address for backward compatibility
+                        await updateAddress(addressCountry, addressDistrict, addressCity, addressLine);
+
+                        let res: { success: boolean; error?: string };
+                        if (editingAddressId) {
+                          res = await updateSavedAddress(editingAddressId, {
+                            label: addressLabel,
+                            country: addressCountry,
+                            district: addressDistrict,
+                            city: addressCity,
+                            address: addressLine
+                          });
+                        } else {
+                          res = await addSavedAddress({
+                            label: addressLabel,
+                            country: addressCountry,
+                            district: addressDistrict,
+                            city: addressCity,
+                            address: addressLine
+                          });
+                        }
+
                         if (res.success) {
                           setAddressSuccess(true);
                           setIsEditingAddress(false);
+                          setEditingAddressId(null);
                           setTimeout(() => setAddressSuccess(false), 3000);
                         } else {
                           setAddressError(res.error || 'Failed to update address.');
@@ -521,6 +627,17 @@ export default function AccountClient() {
                       className="bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-2xl p-6 md:p-8 space-y-6 max-w-xl shadow-sm"
                     >
                       <div className="space-y-4 font-sans">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Address Tag / Label</label>
+                          <input 
+                            type="text"
+                            value={addressLabel}
+                            onChange={(e) => setAddressLabel(e.target.value)}
+                            placeholder="e.g. Home, Office, Atelier Residence"
+                            className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-3 text-xs text-[#1D2B3F] placeholder-[#657892]/45 focus:border-[#1C4D8D] outline-none shadow-sm"
+                            required
+                          />
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
                             <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Country</label>
@@ -580,7 +697,10 @@ export default function AccountClient() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setIsEditingAddress(false)}
+                            onClick={() => {
+                              setIsEditingAddress(false);
+                              setEditingAddressId(null);
+                            }}
                             className="border border-[#657892]/30 hover:bg-[#657892]/10 text-[#1D2B3F] px-6 py-3 rounded-lg text-xs font-semibold uppercase tracking-widest transition-all cursor-pointer font-sans"
                           >
                             Cancel

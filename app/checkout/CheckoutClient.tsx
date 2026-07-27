@@ -17,6 +17,7 @@ export default function CheckoutClient() {
   const router = useRouter();
   const cart = useStore((state) => state.cart);
   const currentUser = useStore((state) => state.currentUser);
+  const savedAddresses = useStore((state) => state.savedAddresses);
   const placeOrder = useStore((state) => state.placeOrder);
   const settings = useStore((state) => state.settings);
   
@@ -31,6 +32,7 @@ export default function CheckoutClient() {
   const [step, setStep] = useState(1);
 
   // Form Inputs
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<string>('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('Uganda');
@@ -84,17 +86,26 @@ export default function CheckoutClient() {
       if (currentUser) {
         setEmail(currentUser.email);
         setPhone(currentUser.phone || '');
-        if (currentUser.country) setCountry(currentUser.country);
-        if (currentUser.district) setDistrict(currentUser.district);
-        if (currentUser.city) setCity(currentUser.city);
-        if (currentUser.address) setAddress(currentUser.address);
+        if (savedAddresses && savedAddresses.length > 0) {
+          const def = savedAddresses.find(a => a.is_default) || savedAddresses[0];
+          setSelectedSavedAddressId(def.id);
+          if (def.country) setCountry(def.country);
+          if (def.district) setDistrict(def.district);
+          if (def.city) setCity(def.city);
+          if (def.address) setAddress(def.address);
+        } else {
+          if (currentUser.country) setCountry(currentUser.country);
+          if (currentUser.district) setDistrict(currentUser.district);
+          if (currentUser.city) setCity(currentUser.city);
+          if (currentUser.address) setAddress(currentUser.address);
+        }
       }
       if (typeof window !== 'undefined' && window.location.search.includes('quick=true')) {
         setIsQuick(true);
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [currentUser]);
+  }, [currentUser, savedAddresses]);
 
   if (!mounted) return null;
 
@@ -653,6 +664,38 @@ export default function CheckoutClient() {
                           />
                         </div>
                       </div>
+
+                      {currentUser && savedAddresses && savedAddresses.length > 0 && (
+                        <div className="space-y-1.5 p-3 bg-[#B9CDE5]/10 border border-[#657892]/20 rounded-xl">
+                          <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-[#C6A15B]" /> Select Saved Address (Optional)
+                          </label>
+                          <select 
+                            value={selectedSavedAddressId} 
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedSavedAddressId(val);
+                              if (val && val !== 'manual') {
+                                const sel = savedAddresses.find(a => a.id === val);
+                                if (sel) {
+                                  if (sel.country) setCountry(sel.country);
+                                  if (sel.district) setDistrict(sel.district);
+                                  if (sel.city) setCity(sel.city);
+                                  if (sel.address) setAddress(sel.address);
+                                }
+                              }
+                            }}
+                            className="w-full bg-[#F7F5F0] border border-[#657892]/30 rounded-lg px-4 py-2.5 text-xs text-[#1D2B3F] outline-none focus:border-[#1C4D8D] shadow-sm font-sans"
+                          >
+                            <option value="manual">-- Enter New Address / Manual Entry --</option>
+                            {savedAddresses.map((addr) => (
+                              <option key={addr.id} value={addr.id}>
+                                {addr.label ? `${addr.label}: ` : ''}{addr.address}, {addr.city} ({addr.country}){addr.is_default ? ' [Default]' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       <div className="space-y-1.5">
                         <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono">Country</label>

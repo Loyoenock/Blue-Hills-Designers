@@ -746,3 +746,35 @@ CREATE POLICY "Allow staff and admin to view reconciliation_flags" ON public.rec
 GRANT SELECT ON public.reconciliation_flags TO authenticated, service_role;
 GRANT INSERT, UPDATE, DELETE ON public.reconciliation_flags TO service_role;
 
+-- Additive migration for saved addresses
+CREATE TABLE IF NOT EXISTS public.saved_addresses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    label TEXT,
+    country TEXT NOT NULL DEFAULT 'Uganda',
+    district TEXT NOT NULL,
+    city TEXT NOT NULL,
+    address TEXT NOT NULL,
+    is_default BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow users to view their own saved addresses" ON public.saved_addresses;
+CREATE POLICY "Allow users to view their own saved addresses" ON public.saved_addresses FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to insert their saved addresses" ON public.saved_addresses;
+CREATE POLICY "Allow users to insert their saved addresses" ON public.saved_addresses FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to update their saved addresses" ON public.saved_addresses;
+CREATE POLICY "Allow users to update their saved addresses" ON public.saved_addresses FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to delete their saved addresses" ON public.saved_addresses;
+CREATE POLICY "Allow users to delete their saved addresses" ON public.saved_addresses FOR DELETE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow administrative access to saved_addresses" ON public.saved_addresses;
+CREATE POLICY "Allow administrative access to saved_addresses" ON public.saved_addresses FOR ALL USING (public.is_admin_or_staff(auth.uid()));
+
+GRANT ALL ON public.saved_addresses TO authenticated, service_role;
+

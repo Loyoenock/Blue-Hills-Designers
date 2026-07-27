@@ -176,4 +176,16 @@ export interface Testimonial {
   updatedAt?: string;
 }
 
+export interface SavedAddress {
+  id: string;
+  user_id?: string;
+  label?: string;
+  country: string;
+  district: string;
+  city: string;
+  address: string;
+  is_default?: boolean;
+  created_at?: string;
+}
+
 
