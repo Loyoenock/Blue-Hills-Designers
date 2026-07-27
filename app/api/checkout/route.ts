@@ -185,18 +185,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    let freeShippingThreshold = 2000; // default standard Ugx threshold
+    if (dbSettings && dbSettings.free_shipping_threshold !== undefined && dbSettings.free_shipping_threshold !== null) {
+      const parsedThreshold = Number(dbSettings.free_shipping_threshold);
+      if (Number.isFinite(parsedThreshold) && parsedThreshold >= 0) {
+        freeShippingThreshold = parsedThreshold;
+      } else {
+        logger.warn('Invalid free_shipping_threshold in app_settings, falling back to default 2000', {
+          val: dbSettings.free_shipping_threshold
+        });
+      }
+    }
+
     let deliveryFee = 0;
     if (selectedShippingMethod === 'standard') {
-      const threshold = 2000; // standard Ugx threshold
-      deliveryFee = subtotal > threshold ? 0 : 50;
+      deliveryFee = subtotal > freeShippingThreshold ? 0 : 50;
     } else if (selectedShippingMethod === 'express') {
       deliveryFee = 120;
     } else if (selectedShippingMethod === 'pickup') {
       deliveryFee = 0;
     }
 
+    let taxRate = 18; // default VAT 18% inclusive
+    if (dbSettings && dbSettings.tax_rate !== undefined && dbSettings.tax_rate !== null) {
+      const parsedTaxRate = Number(dbSettings.tax_rate);
+      if (Number.isFinite(parsedTaxRate) && parsedTaxRate >= 0 && parsedTaxRate <= 100) {
+        taxRate = parsedTaxRate;
+      } else {
+        logger.warn('Invalid tax_rate in app_settings, falling back to default 18', {
+          val: dbSettings.tax_rate
+        });
+      }
+    }
+
     const total = Math.max(0, subtotal - couponDiscount + deliveryFee);
-    const taxRate = 18; // VAT 18% inclusive
     const taxableAmount = subtotal - couponDiscount;
     const taxAmount = Math.round((taxableAmount / (1 + taxRate / 100)) * (taxRate / 100));
 
