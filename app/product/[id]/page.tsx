@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
           openGraph: {
             title: p.name,
             description: p.description || 'Premium luxury corporate menswear.',
-            type: 'video.other', // General dynamic OG format or page
+            type: 'website',
           }
         };
       }

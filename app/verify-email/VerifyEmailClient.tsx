@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mail, ArrowRight, Check, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Mail, ArrowRight, Check, AlertTriangle, RefreshCw, Info } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getSupabaseClient } from '../../lib/supabase';
 
@@ -189,8 +189,23 @@ export default function VerifyEmailClient() {
               <span className="text-xs uppercase tracking-[0.3em] text-[#1C4D8D] font-semibold">Security Verification</span>
               <h1 className="font-serif text-3xl md:text-4xl text-[#1D2B3F] tracking-tight font-bold">Validate Elite Profile</h1>
               <p className="text-[#657892] text-xs md:text-sm font-light">
-                Submit the 6-digit security code dispatched to your registered email address to authorize registry activation.
+                Accounts on Blue Hills Designers are automatically activated upon registration. If you received a 6-digit security code or link, you may authorize it below or proceed directly to your account.
               </p>
+            </div>
+
+            {/* Instant activation info notice */}
+            <div className="bg-[#1C4D8D]/5 border border-[#1C4D8D]/20 rounded-lg p-4 flex gap-3 text-[#1D2B3F] text-xs font-sans">
+              <Info className="w-5 h-5 shrink-0 text-[#1C4D8D]" />
+              <div className="space-y-1">
+                <span className="font-semibold block">Email Verification Optional</span>
+                <span className="text-[#657892]">Your client registry is already active and ready. Email verification is not required for account sign-in.</span>
+                <div className="pt-1">
+                  <Link href="/login" className="text-[#1C4D8D] font-semibold underline hover:text-[#1D2B3F] inline-flex items-center gap-1">
+                    <span>Proceed to Sign In</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
             </div>
 
             {/* Error / Success logs */}

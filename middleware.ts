@@ -3,6 +3,53 @@ import type { NextRequest } from 'next/server';
 import { isBootstrapAdminEmail } from './lib/adminBootstrap';
 import { logger } from './lib/apiUtils';
 
+/**
+ * Helper to perform fetch requests with an AbortController timeout.
+ * Prevents requests from hanging indefinitely if Supabase is unreachable or slow.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+interface RoleCacheRecord {
+  role: string;
+  expiresAt: number;
+}
+
+/**
+ * Short-TTL in-memory cache for user role profile lookups.
+ * TTL: 60 seconds (60,000 ms).
+ * Tradeoff: Avoids redundant database queries to Supabase REST /profiles during rapid client-side
+ * admin route navigations while ensuring full access-token authentication occurs on every request.
+ */
+const ROLE_CACHE_TTL_MS = 60 * 1000;
+const roleCacheMap = new Map<string, RoleCacheRecord>();
+
+// Clean up expired role cache entries periodically to prevent memory leaks
+if (typeof global !== 'undefined') {
+  const intervalId = (global as any).__roleCacheCleanupInterval;
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
+  (global as any).__roleCacheCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [userId, record] of roleCacheMap.entries()) {
+      if (now > record.expiresAt) {
+        roleCacheMap.delete(userId);
+      }
+    }
+  }, 5 * 60 * 1000);
+}
+
 export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   
@@ -33,14 +80,14 @@ export async function middleware(request: NextRequest) {
     // 1. Try to validate existing access token
     if (accessToken) {
       try {
-        const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+        const response = await fetchWithTimeout(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'apikey': supabaseAnonKey,
           },
           cache: 'no-store'
-        });
+        }, 5000);
 
         if (response.ok) {
           user = await response.json();
@@ -56,7 +103,7 @@ export async function middleware(request: NextRequest) {
     if ((!user || !user.id) && refreshToken) {
       logger.info('[MIDDLEWARE] Access token missing or invalid. Attempting silent token refresh.');
       try {
-        const refreshResponse = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/token?grant_type=refresh_token`, {
+        const refreshResponse = await fetchWithTimeout(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/token?grant_type=refresh_token`, {
           method: 'POST',
           headers: {
             'apikey': supabaseAnonKey,
@@ -64,7 +111,7 @@ export async function middleware(request: NextRequest) {
           },
           body: JSON.stringify({ refresh_token: refreshToken }),
           cache: 'no-store'
-        });
+        }, 5000);
 
         if (refreshResponse.ok) {
           const refreshData = await refreshResponse.json();
@@ -106,31 +153,41 @@ export async function middleware(request: NextRequest) {
       if (user.email && isBootstrapAdminEmail(user.email)) {
         userRole = 'Super Admin';
       } else {
-        // Query the database profiles table directly via REST API using the validated JWT
-        try {
-          const profileRes = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${user.id}&select=*`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'apikey': supabaseAnonKey,
-            },
-            cache: 'no-store'
-          });
+        const now = Date.now();
+        const cached = roleCacheMap.get(user.id);
+        if (cached && now < cached.expiresAt) {
+          userRole = cached.role;
+        } else {
+          // Query the database profiles table directly via REST API using the validated JWT
+          try {
+            const profileRes = await fetchWithTimeout(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${user.id}&select=*`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'apikey': supabaseAnonKey,
+              },
+              cache: 'no-store'
+            }, 5000);
 
-          if (profileRes.ok) {
-            const profiles = await profileRes.json();
-            if (Array.isArray(profiles) && profiles.length > 0) {
-              userRole = profiles[0].role || 'Customer';
+            if (profileRes.ok) {
+              const profiles = await profileRes.json();
+              if (Array.isArray(profiles) && profiles.length > 0) {
+                userRole = profiles[0].role || 'Customer';
+              } else {
+                userRole = user.user_metadata?.role || 'Customer';
+              }
+              roleCacheMap.set(user.id, {
+                role: userRole,
+                expiresAt: now + ROLE_CACHE_TTL_MS,
+              });
             } else {
+              logger.warn(`[MIDDLEWARE] Profile DB lookup failed with status: ${profileRes.status}, falling back to auth metadata`);
               userRole = user.user_metadata?.role || 'Customer';
             }
-          } else {
-            logger.warn(`[MIDDLEWARE] Profile DB lookup failed with status: ${profileRes.status}, falling back to auth metadata`);
+          } catch (dbErr) {
+            logger.error('[MIDDLEWARE] Direct DB profile fetch exception, falling back:', dbErr);
             userRole = user.user_metadata?.role || 'Customer';
           }
-        } catch (dbErr) {
-          logger.error('[MIDDLEWARE] Direct DB profile fetch exception, falling back:', dbErr);
-          userRole = user.user_metadata?.role || 'Customer';
         }
       }
 
