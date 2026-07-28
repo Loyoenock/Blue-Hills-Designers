@@ -21,6 +21,7 @@ const envSchema = z.object({
   FLUTTERWAVE_PUBLIC_KEY: z.string().optional(),
   FLUTTERWAVE_WEBHOOK_SECRET_HASH: z.string().optional(),
   PAYMENT_TEST_MODE: z.string().optional(),
+  SENTRY_DSN: z.string().optional(),
 });
 
 export function validateEnv() {
@@ -39,6 +40,7 @@ export function validateEnv() {
     FLUTTERWAVE_PUBLIC_KEY: process.env.FLUTTERWAVE_PUBLIC_KEY,
     FLUTTERWAVE_WEBHOOK_SECRET_HASH: process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH,
     PAYMENT_TEST_MODE: process.env.PAYMENT_TEST_MODE,
+    SENTRY_DSN: process.env.SENTRY_DSN,
   };
 
   const result = envSchema.safeParse(envVars);
