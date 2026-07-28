@@ -17,6 +17,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, User, Coupon, Category, Testimonial } from '../../types';
 import { getSupabaseClient } from '../../lib/supabase';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
+import DashboardTab from './components/DashboardTab';
+import ProductsTab from './components/ProductsTab';
+import CategoriesTab from './components/CategoriesTab';
+import TestimonialsTab from './components/TestimonialsTab';
+import CouponsTab from './components/CouponsTab';
+import OrdersTab from './components/OrdersTab';
+import UsersTab from './components/UsersTab';
+import PaymentsTab from './components/PaymentsTab';
+import BookingsTab from './components/BookingsTab';
+import LogsTab from './components/LogsTab';
+import ReconciliationTab from './components/ReconciliationTab';
+import SettingsTab from './components/SettingsTab';
 
 export default function Admin() {
   const router = useRouter();
@@ -1031,629 +1043,63 @@ export default function Admin() {
             
             {/* SUB-TAB 1: DASHBOARD PULSE */}
             {activeTab === 'dashboard' && (
-              <motion.div 
-                key="dashboard"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-8"
-              >
-                {/* Stats grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
-                  {[
-                    { title: "Boutique Revenue", val: `Ugx ${totalRevenue}`, subtitle: "Net authorized capital holds", icon: DollarSign },
-                    { title: "Sartorial Orders", val: orders.length, subtitle: "Trunks registered", icon: ShoppingBag },
-                    { title: "Executive Clients", val: activeCustomers, subtitle: "Active VIP registries", icon: Users },
-                    { title: "Apparel Stock", val: products.length, subtitle: "Tailoring designs active", icon: Layers }
-                  ].map((st, i) => {
-                    const Icon = st.icon;
-                    return (
-                      <div key={i} className="bg-[#111111] border border-white/10 rounded-2xl p-5 space-y-1">
-                        <div className="flex justify-between items-start">
-                          <span className="text-[9px] text-white/40 uppercase tracking-widest font-mono">{st.title}</span>
-                          <Icon className="w-4 h-4 text-[#20D9A1]" />
-                        </div>
-                        <div className="font-mono text-2xl font-bold text-white">{st.val}</div>
-                        <p className="text-[9px] text-white/30 leading-normal">{st.subtitle}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Mid-grid: Mini chart representation using custom stylized css and vectors */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-                  {/* Top Products representation */}
-                  <div className="md:col-span-7 bg-[#111111] border border-white/10 rounded-2xl p-6 space-y-4">
-                    <h4 className="font-serif text-base text-white font-bold">Top Performing Sartorial Apparel</h4>
-                    <div className="space-y-3">
-                      {products.slice(0, 3).map((prod, index) => {
-                        const totalOrdersOfProd = orders.filter(o => o.items.some(it => it.productId === prod.id)).length;
-                        return (
-                          <div key={prod.id} className="space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-white/80 font-medium">{prod.name}</span>
-                              <span className="text-white/40 font-mono">{totalOrdersOfProd} commissions</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-[#5F39FF]" 
-                                style={{ width: `${Math.min(100, (totalOrdersOfProd * 40) + 20)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Revenue Growth Mini visualization */}
-                  <div className="md:col-span-5 bg-[#111111] border border-white/10 rounded-2xl p-6 flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <span className="text-[10px] text-white/40 uppercase tracking-widest font-mono">Monthly Projection</span>
-                      <h4 className="font-serif text-lg text-white font-bold flex items-center gap-2">
-                        <span>Lubowa Retail Target</span>
-                        <TrendingUp className="w-4 h-4 text-[#20D9A1]" />
-                      </h4>
-                      <p className="text-xs text-white/50 leading-relaxed font-light">Showroom target of Ugx 50,000 corporate investment on menswear collections is 65% completed.</p>
-                    </div>
-
-                    <div className="pt-4 font-mono text-sm font-semibold flex justify-between items-center text-[#20D9A1]">
-                      <span>65% Achieved</span>
-                      <span>Ugx 32,500</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recent orders ledger quick view */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 space-y-4">
-                  <h4 className="font-serif text-base text-white font-bold">Active Showroom Registrations</h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse font-sans text-xs">
-                      <thead>
-                        <tr className="border-b border-white/5 text-[9px] uppercase tracking-widest font-mono text-white/40">
-                          <th className="py-3 px-2">REGISTRY ID</th>
-                          <th className="py-3 px-2">VIP CLIENT</th>
-                          <th className="py-3 px-2">ORDER AMOUNT</th>
-                          <th className="py-3 px-2">STATUS</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {orders.slice(0, 3).map((o) => (
-                          <tr key={o.id} className="hover:bg-white/5 transition-colors">
-                            <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{o.id}</td>
-                            <td className="py-3 px-2 text-white">{o.customerName}</td>
-                            <td className="py-3 px-2 font-mono font-semibold">Ugx {o.amount}</td>
-                            <td className="py-3 px-2">
-                              <span className={`text-[9px] font-mono uppercase font-bold px-2.5 py-0.5 rounded-full ${
-                                o.status === 'Delivered' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                o.status === 'Processing' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-                              }`}>
-                                {o.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <DashboardTab
+                totalRevenue={totalRevenue}
+                orders={orders}
+                activeCustomers={activeCustomers}
+                products={products}
+              />
             )}
 
             {/* SUB-TAB 2: PRODUCTS APPAREL REGISTRY */}
             {activeTab === 'products' && (
-              <motion.div 
-                key="products"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <h3 className="font-serif text-xl text-white font-bold">Showroom Apparel Registry</h3>
-                  
-                  {canModifyProducts && (
-                    <button 
-                      onClick={() => handleOpenProductModal()}
-                      className="bg-[#5F39FF] hover:bg-opacity-95 text-white px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer"
-                      id="create-product-btn"
-                    >
-                      <Plus className="w-4 h-4" /> Add Product
-                    </button>
-                  )}
-                </div>
-
-                {/* Search & filtering */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 md:col-span-2">
-                    <Search className="w-3.5 h-3.5 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      placeholder="Search apparel name, fabric description..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
-                    />
-                  </div>
-                  <div>
-                    <select 
-                      value={productCategoryFilter}
-                      onChange={(e) => setProductCategoryFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="All">All Categories</option>
-                      <option value="Suits">Suits</option>
-                      <option value="Shirts">Shirts</option>
-                      <option value="Shoes">Shoes</option>
-                      <option value="Accessories">Accessories</option>
-                    </select>
-                  </div>
-                  <div>
-                    <select 
-                      value={stockStatusFilter}
-                      onChange={(e) => setStockStatusFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="All">All Stock Levels</option>
-                      <option value="In Stock">In Stock Only</option>
-                      <option value="Low Stock">Low Stock (≤ 3)</option>
-                      <option value="Out of Stock">Out of Stock</option>
-                    </select>
-                  </div>
-                  <div>
-                    <select 
-                      value={productSort}
-                      onChange={(e) => setProductSort(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="Default">Default Order</option>
-                      <option value="PriceAsc">Price: Low to High</option>
-                      <option value="PriceDesc">Price: High to Low</option>
-                      <option value="StockAsc">Stock: Low to High</option>
-                      <option value="StockDesc">Stock: High to Low</option>
-                      <option value="NameAsc">Alphabetical (A-Z)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Table representation */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse font-sans text-xs">
-                      <thead>
-                        <tr className="border-b border-white/5 text-[9px] uppercase tracking-widest font-mono text-white/40">
-                          <th className="py-3 px-2">Image</th>
-                          <th className="py-3 px-2">Product Details</th>
-                          <th className="py-3 px-2 font-mono">Category</th>
-                          <th className="py-3 px-2 font-mono">Price</th>
-                          <th className="py-3 px-2 font-mono">Stock Left</th>
-                          <th className="py-3 px-2 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {filteredProducts.map((p) => (
-                          <Fragment key={p.id}>
-                            <tr className="hover:bg-white/5 transition-colors">
-                              <td className="py-3 px-2">
-                                <div className="relative w-8 h-10 rounded overflow-hidden bg-black shrink-0">
-                                  <Image src={getSafeImageSrc(p.images?.[0])} alt={p.name} fill className="object-cover" sizes="32px" referrerPolicy="no-referrer" />
-                                </div>
-                              </td>
-                              <td className="py-3 px-2 space-y-0.5">
-                                <span className="font-serif font-bold text-white text-xs block">{p.name}</span>
-                                <span className="text-[10px] text-white/40 block max-w-xs truncate">{p.description}</span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {p.isNew && (
-                                    <span className="bg-[#20D9A1]/10 border border-[#20D9A1]/20 text-[#20D9A1] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      New
-                                    </span>
-                                  )}
-                                  {p.isFeatured && (
-                                    <span className="bg-[#5F39FF]/10 border border-[#5F39FF]/20 text-[#a08eff] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      Featured
-                                    </span>
-                                  )}
-                                  {p.isDealOfTheDay && (
-                                    <span className="bg-[#C6A15B]/10 border border-[#C6A15B]/20 text-[#C6A15B] text-[8px] px-1 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      Secret Offer ({p.discountPercentage || 0}%)
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 pt-1.5 border-t border-white/5 text-[9px] font-mono">
-                                  {p.sizes && p.sizes.length > 0 && (
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[#C6A15B] font-bold uppercase tracking-wider text-[8px]">Size Registry:</span>
-                                      <span className="text-white/60">{p.sizes.join(', ')}</span>
-                                    </div>
-                                  )}
-                                  {p.colors && p.colors.length > 0 && (
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[#C6A15B] font-bold uppercase tracking-wider text-[8px]">Color Palette:</span>
-                                      <span className="text-white/60">{p.colors.join(', ')}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-3 px-2 font-mono uppercase text-[10px] text-white/50">{p.category}</td>
-                              <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">Ugx {p.price}</td>
-                              <td className="py-3 px-2 font-mono">
-                                <div className="flex items-center gap-1 font-mono">
-                                  <button 
-                                    onClick={() => updateProductStockQuick(p.id, Math.max(0, p.stock - 1), currentUser?.name || 'Admin', currentUser?.role || 'Staff')}
-                                    className="w-5 h-5 rounded border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 active:scale-95 transition-all text-[11px]"
-                                    title="Decrease Stock"
-                                  >
-                                    -
-                                  </button>
-                                  <span className={`w-6 text-center text-[10px] font-bold ${p.stock <= 2 ? 'text-red-400 font-bold' : 'text-white'}`}>
-                                    {p.stock}
-                                  </span>
-                                  <button 
-                                    onClick={() => updateProductStockQuick(p.id, p.stock + 1, currentUser?.name || 'Admin', currentUser?.role || 'Staff')}
-                                    className="w-5 h-5 rounded border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 active:scale-95 transition-all text-[11px]"
-                                    title="Increase Stock"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="py-3 px-2 text-right">
-                                <div className="flex justify-end gap-1.5">
-                                  <button 
-                                    onClick={() => setExpandedReviewsProductId(expandedReviewsProductId === p.id ? null : p.id)}
-                                    className={`p-1.5 rounded border transition-all cursor-pointer relative ${
-                                      expandedReviewsProductId === p.id 
-                                        ? 'border-[#C6A15B]/40 bg-[#C6A15B]/10 text-[#C6A15B]' 
-                                        : 'border-white/5 bg-white/5 hover:border-[#C6A15B]/30 hover:bg-[#C6A15B]/5 text-white/70 hover:text-[#C6A15B]'
-                                    }`}
-                                    title="Moderate product reviews"
-                                  >
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                    {p.reviews && p.reviews.length > 0 && (
-                                      <span className="absolute -top-1 -right-1 bg-[#C6A15B] text-black font-sans font-extrabold text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center scale-90 font-bold">
-                                        {p.reviews.length}
-                                      </span>
-                                    )}
-                                  </button>
-
-                                  <button 
-                                    onClick={() => handleOpenProductModal(p)}
-                                    className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
-                                    title="Edit product details"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleOpenDeleteModal(p)}
-                                    className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
-                                    title="Soft delete from showroom"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-
-                            {expandedReviewsProductId === p.id && (
-                              <tr className="bg-black/35 border-b border-white/5">
-                                <td colSpan={6} className="py-4 px-6 space-y-3">
-                                  <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                                    <h4 className="font-serif font-bold text-white text-xs flex items-center gap-1.5">
-                                      <MessageSquare className="w-3.5 h-3.5 text-[#C6A15B]" />
-                                      Apparel Reviews & Feedbacks Moderation Panel
-                                    </h4>
-                                    <button 
-                                      onClick={() => setExpandedReviewsProductId(null)}
-                                      className="text-white/40 hover:text-white text-[10px] font-mono"
-                                    >
-                                      Close Panel [✕]
-                                    </button>
-                                  </div>
-                                  
-                                  {!p.reviews || p.reviews.length === 0 ? (
-                                    <p className="text-[10px] text-white/40 font-serif italic py-2">
-                                      No feedback or reviews recorded for this apparel from customers yet.
-                                    </p>
-                                  ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
-                                      {p.reviews.map((rev) => (
-                                        <div key={rev.id} className="bg-white/5 border border-white/5 rounded-xl p-3 flex justify-between items-start gap-4">
-                                          <div className="space-y-1 w-full">
-                                            <div className="flex items-center gap-2">
-                                              <span className="font-semibold text-white text-[11px]">{rev.userName}</span>
-                                              <span className="bg-white/10 text-white/60 text-[8px] font-mono px-1 rounded uppercase">
-                                                {rev.userRole || 'Customer'}
-                                              </span>
-                                              <span className="text-[9px] text-white/30 font-mono ml-auto">{rev.date}</span>
-                                            </div>
-                                            <div className="flex items-center gap-0.5 py-0.5">
-                                              {Array.from({ length: 5 }).map((_, i) => (
-                                                <Star 
-                                                  key={i} 
-                                                  className={`w-3 h-3 ${i < rev.rating ? 'text-[#C6A15B] fill-[#C6A15B]' : 'text-white/10'}`} 
-                                                />
-                                              ))}
-                                            </div>
-                                            <p className="text-[10px] text-white/75 leading-relaxed italic">
-                                              "{rev.comment}"
-                                            </p>
-                                          </div>
-                                          
-                                          <button 
-                                            onClick={async () => {
-                                              if (confirm('Are you sure you want to moderate and remove this review permanently?')) {
-                                                await deleteReview(p.id, rev.id, currentUser?.name || 'Moderator', currentUser?.role || 'Admin');
-                                              }
-                                            }}
-                                            className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
-                                            title="Moderate review"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <ProductsTab
+                canModifyProducts={canModifyProducts}
+                handleOpenProductModal={handleOpenProductModal}
+                productSearch={productSearch}
+                setProductSearch={setProductSearch}
+                productCategoryFilter={productCategoryFilter}
+                setProductCategoryFilter={setProductCategoryFilter}
+                stockStatusFilter={stockStatusFilter}
+                setStockStatusFilter={setStockStatusFilter}
+                productSort={productSort}
+                setProductSort={setProductSort}
+                filteredProducts={filteredProducts}
+                getSafeImageSrc={getSafeImageSrc}
+                updateProductStockQuick={updateProductStockQuick}
+                currentUser={currentUser}
+                handleOpenDeleteModal={handleOpenDeleteModal}
+                expandedReviewsProductId={expandedReviewsProductId}
+                setExpandedReviewsProductId={setExpandedReviewsProductId}
+                deleteReview={deleteReview}
+              />
             )}
 
             {/* SUB-TAB: CATEGORIES MANAGEMENT */}
             {activeTab === 'categories' && canSeeCategories && (
-              <motion.div 
-                key="categories"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold flex items-center gap-2">
-                      <Layers className="w-5 h-5 text-[#20D9A1]" />
-                      Apparel Categories Registry
-                    </h3>
-                    <p className="text-[11px] text-white/40 mt-0.5">Manage database-backed merchandise categories and catalog organization.</p>
-                  </div>
-                  
-                  {canModifyCategories && (
-                    <button 
-                      onClick={() => handleOpenCategoryModal()}
-                      className="bg-[#20D9A1] hover:bg-opacity-95 text-black px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-[#20D9A1]/20 font-mono"
-                      id="create-category-btn"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Category
-                    </button>
-                  )}
-                </div>
-
-                {/* Filters */}
-                <div className="bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 max-w-md">
-                    <Search className="w-4 h-4 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={categorySearch}
-                      onChange={(e) => setCategorySearch(e.target.value)}
-                      placeholder="Search category name, slug, description..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0 font-mono"
-                      id="category-search-input"
-                    />
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] uppercase tracking-wider text-white/40 font-mono">
-                          <th className="py-3.5 px-4">Category Name & Slug</th>
-                          <th className="py-3.5 px-4">Description</th>
-                          <th className="py-3.5 px-3 text-center">Assigned Products</th>
-                          <th className="py-3.5 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-xs text-white/80">
-                        {filteredCategories.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="py-12 text-center text-white/40 font-mono text-xs">
-                              No merchandise categories matching criteria.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredCategories.map((c) => {
-                            const productCount = (products || []).filter(p => p.category?.toLowerCase() === c.name.toLowerCase() || p.category?.toLowerCase() === c.slug.toLowerCase()).length;
-                            return (
-                              <tr key={c.id || c.slug} className="hover:bg-white/[0.02] transition-colors">
-                                <td className="py-3.5 px-4">
-                                  <div className="font-semibold text-white text-sm">{c.name}</div>
-                                  <div className="text-[10px] text-white/40 font-mono font-light">slug: {c.slug}</div>
-                                </td>
-                                <td className="py-3.5 px-4 text-white/70 max-w-xs font-light text-xs">
-                                  {c.description || <span className="text-white/30 italic">No description provided</span>}
-                                </td>
-                                <td className="py-3.5 px-3 text-center font-mono">
-                                  <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded text-xs font-bold text-[#20D9A1]">
-                                    {productCount} {productCount === 1 ? 'Product' : 'Products'}
-                                  </span>
-                                </td>
-                                <td className="py-3.5 px-4 text-right">
-                                  <div className="flex justify-end gap-1.5">
-                                    {canModifyCategories && (
-                                      <>
-                                        <button 
-                                          onClick={() => handleOpenCategoryModal(c)}
-                                          className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
-                                          title="Edit category"
-                                        >
-                                          <Edit className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button 
-                                          onClick={() => handleOpenDeleteCategoryModal(c)}
-                                          className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
-                                          title="Delete category"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <CategoriesTab
+                canModifyCategories={canModifyCategories}
+                handleOpenCategoryModal={handleOpenCategoryModal}
+                categorySearch={categorySearch}
+                setCategorySearch={setCategorySearch}
+                filteredCategories={filteredCategories}
+                products={products}
+                handleOpenDeleteCategoryModal={handleOpenDeleteCategoryModal}
+              />
             )}
 
             {/* SUB-TAB: TESTIMONIALS MANAGEMENT */}
             {activeTab === 'testimonials' && canSeeTestimonials && (
-              <motion.div 
-                key="testimonials"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#111111] p-6 rounded-2xl border border-white/10">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-[#C6A15B]" />
-                      Executive Testimonials
-                    </h3>
-                    <p className="text-[11px] text-white/40 mt-0.5">Manage customer endorsements and VIP quotes displayed on the public homepage.</p>
-                  </div>
-                  {canModifyTestimonials && (
-                    <button
-                      onClick={() => handleOpenTestimonialModal()}
-                      className="bg-[#5F39FF] text-white hover:bg-[#4d2ee0] px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-[#5F39FF]/20 font-mono shrink-0"
-                      id="create-testimonial-btn"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Testimonial
-                    </button>
-                  )}
-                </div>
-
-                {/* Filter / Search */}
-                <div className="bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 max-w-md">
-                    <Search className="w-4 h-4 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={testimonialSearch}
-                      onChange={(e) => setTestimonialSearch(e.target.value)}
-                      placeholder="Search quote, author name, role, company..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0 font-mono"
-                      id="testimonial-search-input"
-                    />
-                  </div>
-                </div>
-
-                {/* Testimonials Table */}
-                <div className="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] uppercase tracking-wider text-white/40 font-mono">
-                          <th className="py-3.5 px-3 text-center w-16">Order</th>
-                          <th className="py-3.5 px-4">Author & Role</th>
-                          <th className="py-3.5 px-4">Quote</th>
-                          <th className="py-3.5 px-3 text-center">Status</th>
-                          <th className="py-3.5 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-xs text-white/80">
-                        {filteredTestimonials.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="py-12 text-center text-white/40 font-mono text-xs">
-                              No testimonials found matching criteria.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredTestimonials.map((t) => (
-                            <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
-                              <td className="py-3.5 px-3 text-center font-mono">
-                                <span className="bg-white/5 border border-white/10 text-white/70 px-2.5 py-1 rounded text-xs font-bold">
-                                  #{t.displayOrder}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 min-w-[180px]">
-                                <div className="font-serif font-bold text-white text-sm">{t.name}</div>
-                                <div className="text-[10px] text-[#C6A15B] font-mono font-medium">
-                                  {t.role}{t.role && t.company ? ' • ' : ''}{t.company}
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4 max-w-md font-serif italic text-white/80 text-xs leading-relaxed">
-                                &ldquo;{t.quote}&rdquo;
-                              </td>
-                              <td className="py-3.5 px-3 text-center font-mono">
-                                {canModifyTestimonials ? (
-                                  <button
-                                    onClick={() => updateTestimonial(t.id!, { isActive: !t.isActive }, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin')}
-                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                                      t.isActive
-                                        ? 'bg-[#20D9A1]/10 border-[#20D9A1]/30 text-[#20D9A1] hover:bg-[#20D9A1]/20'
-                                        : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70'
-                                    }`}
-                                  >
-                                    {t.isActive ? 'Active' : 'Inactive'}
-                                  </button>
-                                ) : (
-                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                    t.isActive
-                                      ? 'bg-[#20D9A1]/10 border-[#20D9A1]/30 text-[#20D9A1]'
-                                      : 'bg-white/5 border-white/10 text-white/40'
-                                  }`}>
-                                    {t.isActive ? 'Active' : 'Inactive'}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3.5 px-4 text-right">
-                                <div className="flex justify-end gap-1.5">
-                                  {canModifyTestimonials && (
-                                    <>
-                                      <button 
-                                        onClick={() => handleOpenTestimonialModal(t)}
-                                        className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
-                                        title="Edit testimonial"
-                                      >
-                                        <Edit className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button 
-                                        onClick={() => handleOpenDeleteTestimonialModal(t)}
-                                        className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
-                                        title="Delete testimonial"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <TestimonialsTab
+                canModifyTestimonials={canModifyTestimonials}
+                handleOpenTestimonialModal={handleOpenTestimonialModal}
+                testimonialSearch={testimonialSearch}
+                setTestimonialSearch={setTestimonialSearch}
+                filteredTestimonials={filteredTestimonials}
+                updateTestimonial={updateTestimonial}
+                currentUser={currentUser}
+                handleOpenDeleteTestimonialModal={handleOpenDeleteTestimonialModal}
+              />
             )}
 
             {/* SUB-TAB: COUPONS MANAGEMENT */}
