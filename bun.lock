@@ -22,6 +22,7 @@
         "zustand": "^5.0.2",
       },
       "devDependencies": {
+        "@axe-core/playwright": "^4.12.1",
         "@eslint/eslintrc": "^3.3.6",
         "@playwright/test": "^1.62.0",
         "@tailwindcss/postcss": "^4.0.0-beta.4",
@@ -31,6 +32,7 @@
         "autoprefixer": "^10.4.20",
         "eslint": "^9.16.0",
         "eslint-config-next": "15.1.12",
+        "eslint-plugin-jsx-a11y": "^6.10.2",
         "postcss": "^8.4.49",
         "tailwindcss": "^4.0.0-beta.4",
         "typescript": "^5.7.2",
@@ -40,6 +42,8 @@
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
+
+    "@axe-core/playwright": ["@axe-core/playwright@4.12.1", "", { "dependencies": { "axe-core": "~4.12.1" }, "peerDependencies": { "playwright-core": ">= 1.0.0" } }, "sha512-rMd7xriptqKpP+w5265i4Hdkv2X5kbu6uiBi/B2I7uf3hieRBM3qDCfaKPtxfiYb2mKXfF+yLODJwIx+Jv1GDw=="],
 
     "@colors/colors": ["@colors/colors@1.6.0", "", {}, "sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA=="],
 
