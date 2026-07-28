@@ -15,34 +15,63 @@ export default function AIStylist() {
   const currentUser = useStore((state) => state.currentUser);
   const settings = useStore((state) => state.settings);
   const products = useStore((state) => state.products);
+  const loadStylistHistory = useStore((state) => state.loadStylistHistory);
+  const saveStylistMessage = useStore((state) => state.saveStylistMessage);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history on mount
+  // Load chat history on mount / user change
   useEffect(() => {
-    const saved = localStorage.getItem('blue_hills_styling_chat');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
-          return;
+    let isMounted = true;
+
+    async function initChat() {
+      if (currentUser?.id) {
+        try {
+          const res = await loadStylistHistory();
+          if (isMounted && res.success && res.messages && res.messages.length > 0) {
+            setMessages(res.messages);
+            return;
+          }
+        } catch (e) {
+          console.warn('Failed to load online stylist history:', e);
         }
-      } catch (e) {
-        console.warn('Failed to parse saved chat history:', e);
+      }
+
+      // Guest or fallback to localStorage
+      const saved = localStorage.getItem('blue_hills_styling_chat');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            if (isMounted) setMessages(parsed);
+            return;
+          }
+        } catch (e) {
+          console.warn('Failed to parse saved chat history:', e);
+        }
+      }
+
+      // Fallback default message
+      if (isMounted) {
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'model',
+            content: 'WELCOME_PLACEHOLDER'
+          }
+        ]);
       }
     }
-    // Fallback default message
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'model',
-        content: 'WELCOME_PLACEHOLDER'
-      }
-    ]);
-  }, []);
+
+    initChat();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.id, loadStylistHistory]);
 
   // Save chat history to localStorage on changes
   useEffect(() => {
@@ -127,11 +156,19 @@ export default function AIStylist() {
       }
 
       const data = await response.json();
-      setMessages(curr => [...curr, {
-        id: `model-msg-${curr.length + 1}`,
+      const modelMsg: ChatMessage = {
+        id: `model-msg-${updatedMessages.length + 1}`,
         role: 'model',
         content: data.text
-      }]);
+      };
+      const finalMessages = [...updatedMessages, modelMsg];
+      setMessages(finalMessages);
+
+      if (currentUser?.id) {
+        saveStylistMessage(finalMessages).catch((err) => {
+          console.warn('Silent saveStylistMessage error:', err);
+        });
+      }
     } catch (err: any) {
       const greeting = currentUser ? `Mr. ${currentUser.name}` : 'Sir';
       const supportNo = settings?.supportPhone || settings?.conciergePhone || '+256 (772) 123-456';
@@ -144,11 +181,19 @@ export default function AIStylist() {
         errorText = `I apologize, ${greeting}. We have reached the session styling depth limit. Kindly use the "Reset Dialog" option above to start a fresh styling register.`;
       }
 
-      setMessages(curr => [...curr, {
-        id: `error-msg-${curr.length + 1}`,
+      const errorMsg: ChatMessage = {
+        id: `error-msg-${updatedMessages.length + 1}`,
         role: 'model',
         content: errorText
-      }]);
+      };
+      const finalMessages = [...updatedMessages, errorMsg];
+      setMessages(finalMessages);
+
+      if (currentUser?.id) {
+        saveStylistMessage(finalMessages).catch((err) => {
+          console.warn('Silent saveStylistMessage error:', err);
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -203,6 +248,11 @@ export default function AIStylist() {
                 ];
                 setMessages(resetMsg);
                 localStorage.setItem('blue_hills_styling_chat', JSON.stringify(resetMsg));
+                if (currentUser?.id) {
+                  saveStylistMessage(resetMsg).catch((err) => {
+                    console.warn('Silent saveStylistMessage error:', err);
+                  });
+                }
               }}
               className="text-[#657892] hover:text-[#1C4D8D] flex items-center gap-1.5 text-xs transition-colors p-1"
               title="Reset conversation"

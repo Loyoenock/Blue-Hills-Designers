@@ -188,4 +188,18 @@ export interface SavedAddress {
   created_at?: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+}
+
+export interface StylistConversation {
+  id: string;
+  user_id?: string | null;
+  messages: ChatMessage[];
+  updated_at?: string;
+}
+
+
 

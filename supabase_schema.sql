@@ -778,3 +778,31 @@ CREATE POLICY "Allow administrative access to saved_addresses" ON public.saved_a
 
 GRANT ALL ON public.saved_addresses TO authenticated, service_role;
 
+-- Additive migration for AI Stylist Conversations
+CREATE TABLE IF NOT EXISTS public.stylist_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.stylist_conversations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow users to view their own stylist conversations" ON public.stylist_conversations;
+CREATE POLICY "Allow users to view their own stylist conversations" ON public.stylist_conversations FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to insert their own stylist conversations" ON public.stylist_conversations;
+CREATE POLICY "Allow users to insert their own stylist conversations" ON public.stylist_conversations FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to update their own stylist conversations" ON public.stylist_conversations;
+CREATE POLICY "Allow users to update their own stylist conversations" ON public.stylist_conversations FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow users to delete their own stylist conversations" ON public.stylist_conversations;
+CREATE POLICY "Allow users to delete their own stylist conversations" ON public.stylist_conversations FOR DELETE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow staff and admin to view stylist_conversations" ON public.stylist_conversations;
+CREATE POLICY "Allow staff and admin to view stylist_conversations" ON public.stylist_conversations FOR SELECT USING (public.is_admin_or_staff(auth.uid()));
+
+GRANT ALL ON public.stylist_conversations TO authenticated, service_role;
+
+

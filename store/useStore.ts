@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category, Testimonial, SavedAddress
+  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category, Testimonial, SavedAddress, ChatMessage
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
@@ -38,6 +38,10 @@ interface StoreState {
   updateSavedAddress: (id: string, updatedFields: Partial<SavedAddress>) => Promise<{ success: boolean; error?: string }>;
   deleteSavedAddress: (id: string) => Promise<{ success: boolean; error?: string }>;
   setDefaultAddress: (id: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Stylist Conversation actions
+  loadStylistHistory: () => Promise<{ success: boolean; messages?: ChatMessage[]; error?: string }>;
+  saveStylistMessage: (messages: ChatMessage[]) => Promise<{ success: boolean; error?: string }>;
 
   // Testimonial management actions (Admin)
   addTestimonial: (testimonialData: Partial<Testimonial>, adminName?: string, adminRole?: string) => Promise<{ success: boolean; error?: string }>;
@@ -2104,6 +2108,91 @@ export const useStore = create<StoreState>()(
           }
         } catch (e) {
           console.error('Failed to fetch saved addresses:', e);
+        }
+      },
+
+      loadStylistHistory: async () => {
+        try {
+          const current = get().currentUser;
+          const supabase = getSupabaseClient();
+          if (!current || !supabase) {
+            return { success: false, error: 'User not authenticated' };
+          }
+          const { data, error } = await supabase
+            .from('stylist_conversations')
+            .select('*')
+            .eq('user_id', current.id)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (error) {
+            console.warn('Failed to load stylist history from Supabase:', error.message);
+            return { success: false, error: error.message };
+          }
+
+          if (data && Array.isArray(data.messages)) {
+            return { success: true, messages: data.messages as ChatMessage[] };
+          }
+          return { success: true, messages: [] };
+        } catch (err: any) {
+          console.warn('Error loading stylist history:', err);
+          return { success: false, error: err?.message || 'Failed to load stylist history' };
+        }
+      },
+
+      saveStylistMessage: async (messages: ChatMessage[]) => {
+        try {
+          const current = get().currentUser;
+          const supabase = getSupabaseClient();
+          if (!current || !supabase) {
+            return { success: false, error: 'User not authenticated' };
+          }
+
+          const { data: existing, error: selectErr } = await supabase
+            .from('stylist_conversations')
+            .select('id')
+            .eq('user_id', current.id)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (selectErr) {
+            console.warn('Error querying stylist_conversations:', selectErr.message);
+          }
+
+          if (existing?.id) {
+            const { error } = await supabase
+              .from('stylist_conversations')
+              .update({
+                messages,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existing.id);
+
+            if (error) {
+              console.warn('Failed to update stylist conversation:', error.message);
+              return { success: false, error: error.message };
+            }
+          } else {
+            const { error } = await supabase
+              .from('stylist_conversations')
+              .insert({
+                user_id: current.id,
+                messages,
+                updated_at: new Date().toISOString()
+              });
+
+            if (error) {
+              console.warn('Failed to insert stylist conversation:', error.message);
+              return { success: false, error: error.message };
+            }
+          }
+
+          return { success: true };
+        } catch (err: any) {
+          console.warn('Error saving stylist conversation:', err);
+          return { success: false, error: err?.message || 'Failed to save stylist conversation' };
         }
       },
 
