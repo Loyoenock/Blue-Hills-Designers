@@ -18,7 +18,7 @@ interface PaymentsTabProps {
   paymentMethodFilter: string;
   setPaymentMethodFilter: (m: string) => void;
   filteredPayments: any[];
-  updatePaymentStatus: (id: string, status: any, name: string, role: string) => Promise<void>;
+  updatePaymentStatus: (id: string, status: any, name: string, role: string) => Promise<any>;
   currentUser: User | null;
 }
 

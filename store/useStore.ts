@@ -1139,7 +1139,9 @@ export const useStore = create<StoreState>()(
           const { data: dbProfiles } = await supabase.from('profiles').select('id').limit(1);
           if (!dbProfiles || dbProfiles.length === 0) {
             for (const user of INITIAL_USERS) {
-              await safeSupabaseUpsert('profiles', user);
+              if (isUUID(user.id)) {
+                await safeSupabaseUpsert('profiles', user);
+              }
             }
           }
 
@@ -1159,17 +1161,19 @@ export const useStore = create<StoreState>()(
               }
               for (const rev of prod.reviews || []) {
                 const matchedUser = INITIAL_USERS.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
-                const reviewerUserId = matchedUser ? matchedUser.id : `usr-${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-                await safeSupabaseUpsert('profiles', {
-                  id: reviewerUserId,
-                  name: rev.userName,
-                  email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
-                  phone: matchedUser?.phone || '',
-                  role: matchedUser?.role || 'Customer',
-                  spending: matchedUser?.spending || 0,
-                  rewardsPoints: matchedUser?.rewardsPoints || 0
-                });
-                await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
+                const reviewerUserId = matchedUser && isUUID(matchedUser.id) ? matchedUser.id : null;
+                if (reviewerUserId) {
+                  await safeSupabaseUpsert('profiles', {
+                    id: reviewerUserId,
+                    name: rev.userName,
+                    email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
+                    phone: matchedUser?.phone || '',
+                    role: matchedUser?.role || 'Customer',
+                    spending: matchedUser?.spending || 0,
+                    rewardsPoints: matchedUser?.rewardsPoints || 0
+                  });
+                  await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
+                }
               }
             }
           }
@@ -1245,20 +1249,22 @@ export const useStore = create<StoreState>()(
         // 2. Profiles / Users
         const { data: dbProfiles, error: profilesError } = await supabase.from('profiles').select('*');
         if (dbProfiles !== null && !profilesError) {
-          const mappedUsers = dbProfiles.map((p: any) => ({
-            id: p.id,
-            name: p.full_name || p.name || 'Gentleman Customer',
-            email: p.email,
-            phone: p.phone,
-            role: capitalizeRole(p.role),
-            spending: p.lifetime_spending || p.spending || 0,
-            rewardsPoints: p.reward_points || p.rewardsPoints || 0,
-            source: 'db'
-          }));
+          const mappedUsers = dbProfiles
+            .filter((p: any) => p && p.id && isUUID(p.id))
+            .map((p: any) => ({
+              id: p.id,
+              name: p.full_name || p.name || 'Gentleman Customer',
+              email: p.email || '',
+              phone: p.phone || '',
+              role: capitalizeRole(p.role),
+              spending: p.lifetime_spending || p.spending || 0,
+              rewardsPoints: p.reward_points || p.rewardsPoints || 0,
+              source: 'db'
+            }));
           set({ users: mappedUsers as User[] });
         } else {
           if (get().users.length === 0) {
-            set({ users: INITIAL_USERS });
+            set({ users: INITIAL_USERS.filter(u => isUUID(u.id)) });
           }
         }
 

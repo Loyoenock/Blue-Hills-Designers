@@ -23,6 +23,7 @@ import CategoriesTab from './components/CategoriesTab';
 import TestimonialsTab from './components/TestimonialsTab';
 import CouponsTab from './components/CouponsTab';
 import OrdersTab from './components/OrdersTab';
+import CustomersTab from './components/CustomersTab';
 import UsersTab from './components/UsersTab';
 import PaymentsTab from './components/PaymentsTab';
 import BookingsTab from './components/BookingsTab';
@@ -1163,1224 +1164,145 @@ export default function Admin() {
 
             {/* SUB-TAB: COUPONS MANAGEMENT */}
             {activeTab === 'coupons' && canSeeCoupons && (
-              <motion.div 
-                key="coupons"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold flex items-center gap-2">
-                      <Tag className="w-5 h-5 text-[#C6A15B]" />
-                      Coupons & Promotions Registry
-                    </h3>
-                    <p className="text-[11px] text-white/40 mt-0.5">Manage luxury promotional discount codes, minimum subtotals, limits, and expiration.</p>
-                  </div>
-                  
-                  <button 
-                    onClick={() => handleOpenCouponModal()}
-                    className="bg-[#5F39FF] hover:bg-opacity-95 text-white px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-[#5F39FF]/20"
-                    id="create-coupon-btn"
-                  >
-                    <Plus className="w-4 h-4" /> Add Coupon
-                  </button>
-                </div>
-
-                {/* Search & filtering */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 sm:col-span-1">
-                    <Search className="w-3.5 h-3.5 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={couponSearch}
-                      onChange={(e) => setCouponSearch(e.target.value)}
-                      placeholder="Search code (e.g. WELCOME10)..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
-                    />
-                  </div>
-                  <div>
-                    <select 
-                      value={couponTypeFilter}
-                      onChange={(e) => setCouponTypeFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer font-mono"
-                    >
-                      <option value="All">All Discount Types</option>
-                      <option value="percentage">Percentage Off (%)</option>
-                      <option value="fixed">Fixed Amount (Ugx)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <select 
-                      value={couponStatusFilter}
-                      onChange={(e) => setCouponStatusFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-1.5 px-3 text-white focus:outline-none cursor-pointer font-mono"
-                    >
-                      <option value="All">All Statuses</option>
-                      <option value="Active">Active Only</option>
-                      <option value="Inactive">Inactive Only</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-white/70">
-                      <thead className="bg-white/5 uppercase text-[9px] font-mono tracking-widest text-white/40 border-b border-white/10">
-                        <tr>
-                          <th className="py-3.5 px-4 font-bold">Coupon Code</th>
-                          <th className="py-3.5 px-3 font-bold">Discount</th>
-                          <th className="py-3.5 px-3 font-bold">Min Subtotal</th>
-                          <th className="py-3.5 px-3 font-bold">Usage / Limit</th>
-                          <th className="py-3.5 px-3 font-bold">Expiration</th>
-                          <th className="py-3.5 px-3 font-bold">Status</th>
-                          <th className="py-3.5 px-4 text-right font-bold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {filteredCoupons.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="py-12 text-center text-white/40 text-xs font-mono">
-                              No coupon records found matching your query.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredCoupons.map((c) => {
-                            const isExpired = c.expiresAt && new Date(c.expiresAt).getTime() < Date.now();
-                            const isLimitReached = c.usageLimit !== null && c.usageLimit !== undefined && (c.timesUsed || 0) >= c.usageLimit;
-
-                            return (
-                              <tr key={c.id || c.code} className="hover:bg-white/[0.02] transition-colors">
-                                <td className="py-3.5 px-4">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-bold text-white text-xs tracking-wider bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
-                                      {c.code}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-3 font-mono font-bold text-[#20D9A1]">
-                                  {c.discountType === 'percentage' 
-                                    ? `${c.discountValue}% OFF` 
-                                    : `Ugx ${c.discountValue.toLocaleString()} OFF`}
-                                </td>
-                                <td className="py-3.5 px-3 font-mono text-white/60">
-                                  {c.minSubtotal ? `Ugx ${c.minSubtotal.toLocaleString()}` : <span className="text-white/20">—</span>}
-                                </td>
-                                <td className="py-3.5 px-3 font-mono text-xs">
-                                  <span className={isLimitReached ? 'text-red-400 font-bold' : 'text-white'}>
-                                    {c.timesUsed || 0}
-                                  </span>
-                                  <span className="text-white/30"> / {c.usageLimit !== null && c.usageLimit !== undefined ? c.usageLimit : '∞'}</span>
-                                </td>
-                                <td className="py-3.5 px-3 font-mono text-[11px]">
-                                  {c.expiresAt ? (
-                                    <span className={isExpired ? 'text-red-400 font-bold' : 'text-white/70'}>
-                                      {new Date(c.expiresAt).toLocaleDateString()}
-                                    </span>
-                                  ) : (
-                                    <span className="text-white/30">No expiry</span>
-                                  )}
-                                </td>
-                                <td className="py-3.5 px-3">
-                                  {c.isActive === false ? (
-                                    <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      Disabled
-                                    </span>
-                                  ) : isExpired ? (
-                                    <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      Expired
-                                    </span>
-                                  ) : isLimitReached ? (
-                                    <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      Limit Maxed
-                                    </span>
-                                  ) : (
-                                    <span className="bg-[#20D9A1]/10 border border-[#20D9A1]/20 text-[#20D9A1] text-[9px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                                      Active
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3.5 px-4 text-right">
-                                  <div className="flex justify-end gap-1.5">
-                                    <button 
-                                      onClick={() => handleOpenCouponModal(c)}
-                                      className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-[#20D9A1]/30 hover:bg-[#20D9A1]/5 text-white/70 hover:text-[#20D9A1] transition-all cursor-pointer"
-                                      title="Edit coupon"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleOpenDeleteCouponModal(c)}
-                                      className="p-1.5 rounded border border-white/5 bg-white/5 hover:border-red-500/30 hover:bg-red-500/5 text-white/70 hover:text-red-400 transition-all cursor-pointer"
-                                      title="Delete coupon"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <CouponsTab
+                canSeeCoupons={canSeeCoupons}
+                handleOpenCouponModal={handleOpenCouponModal}
+                couponSearch={couponSearch}
+                setCouponSearch={setCouponSearch}
+                couponTypeFilter={couponTypeFilter}
+                setCouponTypeFilter={setCouponTypeFilter}
+                couponStatusFilter={couponStatusFilter}
+                setCouponStatusFilter={setCouponStatusFilter}
+                filteredCoupons={filteredCoupons}
+                handleOpenDeleteCouponModal={handleOpenDeleteCouponModal}
+              />
             )}
 
             {/* SUB-TAB 3: ORDER LEDGER MODIFICATIONS */}
             {activeTab === 'orders' && (
-              <motion.div 
-                key="orders"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <h3 className="font-serif text-xl text-white font-bold">BHD Orders Ledger</h3>
-
-                  <div className="flex gap-2.5">
-                    <button 
-                      onClick={() => handleExportData('csv')}
-                      className="bg-[#111111] hover:bg-white/5 border border-white/10 px-3 py-1.5 rounded text-xs text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5 text-[#20D9A1]" /> Export CSV
-                    </button>
-                    <button 
-                      onClick={() => handleExportData('print')}
-                      className="bg-[#111111] hover:bg-white/5 border border-white/10 px-3 py-1.5 rounded text-xs text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-[#5F39FF]" /> Print Ledger
-                    </button>
-                  </div>
-                </div>
-
-                {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-2">
-                    <Search className="w-4 h-4 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={orderSearch}
-                      onChange={(e) => setOrderSearch(e.target.value)}
-                      placeholder="Search Order ID, Client names..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
-                    />
-                  </div>
-                  <div>
-                    <select 
-                      value={orderStatusFilter}
-                      onChange={(e) => setOrderStatusFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
-                    >
-                      <option value="All">All Dispatches</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Processing">Processing</option>
-                      <option value="Delivered">Delivered</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Ledger lists */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse font-sans text-xs">
-                      <thead>
-                        <tr className="border-b border-white/5 text-[9px] uppercase tracking-widest font-mono text-white/40">
-                          <th className="py-3 px-2">REGISTRY ID</th>
-                          <th className="py-3 px-2">CLIENT</th>
-                          <th className="py-3 px-2 font-mono">DATE RECORDED</th>
-                          <th className="py-3 px-2 font-mono">TOTAL SUM</th>
-                          <th className="py-3 px-2 font-mono">STATUS STATE</th>
-                          <th className="py-3 px-2 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {filteredOrders.map((o) => (
-                          <tr key={o.id} className="hover:bg-white/5 transition-colors">
-                            <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{o.id}</td>
-                            <td className="py-3 px-2 space-y-0.5">
-                              <span className="font-semibold text-white block">{o.customerName}</span>
-                              <span className="text-[10px] text-white/40 block">{o.customerEmail}</span>
-                            </td>
-                            <td className="py-3 px-2 font-mono text-white/50">{o.date}</td>
-                            <td className="py-3 px-2 font-mono font-bold text-white">Ugx {o.amount}</td>
-                            <td className="py-3 px-2">
-                              {/* Status state modifier dropdown */}
-                              {canModifyOrders ? (
-                                <select
-                                  value={o.status}
-                                  onChange={(e) => updateOrderStatus(
-                                    o.id, 
-                                    e.target.value as any,
-                                    currentUser?.name || 'Master Admin',
-                                    currentUser?.role || 'Super Admin'
-                                  )}
-                                  className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
-                                    o.status === 'Delivered' ? 'text-green-400' :
-                                    o.status === 'Processing' ? 'text-blue-400' :
-                                    o.status === 'Cancelled' ? 'text-red-400' :
-                                    'text-yellow-400'
-                                  }`}
-                                >
-                                  <option value="Pending">Pending</option>
-                                  <option value="Processing">Processing</option>
-                                  <option value="Delivered">Delivered</option>
-                                  <option value="Cancelled">Cancelled</option>
-                                </select>
-                              ) : (
-                                <span className={`text-[10px] font-mono uppercase font-bold px-2.5 py-1 rounded-full ${
-                                  o.status === 'Delivered' ? 'bg-green-500/10 text-green-400' :
-                                  'bg-yellow-500/10 text-yellow-400'
-                                }`}>
-                                  {o.status}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-2 text-right">
-                              <button 
-                                onClick={() => setSelectedOrderDetails(o)}
-                                className="bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] uppercase font-mono px-2.5 py-1.5 rounded transition-all cursor-pointer"
-                              >
-                                Review
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <OrdersTab
+                handleExportData={handleExportData}
+                orderSearch={orderSearch}
+                setOrderSearch={setOrderSearch}
+                orderStatusFilter={orderStatusFilter}
+                setOrderStatusFilter={setOrderStatusFilter}
+                filteredOrders={filteredOrders}
+                canModifyOrders={canModifyOrders}
+                updateOrderStatus={updateOrderStatus}
+                currentUser={currentUser}
+                setSelectedOrderDetails={setSelectedOrderDetails}
+              />
             )}
 
             {/* SUB-TAB: VIP CLIENTELE (CUSTOMERS) */}
             {activeTab === 'customers' && (
-              <motion.div 
-                key="customers"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold">VIP Clientele Directory</h3>
-                    <p className="text-xs text-white/40">Monitor customer purchasing history, lifetime value, and order recency.</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-[#20D9A1] font-mono uppercase tracking-widest font-bold">● Clientele Insights Live</span>
-                  </div>
-                </div>
-
-                {/* Search Input */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search client profiles by name, email, phone..."
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      className="w-full bg-[#111111] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-white/30 focus:border-[#20D9A1] outline-none transition-all font-mono"
-                    />
-                    {customerSearch && (
-                      <button 
-                        onClick={() => setCustomerSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grid of Customer Cards */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {filteredCustomers.length === 0 ? (
-                    <div className="xl:col-span-2 bg-[#111111] border border-dashed border-white/10 rounded-2xl p-12 text-center text-white/40">
-                      <UserCircle className="w-10 h-10 mx-auto opacity-30 mb-3 text-white" />
-                      <p className="font-serif font-bold text-lg text-white mb-1">No VIP clientele matched your search</p>
-                      <p className="text-xs font-mono">Try adjusting your search criteria.</p>
-                    </div>
-                  ) : (
-                    filteredCustomers.map((c) => (
-                      <div key={c.id} className="bg-[#111111] border border-white/10 rounded-2xl p-6 flex flex-col justify-between space-y-4 hover:border-white/20 transition-all">
-                        <div>
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="space-y-1">
-                              <h4 className="font-serif text-lg text-white font-bold tracking-tight">{c.name}</h4>
-                              <p className="text-[10px] text-white/40 font-mono flex items-center gap-1.5">
-                                <span className="text-[#20D9A1]">ID:</span> {c.id}
-                              </p>
-                              <p className="text-xs text-white/60 font-mono">{c.email}</p>
-                              {c.phone && <p className="text-xs text-white/50 font-mono">Tel: {c.phone}</p>}
-                            </div>
-                            <span className="text-[9px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              VIP Client
-                            </span>
-                          </div>
-
-                          {/* Stats / Spend / Orders / Recency */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 bg-black/20 rounded-xl p-3 border border-white/5 font-mono text-[11px]">
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Total Orders</span>
-                              <span className="text-white font-bold text-sm">{c.totalOrders}</span>
-                            </div>
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Lifetime Spend</span>
-                              <span className="text-[#20D9A1] font-bold text-sm">
-                                Ugx {c.lifetimeSpend.toLocaleString()}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Last Order</span>
-                              <span className="text-white font-medium text-xs truncate block">{c.lastOrderDate}</span>
-                            </div>
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Status</span>
-                              <span className={`text-xs font-bold block ${
-                                c.lastOrderStatus === 'Delivered' ? 'text-green-400' :
-                                c.lastOrderStatus === 'Processing' ? 'text-blue-400' :
-                                c.lastOrderStatus === 'Cancelled' ? 'text-red-400' :
-                                c.lastOrderStatus === 'Pending' ? 'text-yellow-400' :
-                                'text-white/40'
-                              }`}>
-                                {c.lastOrderStatus}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Additional Customer Info: Spending & Rewards Points from User profile */}
-                          <div className="grid grid-cols-2 gap-4 mt-3 bg-black/40 rounded-xl p-3 border border-white/5 font-mono text-[10px]">
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Profile Spending</span>
-                              <span className="text-white/80 font-bold">${c.spending?.toLocaleString() || '0'}</span>
-                            </div>
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Rewards Points</span>
-                              <span className="text-[#20D9A1] font-bold">{c.rewardsPoints?.toLocaleString() || '0'} pts</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions row */}
-                        <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
-                          <button
-                            onClick={() => {
-                              setOrderSearch(c.email);
-                              setActiveTab('orders');
-                            }}
-                            className="bg-[#5F39FF]/10 hover:bg-[#5F39FF]/20 border border-[#5F39FF]/30 text-[#20D9A1] hover:text-white font-semibold text-xs uppercase font-mono px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
-                          >
-                            <ShoppingBag className="w-3.5 h-3.5" /> View Orders
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </motion.div>
+              <CustomersTab
+                customerSearch={customerSearch}
+                setCustomerSearch={setCustomerSearch}
+                filteredCustomers={filteredCustomers}
+                setOrderSearch={setOrderSearch}
+                setActiveTab={setActiveTab}
+              />
             )}
 
             {/* SUB-TAB 4: AUTHORIZED STAFF LIST & USER MANAGEMENT */}
             {activeTab === 'users' && (
-              <motion.div 
-                key="users"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold">User & BHD Access Directory</h3>
-                    <p className="text-xs text-white/40">Manage staff roles, customer profiles, spending metrics, and loyalty keys.</p>
-                  </div>
-                  {canModifyUsers && (
-                    <button
-                      onClick={() => handleOpenUserModal(null)}
-                      className="bg-[#20D9A1] hover:bg-[#1bb887] text-black font-semibold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer font-mono"
-                    >
-                      <Plus className="w-4 h-4" /> Add New Profile
-                    </button>
-                  )}
-                </div>
-
-                {/* Filter and Search Controls */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search profiles by name, email, phone..."
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      className="w-full bg-[#111111] border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-white/30 focus:border-[#20D9A1] outline-none transition-all font-mono"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 bg-[#111111] border border-white/10 rounded-xl px-3 py-1">
-                    <Filter className="text-white/40 w-3.5 h-3.5" />
-                    <select
-                      value={userRoleFilter}
-                      onChange={(e) => setUserRoleFilter(e.target.value)}
-                      className="bg-transparent border-none text-xs text-white outline-none cursor-pointer pr-4 py-1"
-                    >
-                      <option value="All" className="bg-[#111111]">All Roles</option>
-                      <option value="Super Admin" className="bg-[#111111]">Super Admin</option>
-                      <option value="Admin" className="bg-[#111111]">Admin</option>
-                      <option value="Manager" className="bg-[#111111]">Manager</option>
-                      <option value="Staff" className="bg-[#111111]">Staff</option>
-                      <option value="Customer" className="bg-[#111111]">Customer</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Grid of Users */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {filteredUsers.length === 0 ? (
-                    <div className="xl:col-span-2 bg-[#111111] border border-dashed border-white/10 rounded-2xl p-12 text-center text-white/40">
-                      <Users className="w-10 h-10 mx-auto opacity-30 mb-3 text-white" />
-                      <p className="font-serif font-bold text-lg text-white mb-1">No profiles matched your filters</p>
-                      <p className="text-xs font-mono">Try adjusting your search criteria or register a new profile.</p>
-                    </div>
-                  ) : (
-                    filteredUsers.map((u) => (
-                      <div key={u.id} className="bg-[#111111] border border-white/10 rounded-2xl p-6 flex flex-col justify-between space-y-4 hover:border-white/20 transition-all">
-                        <div>
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="space-y-1">
-                              <h4 className="font-serif text-lg text-white font-bold tracking-tight">{u.name}</h4>
-                              <p className="text-[10px] text-white/40 font-mono flex items-center gap-1.5">
-                                <span className="text-[#20D9A1]">ID:</span> {u.id}
-                              </p>
-                              <p className="text-xs text-white/60 font-mono">{u.email}</p>
-                              {u.phone && <p className="text-xs text-white/50 font-mono">Tel: {u.phone}</p>}
-                            </div>
-                            <span className={`text-[9px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                              u.role === 'Super Admin' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                              u.role === 'Admin' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                              u.role === 'Manager' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                              u.role === 'Staff' ? 'bg-yellow-500/10 text-[#20D9A1] border border-yellow-500/20' :
-                              'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            }`}>
-                              {u.role}
-                            </span>
-                          </div>
-
-                          {/* Stats / Spending / Rewards section */}
-                          <div className="grid grid-cols-2 gap-4 mt-4 bg-black/20 rounded-xl p-3 border border-white/5 font-mono text-[11px]">
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Boutique Spending</span>
-                              <span className="text-white font-bold text-sm">${u.spending?.toLocaleString() || '0'}</span>
-                            </div>
-                            <div>
-                              <span className="text-white/40 uppercase text-[8px] tracking-wider block">Rewards Points</span>
-                              <span className="text-[#20D9A1] font-bold text-sm">{u.rewardsPoints?.toLocaleString() || '0'} pts</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-black/40 border border-white/5 rounded-xl p-3 text-[10px] text-white/40 leading-relaxed font-mono space-y-1 mt-4">
-                            <span className="text-white font-bold uppercase text-[8px] block tracking-widest text-[#20D9A1]">Active Authorization Scope</span>
-                            {u.role === 'Super Admin' && <p>✓ Full system mutations, override settings, hard-deletions, security audit decryption.</p>}
-                            {u.role === 'Admin' && <p>✓ Operations override, apparel modification, stock allocations, order dispatches.</p>}
-                            {u.role === 'Manager' && <p>✓ Product addition, details modification, dispatch updates.</p>}
-                            {u.role === 'Staff' && <p>✓ Courier dispatch tracking, client order notes modification.</p>}
-                            {u.role === 'Customer' && <p>✓ Private lounge profile, loyalty rewards tracker, personal trunk checks.</p>}
-                          </div>
-                        </div>
-
-                        {/* Actions row */}
-                        {canModifyUsers && (
-                          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
-                            <button
-                              onClick={() => handleOpenUserModal(u)}
-                              className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-xs uppercase font-mono px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
-                            >
-                              <Edit className="w-3.5 h-3.5" /> Edit
-                            </button>
-                            {/* Prevent deleting oneself */}
-                            {currentUser?.id !== u.id && (
-                              <button
-                                onClick={() => handleOpenDeleteUserModal(u)}
-                                className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-semibold text-xs uppercase font-mono px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Delete
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </motion.div>
+              <UsersTab
+                canModifyUsers={canModifyUsers}
+                handleOpenUserModal={handleOpenUserModal}
+                userSearch={userSearch}
+                setUserSearch={setUserSearch}
+                userRoleFilter={userRoleFilter}
+                setUserRoleFilter={setUserRoleFilter}
+                filteredUsers={filteredUsers}
+                currentUser={currentUser}
+                handleOpenDeleteUserModal={handleOpenDeleteUserModal}
+              />
             )}
 
             {/* SUB-TAB: PAYMENT LEDGER */}
             {activeTab === 'payments' && (
-              <motion.div 
-                key="payments"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold">Sartorial Payment Ledger</h3>
-                    <p className="text-white/40 text-xs font-light">Monitor transactions, adjust clearance codes, and issue overrides.</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-[#20D9A1] font-mono uppercase tracking-widest font-bold">Ledger Active</span>
-                  </div>
-                </div>
-
-                {/* Statistics panel */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                  {[
-                    { title: "SETTLED AMOUNT", val: `Ugx ${paymentStats.settledSum}`, color: 'text-green-400', desc: 'Cleared funds successfully settled.' },
-                    { title: "PENDING DEPOSITS", val: `Ugx ${paymentStats.pendingSum}`, color: 'text-yellow-400', desc: 'Funds awaiting authorization.' },
-                    { title: "REFUNDED CAPITAL", val: `Ugx ${paymentStats.refundedSum}`, color: 'text-blue-400', desc: 'Returned to corporate cards.' },
-                    { title: "FAILED ATTEMPTS", val: `Ugx ${paymentStats.failedSum}`, color: 'text-red-400', desc: 'Declined transactions.' }
-                  ].map((stat, i) => (
-                    <div key={i} className="bg-[#111111] border border-white/10 rounded-xl p-4 space-y-1">
-                      <span className="text-[8px] text-white/40 uppercase tracking-widest font-mono font-bold block">{stat.title}</span>
-                      <div className={`font-mono text-lg font-bold ${stat.color}`}>{stat.val}</div>
-                      <p className="text-[9px] text-white/30 leading-normal">{stat.desc}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Search & Filters */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
-                  <div className="relative w-full md:w-72">
-                    <Search className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Search payments, customers, order IDs..."
-                      value={paymentSearch}
-                      onChange={(e) => setPaymentSearch(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-white/30 focus:border-[#5F39FF] outline-none"
-                    />
-                    {paymentSearch && (
-                      <button 
-                        onClick={() => setPaymentSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-white/40 uppercase tracking-wider font-mono">Status:</span>
-                      <select 
-                        value={paymentStatusFilter}
-                        onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                        className="bg-black border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-medium focus:border-[#5F39FF] outline-none"
-                      >
-                        <option value="All">All Statuses</option>
-                        <option value="Paid">Paid</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Refunded">Refunded</option>
-                        <option value="Failed">Failed</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-white/40 uppercase tracking-wider font-mono">Method:</span>
-                      <select 
-                        value={paymentMethodFilter}
-                        onChange={(e) => setPaymentMethodFilter(e.target.value)}
-                        className="bg-black border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-medium focus:border-[#5F39FF] outline-none"
-                      >
-                        <option value="All">All Methods</option>
-                        <option value="Visa">Visa Card</option>
-                        <option value="Mobile Money">Mobile Money</option>
-                        <option value="Cash on Delivery">Cash on Delivery</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payments Table */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse font-sans text-xs">
-                      <thead>
-                        <tr className="border-b border-white/5 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40">
-                          <th className="py-3 px-4 font-mono">TRANSACTION ID</th>
-                          <th className="py-3 px-4 font-mono">ORDER ID</th>
-                          <th className="py-3 px-4">VIP CLIENT</th>
-                          <th className="py-3 px-4 font-mono">DATE</th>
-                          <th className="py-3 px-4 font-mono">METHOD</th>
-                          <th className="py-3 px-4 font-mono">SETTLEMENT SUM</th>
-                          <th className="py-3 px-4 font-mono">CLEARANCE STATUS</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {filteredPayments.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="py-12 text-center text-white/30 font-light text-xs">
-                              No payment transactions found matching the parameters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredPayments.map((p) => (
-                            <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                              <td className="py-4 px-4 font-mono text-white/80 font-bold">{p.transactionId}</td>
-                              <td className="py-4 px-4 font-mono font-bold text-[#20D9A1]">{p.orderId}</td>
-                              <td className="py-4 px-4 space-y-0.5">
-                                <span className="font-semibold text-white block">{p.customerName}</span>
-                                <span className="text-[10px] text-white/40 block">{p.customerEmail}</span>
-                              </td>
-                              <td className="py-4 px-4 font-mono text-white/50">{p.date}</td>
-                              <td className="py-4 px-4">
-                                <span className="text-white font-medium text-xs flex items-center gap-1.5">
-                                  <CreditCard className="w-3.5 h-3.5 text-white/30" />
-                                  {p.paymentMethod}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 font-mono font-bold text-white">Ugx {p.amount}</td>
-                              <td className="py-4 px-4">
-                                <select
-                                  value={p.status}
-                                  onChange={(e) => updatePaymentStatus(
-                                    p.id, 
-                                    e.target.value as any,
-                                    currentUser?.name || 'Master Admin',
-                                    currentUser?.role || 'Super Admin'
-                                  )}
-                                  className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
-                                    p.status === 'Paid' ? 'text-green-400' :
-                                    p.status === 'Pending' ? 'text-yellow-400' :
-                                    p.status === 'Refunded' ? 'text-blue-400' :
-                                    'text-red-400'
-                                  }`}
-                                >
-                                  <option value="Paid">Paid</option>
-                                  <option value="Pending">Pending</option>
-                                  <option value="Refunded">Refunded</option>
-                                  <option value="Failed">Failed</option>
-                                </select>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <PaymentsTab
+                paymentStats={paymentStats}
+                paymentSearch={paymentSearch}
+                setPaymentSearch={setPaymentSearch}
+                paymentStatusFilter={paymentStatusFilter}
+                setPaymentStatusFilter={setPaymentStatusFilter}
+                paymentMethodFilter={paymentMethodFilter}
+                setPaymentMethodFilter={setPaymentMethodFilter}
+                filteredPayments={filteredPayments}
+                updatePaymentStatus={updatePaymentStatus}
+                currentUser={currentUser}
+              />
             )}
 
             {/* SUB-TAB: STYLE BOOKINGS */}
             {activeTab === 'bookings' && (
-              <motion.div 
-                key="bookings"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <h3 className="font-serif text-xl text-white font-bold">Personal Styling Bookings</h3>
-                  <div className="flex gap-2.5">
-                    <span className="text-[10px] text-[#20D9A1] font-mono uppercase tracking-widest font-bold">Bookings Desk Active</span>
-                  </div>
-                </div>
-
-                {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-2">
-                    <Search className="w-4 h-4 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={bookingSearch}
-                      onChange={(e) => setBookingSearch(e.target.value)}
-                      placeholder="Search Client Name, Email, Phone..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
-                    />
-                  </div>
-                  <div>
-                    <select 
-                      value={bookingStatusFilter}
-                      onChange={(e) => setBookingStatusFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
-                    >
-                      <option value="All">All Statuses</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Bookings Table */}
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse font-sans text-xs">
-                      <thead>
-                        <tr className="border-b border-white/5 text-[9px] uppercase tracking-widest font-mono text-white/40">
-                          <th className="py-3 px-2">BOOKING ID</th>
-                          <th className="py-3 px-2">CLIENT DETAILS</th>
-                          <th className="py-3 px-2 font-mono">DATE / TIME</th>
-                          <th className="py-3 px-2 font-mono">NOTES</th>
-                          <th className="py-3 px-2 font-mono">STATUS STATE</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {filteredBookings.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="py-12 text-center text-white/30 font-light text-xs">
-                              No styling bookings found matching the parameters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredBookings.map((b) => (
-                            <tr key={b.id} className="hover:bg-white/5 transition-colors">
-                              <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{b.id}</td>
-                              <td className="py-3 px-2 space-y-0.5">
-                                <span className="font-semibold text-white block">{b.clientName}</span>
-                                <span className="text-[10px] text-white/40 block">{b.clientEmail}</span>
-                                {b.clientPhone && (
-                                  <span className="text-[10px] text-white/40 font-mono block">{b.clientPhone}</span>
-                                )}
-                              </td>
-                              <td className="py-3 px-2 font-mono text-white/70 space-y-0.5">
-                                <div className="font-medium text-white">{b.date}</div>
-                                <div className="text-[10px] text-white/40">{b.time}</div>
-                              </td>
-                              <td className="py-3 px-2 text-white/60 max-w-xs truncate" title={b.notes}>
-                                {b.notes || <span className="text-white/20 italic">No notes</span>}
-                              </td>
-                              <td className="py-3 px-2">
-                                <select
-                                  value={b.status}
-                                  onChange={(e) => updateBookingStatus(
-                                    b.id, 
-                                    e.target.value as any,
-                                    currentUser?.name || 'Master Admin',
-                                    currentUser?.role || 'Super Admin'
-                                  )}
-                                  className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
-                                    b.status === 'Completed' ? 'text-green-400' :
-                                    b.status === 'Confirmed' ? 'text-blue-400' :
-                                    'text-yellow-400'
-                                  }`}
-                                >
-                                  <option value="Pending">Pending</option>
-                                  <option value="Confirmed">Confirmed</option>
-                                  <option value="Completed">Completed</option>
-                                </select>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </motion.div>
+              <BookingsTab
+                bookingSearch={bookingSearch}
+                setBookingSearch={setBookingSearch}
+                bookingStatusFilter={bookingStatusFilter}
+                setBookingStatusFilter={setBookingStatusFilter}
+                filteredBookings={filteredBookings}
+                updateBookingStatus={updateBookingStatus}
+                currentUser={currentUser}
+              />
             )}
 
             {/* SUB-TAB 5: SECURITY AUDIT LOGS */}
             {activeTab === 'logs' && canSeeLogs && (
-              <motion.div 
-                key="logs"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-center">
-                  <h3 className="font-serif text-xl text-white font-bold">PCI-DSS Cybersecurity Audit Logs</h3>
-                  <span className="text-[10px] text-[#20D9A1] font-mono">● ENCRYPTED ACTIVE TRACE</span>
-                </div>
-
-                {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-2">
-                    <Search className="w-4 h-4 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={logSearch}
-                      onChange={(e) => setLogSearch(e.target.value)}
-                      placeholder="Search log details, operator, action..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
-                    />
-                  </div>
-                  <div>
-                    <select 
-                      value={logActionFilter}
-                      onChange={(e) => setLogActionFilter(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
-                    >
-                      <option value="All">All Audit Events</option>
-                      <option value="Product Registered">Product Registered</option>
-                      <option value="Product Updated">Product Updated</option>
-                      <option value="User Registered">User Registered</option>
-                      <option value="User Updated">User Updated</option>
-                      <option value="Order Status Adjusted">Order Status Adjusted</option>
-                      <option value="Payment Status Adjusted">Payment Status Adjusted</option>
-                      <option value="Settings Updated">Settings Updated</option>
-                      <option value="Booking Status Adjusted">Booking Status Adjusted</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 font-mono text-[11px] leading-relaxed space-y-3 max-h-[500px] overflow-y-auto font-sans">
-                  {filteredLogs.length === 0 ? (
-                    <div className="text-center text-white/30 py-8 italic font-sans text-xs">No audit records match the filters.</div>
-                  ) : (
-                    filteredLogs.map((log) => (
-                      <div key={log.id} className="border-b border-white/5 pb-2.5 flex items-start gap-3 font-mono text-[11px]">
-                        <span className="text-white/30 shrink-0 font-mono">[{log.timestamp}]</span>
-                        <div className="space-y-0.5">
-                          <p className="text-[#20D9A1] font-bold uppercase tracking-wider text-[9px] font-mono">Scope: {log.action}</p>
-                          <p className="text-white/70 font-sans">{log.details}</p>
-                          <p className="text-white/30 text-[9px] font-sans">Operator: {log.userName} ({log.userRole})</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </motion.div>
+              <LogsTab
+                canSeeLogs={canSeeLogs}
+                logSearch={logSearch}
+                setLogSearch={setLogSearch}
+                logActionFilter={logActionFilter}
+                setLogActionFilter={setLogActionFilter}
+                filteredLogs={filteredLogs}
+              />
             )}
 
             {/* SUB-TAB: RECONCILIATION FLAGS */}
             {activeTab === 'reconciliation' && canSeeReconciliation && (
-              <motion.div 
-                key="reconciliation"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-center">
-                  <h3 className="font-serif text-xl text-white font-bold">Payment Reconciliation Flags</h3>
-                  <span className="text-[10px] text-amber-400 font-mono">● READ-ONLY AUDIT FLAGS</span>
-                </div>
-
-                {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-3 py-2 col-span-3">
-                    <Search className="w-4 h-4 text-white/40" />
-                    <input 
-                      type="text" 
-                      value={reconciliationSearch}
-                      onChange={(e) => setReconciliationSearch(e.target.value)}
-                      placeholder="Search transaction ID, client email, payment provider, or raw error..."
-                      className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 font-mono text-[11px] leading-relaxed space-y-3 max-h-[500px] overflow-y-auto font-sans">
-                  {isLoadingReconciliation ? (
-                    <div className="text-center text-white/30 py-8 font-sans text-xs">Loading reconciliation flags...</div>
-                  ) : filteredReconciliationFlags.length === 0 ? (
-                    <div className="text-center text-white/30 py-8 italic font-sans text-xs">No reconciliation records match the filter.</div>
-                  ) : (
-                    filteredReconciliationFlags.map((flag) => (
-                      <div key={flag.id} className="border-b border-white/5 pb-2.5 flex items-start gap-3 font-mono text-[11px]">
-                        <span className="text-white/30 shrink-0 font-mono">[{flag.created_at ? new Date(flag.created_at).toISOString() : 'N/A'}]</span>
-                        <div className="space-y-1 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-amber-400 font-bold uppercase tracking-wider text-[9px] font-mono">Txn: {flag.transaction_id || 'N/A'}</span>
-                            <span className="text-white/60 font-mono text-[10px]">Ugx {(flag.amount || 0).toLocaleString()}</span>
-                          </div>
-                          <p className="text-white/70 font-sans">Client: {flag.email || 'N/A'} ({flag.payment_provider || 'N/A'})</p>
-                          <p className="text-red-400/90 font-mono text-[10px] bg-red-950/20 p-2 rounded border border-red-500/10 mt-1">Error: {flag.raw_error || 'Unspecified exception'}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </motion.div>
+              <ReconciliationTab
+                canSeeReconciliation={canSeeReconciliation}
+                reconciliationSearch={reconciliationSearch}
+                setReconciliationSearch={setReconciliationSearch}
+                isLoadingReconciliation={isLoadingReconciliation}
+                filteredReconciliationFlags={filteredReconciliationFlags}
+              />
             )}
+            {/* SUB-TAB: BOUTIQUE SETTINGS */}
             {activeTab === 'settings' && canSeeSettings && (
-              <motion.div 
-                key="settings"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-5">
-                  <div>
-                    <h3 className="font-serif text-xl text-white font-bold">Boutique Configuration Panel</h3>
-                    <p className="text-white/40 text-xs font-light">Fine-tune operating thresholds, premium showroom listings, and concierge parameters.</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-[#20D9A1] font-mono uppercase tracking-widest font-bold">● System Parameters Live</span>
-                  </div>
-                </div>
-
-                {settingsSuccess && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-xs flex items-center gap-3"
-                  >
-                    <CheckCircle className="w-4 h-4 shrink-0" />
-                    <span>Boutique configuration parameters successfully persisted and written to logs.</span>
-                  </motion.div>
-                )}
-
-                <form onSubmit={handleSaveSettings} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* SECTION 1: SHOWROOM DETAILS */}
-                    <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 space-y-4 shadow-lg">
-                      <div className="flex items-center gap-2.5 border-b border-white/5 pb-3">
-                        <Calendar className="w-4 h-4 text-white/40" />
-                        <h4 className="text-xs font-mono font-bold tracking-wider text-white/80 uppercase">Showroom & Support</h4>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-white/50 uppercase tracking-wider font-mono">Operating Showroom Hours</label>
-                          <input 
-                            type="text" 
-                            value={sHours}
-                            onChange={(e) => setSHours(e.target.value)}
-                            className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-[#5F39FF] outline-none"
-                            placeholder="e.g. Sunday to Friday: 9:00 AM - 7:00 PM"
-                            required
-                          />
-                          <p className="text-[9px] text-white/30">Display schedule shown to customers when reserving appointments.</p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-white/50 uppercase tracking-wider font-mono">Boutique Concierge Phone</label>
-                          <input 
-                            type="text" 
-                            value={sPhone}
-                            onChange={(e) => setSPhone(e.target.value)}
-                            className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-[#5F39FF] outline-none"
-                            placeholder="e.g. +256 772 123456"
-                            required
-                          />
-                          <p className="text-[9px] text-white/30">Primary hotline listed on order confirmations and checkout supports.</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* SECTION 2: LOGISTICS & FINANCIALS */}
-                    <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 space-y-4 shadow-lg">
-                      <div className="flex items-center gap-2.5 border-b border-white/5 pb-3">
-                        <DollarSign className="w-4 h-4 text-white/40" />
-                        <h4 className="text-xs font-mono font-bold tracking-wider text-white/80 uppercase">Logistics & Financials</h4>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-white/50 uppercase tracking-wider font-mono">Currency Code</label>
-                            <input 
-                              type="text" 
-                              value={sCurrency}
-                              onChange={(e) => setSCurrency(e.target.value)}
-                              className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-[#5F39FF] outline-none font-mono"
-                              placeholder="Ugx"
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-white/50 uppercase tracking-wider font-mono">Luxury/VAT Rate (%)</label>
-                            <input 
-                              type="number" 
-                              value={sTaxRate}
-                              onChange={(e) => setSTaxRate(Number(e.target.value))}
-                              className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-[#5F39FF] outline-none font-mono"
-                              placeholder="18"
-                              min="0"
-                              max="100"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-white/50 uppercase tracking-wider font-mono">Free Shipping Threshold</label>
-                          <input 
-                            type="number" 
-                            value={sThreshold}
-                            onChange={(e) => setSThreshold(Number(e.target.value))}
-                            className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-[#5F39FF] outline-none font-mono"
-                            placeholder="2000"
-                            min="0"
-                            required
-                          />
-                          <p className="text-[9px] text-white/30">Free delivery is auto-applied to executive invoices above this value.</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* SECTION 3: INTERACTIVE AI EXPERIENCE */}
-                    <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 space-y-4 shadow-lg md:col-span-2">
-                      <div className="flex items-center gap-2.5 border-b border-white/5 pb-3">
-                        <Compass className="w-4 h-4 text-white/40" />
-                        <h4 className="text-xs font-mono font-bold tracking-wider text-white/80 uppercase">AI Stylist & Interactive Controls</h4>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-white/50 uppercase tracking-wider font-mono">AI Stylist Greeting Prefix</label>
-                            <textarea 
-                              value={sGreeting}
-                              onChange={(e) => setSGreet(e.target.value)}
-                              className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-[#5F39FF] outline-none min-h-[80px]"
-                              placeholder="Welcome, elegant guest."
-                              required
-                            />
-                            <p className="text-[9px] text-white/30">The initial opening statement when clients seek virtual tailoring consulting.</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4 flex flex-col justify-center">
-                          {/* TOGGLE: SECRET OFFER */}
-                          <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
-                            <div>
-                              <span className="text-xs font-semibold text-white block">Secret Offer Section</span>
-                              <span className="text-[9px] text-white/40">Display Deal-of-the-Day countdown section on homepage.</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSSecretOffer(!sSecretOffer)}
-                              className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sSecretOffer ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
-                            >
-                              <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sSecretOffer ? 'translate-x-4' : 'translate-x-0'}`} />
-                            </button>
-                          </div>
-
-                          {/* TOGGLE: BANNER */}
-                          <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
-                            <div>
-                              <span className="text-xs font-semibold text-white block">Exclusive Banner Broadcast</span>
-                              <span className="text-[9px] text-white/40">Enable custom collection announcement ribbon at footer/header.</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSBanner(!sBanner)}
-                              className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sBanner ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
-                            >
-                              <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sBanner ? 'translate-x-4' : 'translate-x-0'}`} />
-                            </button>
-                          </div>
-
-                          {/* TOGGLE: MAINTENANCE */}
-                          <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
-                            <div>
-                              <span className="text-xs font-semibold text-red-400 block">Boutique Maintenance Overrides</span>
-                              <span className="text-[9px] text-white/40">Place storefront in read-only reservation-locked mode.</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSMaintenance(!sMaintenance)}
-                              className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sMaintenance ? 'bg-red-500' : 'bg-white/10'}`}
-                            >
-                              <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sMaintenance ? 'translate-x-4' : 'translate-x-0'}`} />
-                            </button>
-                          </div>
-
-                          {/* PAYMENT METHODS GROUP */}
-                          <div className="pt-2 border-t border-white/5 space-y-2">
-                            <span className="text-[10px] text-white/50 uppercase tracking-wider font-mono block">Accepted Payment Methods</span>
-                            
-                            {/* TOGGLE: MOBILE MONEY */}
-                            <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
-                              <div>
-                                <span className="text-xs font-semibold text-white block">Mobile Money</span>
-                                <span className="text-[9px] text-white/40">Allow MTN & Airtel Mobile Money checkout.</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setSPayMomo(!sPayMomo)}
-                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sPayMomo ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
-                              >
-                                <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sPayMomo ? 'translate-x-4' : 'translate-x-0'}`} />
-                              </button>
-                            </div>
-
-                            {/* TOGGLE: VISA */}
-                            <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
-                              <div>
-                                <span className="text-xs font-semibold text-white block">Visa & Credit Card</span>
-                                <span className="text-[9px] text-white/40">Allow Visa and card payments at checkout.</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setSPayVisa(!sPayVisa)}
-                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sPayVisa ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
-                              >
-                                <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sPayVisa ? 'translate-x-4' : 'translate-x-0'}`} />
-                              </button>
-                            </div>
-
-                            {/* TOGGLE: CASH ON DELIVERY */}
-                            <div className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
-                              <div>
-                                <span className="text-xs font-semibold text-white block">Cash on Delivery</span>
-                                <span className="text-[9px] text-white/40">Allow cash payment on concierge delivery.</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setSPayCod(!sPayCod)}
-                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sPayCod ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
-                              >
-                                <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sPayCod ? 'translate-x-4' : 'translate-x-0'}`} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Reset local states from store settings
-                        if (settings) {
-                          setSHours(settings.showroomHours || '');
-                          setSPhone(settings.conciergePhone || settings.supportPhone || '');
-                          setSThreshold(settings.freeShippingThreshold || 0);
-                          setSTaxRate(settings.taxRate || 0);
-                          setSGreet(settings.aiGreetingPrefix || '');
-                          setSBanner(settings.enableNewsBanner !== false);
-                          setSMaintenance(!!settings.maintenanceMode);
-                          setSCurrency(settings.currencySymbol || 'Ugx');
-                          setSSecretOffer(settings.enableSecretOffer !== false);
-                          setSPayMomo(settings.paymentMethods?.mobileMoney !== false);
-                          setSPayVisa(settings.paymentMethods?.visa !== false);
-                          setSPayCod(settings.paymentMethods?.cashOnDelivery !== false);
-                        }
-                      }}
-                      className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-white/80 font-medium transition-colors"
-                    >
-                      Reset Configuration
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-6 py-2.5 bg-[#5F39FF] hover:bg-[#4a26e0] active:scale-98 rounded-xl text-xs text-white font-bold transition-all shadow-md shadow-[#5F39FF]/10 flex items-center gap-2"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Save Configuration
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
+              <SettingsTab
+                canSeeSettings={canSeeSettings}
+                settingsSuccess={settingsSuccess}
+                handleSaveSettings={handleSaveSettings}
+                sHours={sHours}
+                setSHours={setSHours}
+                sPhone={sPhone}
+                setSPhone={setSPhone}
+                sCurrency={sCurrency}
+                setSCurrency={setSCurrency}
+                sTaxRate={sTaxRate}
+                setSTaxRate={setSTaxRate}
+                sThreshold={sThreshold}
+                setSThreshold={setSThreshold}
+                sGreeting={sGreeting}
+                setSGreet={setSGreet}
+                sSecretOffer={sSecretOffer}
+                setSSecretOffer={setSSecretOffer}
+                sBanner={sBanner}
+                setSBanner={setSBanner}
+                sMaintenance={sMaintenance}
+                setSMaintenance={setSMaintenance}
+                sPayMomo={sPayMomo}
+                setSPayMomo={setSPayMomo}
+                sPayVisa={sPayVisa}
+                setSPayVisa={setSPayVisa}
+                sPayCod={sPayCod}
+                setSPayCod={setSPayCod}
+                settings={settings}
+              />
             )}
 
           </AnimatePresence>

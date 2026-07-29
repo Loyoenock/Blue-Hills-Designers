@@ -10,7 +10,7 @@ interface BookingsTabProps {
   bookingStatusFilter: string;
   setBookingStatusFilter: (s: string) => void;
   filteredBookings: any[];
-  updateBookingStatus: (id: string, status: any, name: string, role: string) => Promise<void>;
+  updateBookingStatus: (id: string, status: any, name: string, role: string) => Promise<any>;
   currentUser: User | null;
 }
 

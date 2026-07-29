@@ -12,7 +12,7 @@ interface OrdersTabProps {
   setOrderStatusFilter: (s: string) => void;
   filteredOrders: Order[];
   canModifyOrders: boolean;
-  updateOrderStatus: (id: string, status: any, name: string, role: string) => Promise<void>;
+  updateOrderStatus: (id: string, status: any, name: string, role: string) => Promise<any>;
   currentUser: User | null;
   setSelectedOrderDetails: (order: Order) => void;
 }
