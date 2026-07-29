@@ -1,6 +1,16 @@
 import crypto from 'crypto';
 import { ApiError, logger } from './apiUtils';
 
+// Startup-time configuration warning log for misconfigured production deployment
+if (process.env.PAYMENT_TEST_MODE !== 'true') {
+  const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+  if (!secretKey || secretKey.includes('placeholder') || secretKey.includes('xxxxxxxx')) {
+    logger.warn(
+      'MISCONFIGURED PAYMENT GATEWAY: PAYMENT_TEST_MODE is disabled/unset, but FLUTTERWAVE_SECRET_KEY is missing or contains a placeholder/invalid key. Live payment transactions will fall back to sandbox mode.'
+    );
+  }
+}
+
 export interface PaymentChargeResult {
   success: boolean;
   transactionId: string;

@@ -8,8 +8,10 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get('verif-hash') || req.headers.get('verif_hash');
     const secretHash = process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH || process.env.FLUTTERWAVE_SECRET_KEY;
 
-    // Verify webhook signature if secret hash is configured
-    if (secretHash && process.env.NODE_ENV === 'production') {
+    // Verify webhook signature when live mode is active (PAYMENT_TEST_MODE !== 'true') and secretHash is configured.
+    // Explicit environment flag check ensures consistent behavior across dev/staging/prod without relying on NODE_ENV alone.
+    const isLiveWebhookVerification = secretHash && process.env.PAYMENT_TEST_MODE !== 'true';
+    if (isLiveWebhookVerification) {
       const sigBuf = signature ? Buffer.from(signature, 'utf8') : null;
       const secretBuf = Buffer.from(secretHash, 'utf8');
       const isValid = sigBuf && sigBuf.length === secretBuf.length && crypto.timingSafeEqual(sigBuf, secretBuf);
