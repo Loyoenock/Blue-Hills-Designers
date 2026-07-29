@@ -91,26 +91,42 @@ export async function POST(req: NextRequest) {
     const validatedCartItems = [];
     let subtotal = 0;
 
+    // Calculate total requested quantity per product ID to handle multiple line items/variants of the same product
+    const productTotalsMap: Record<string, number> = {};
     for (const item of cart) {
       const productId = item.product?.id;
       if (!productId) {
         throw new ApiError('Invalid product entry in cart.', 400);
       }
+      const qty = Number(item.quantity) || 0;
+      productTotalsMap[productId] = (productTotalsMap[productId] || 0) + qty;
+    }
 
-      // Query database for the fresh, authoritative stock level & price
-      const { data: product, error: prodErr } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', productId)
-        .single();
+    const fetchedProductsCache: Record<string, any> = {};
 
-      if (prodErr || !product) {
-        throw new ApiError(`Product "${item.product?.name || productId}" could not be verified in our atelier registry.`, 400);
+    for (const item of cart) {
+      const productId = item.product.id;
+
+      // Query database for fresh, authoritative stock level & price if not cached in this request
+      if (!fetchedProductsCache[productId]) {
+        const { data: product, error: prodErr } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', productId)
+          .single();
+
+        if (prodErr || !product) {
+          throw new ApiError(`Product "${item.product?.name || productId}" could not be verified in our atelier registry.`, 400);
+        }
+        fetchedProductsCache[productId] = product;
       }
 
-      // Verify stock level
-      if (product.stock < item.quantity) {
-        throw new ApiError(`Apologies, "${product.name}" has insufficient stock. Available stock is ${product.stock} units, while you requested ${item.quantity}.`, 400);
+      const product = fetchedProductsCache[productId];
+      const totalRequestedQuantity = productTotalsMap[productId];
+
+      // Verify combined stock level for this product across all cart variants
+      if (product.stock < totalRequestedQuantity) {
+        throw new ApiError(`Apologies, "${product.name}" has insufficient stock. Available stock is ${product.stock} units, while you requested ${totalRequestedQuantity}.`, 400);
       }
 
       const itemPrice = Number(product.price) || 0;
@@ -322,20 +338,34 @@ export async function POST(req: NextRequest) {
 
     try {
       logger.info('Reducing inventory stock with atomic rollback safeguards', { orderNumber });
-      // Step A: Decrement inventory stock on products atomically (optimistic conditional locking)
+      // Build per-product aggregated map for atomic stock reduction (handles multiple cart line items referencing same product)
+      const aggregatedProductsMap = new Map<string, { product: any; totalQuantity: number }>();
       for (const item of validatedCartItems) {
+        const existing = aggregatedProductsMap.get(item.product.id);
+        if (existing) {
+          existing.totalQuantity += item.quantity;
+        } else {
+          aggregatedProductsMap.set(item.product.id, {
+            product: item.product,
+            totalQuantity: item.quantity,
+          });
+        }
+      }
+
+      // Step A: Decrement inventory stock on products atomically (optimistic conditional locking)
+      for (const { product, totalQuantity } of aggregatedProductsMap.values()) {
         const { data: updatedProduct, error: updateErr } = await supabase
           .from('products')
-          .update({ stock: item.product.stock - item.quantity, updated_at: new Date().toISOString() })
-          .eq('id', item.product.id)
-          .gte('stock', item.quantity) // Conditional update ensuring sufficient stock is still available!
+          .update({ stock: product.stock - totalQuantity, updated_at: new Date().toISOString() })
+          .eq('id', product.id)
+          .gte('stock', totalQuantity) // Conditional update ensuring sufficient total stock is still available!
           .select()
           .single();
 
         if (updateErr || !updatedProduct) {
-          throw new Error(`Inventory reservation failed for "${item.product.name}". High request density: stock was depleted or changed. Please try checking out again.`);
+          throw new Error(`Inventory reservation failed for "${product.name}". High request density: stock was depleted or changed. Please try checking out again.`);
         }
-        rolledBackItems.push({ productId: item.product.id, originalStock: item.product.stock });
+        rolledBackItems.push({ productId: product.id, originalStock: product.stock });
       }
 
       // Steps B through H: Execute atomic order creation transaction in PL/pgSQL

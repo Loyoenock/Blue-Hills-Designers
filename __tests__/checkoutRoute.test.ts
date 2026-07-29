@@ -230,6 +230,40 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
     expect(data.error).toContain('reached its usage limit');
   });
 
+  it('rejects checkout with 400 if combined quantity of multiple line items for the same product exceeds available stock', async () => {
+    // Product stock is 2. Cart has 2 line items for same product: 1 of size M, 2 of size L (total 3 requested)
+    const req = createCheckoutRequest({
+      email: 'buyer@example.com',
+      phone: '+256770000000',
+      paymentMethod: 'Cash on Delivery',
+      shippingAddress: { city: 'Kampala', address: 'Plot 10 Kampala Rd' },
+      cart: [
+        {
+          id: 'prod-suit-1-M-Navy',
+          product: { id: 'prod-suit-1', name: 'Savile Midnight Suit' },
+          quantity: 1,
+          selectedSize: 'M',
+          selectedColor: 'Navy',
+        },
+        {
+          id: 'prod-suit-1-L-Navy',
+          product: { id: 'prod-suit-1', name: 'Savile Midnight Suit' },
+          quantity: 2,
+          selectedSize: 'L',
+          selectedColor: 'Navy',
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain('insufficient stock');
+    expect(data.error).toContain('Available stock is 2');
+    expect(data.error).toContain('requested 3');
+  });
+
   it('short-circuits and returns existing order details when idempotencyKey matches without calling payment', async () => {
     const existingKey = 'idempotent-key-unique-777';
     mockDbData.orders![existingKey] = {
