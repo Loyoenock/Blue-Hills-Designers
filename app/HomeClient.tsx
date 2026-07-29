@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -14,6 +14,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../types';
 import { getSafeImageSrc } from '../lib/utils';
 
+function getTimeLeftFromEnd(endMs: number) {
+  const diffMs = endMs - Date.now();
+  if (!Number.isFinite(diffMs) || diffMs <= 0) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  }
+  const totalSec = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  return { days, hours, minutes, seconds };
+}
 
 export default function HomeClient() {
   const router = useRouter();
@@ -47,6 +59,8 @@ export default function HomeClient() {
 
   // Countdown timer for Deal of the Day
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 14, minutes: 40, seconds: 17 });
+  const endMsRef = useRef<number | null>(null);
+  const dealKeyRef = useRef<string | null>(null);
 
   // Testimonial index slider
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
@@ -62,36 +76,39 @@ export default function HomeClient() {
   const newArrivals = products.filter(p => p.isNew && !p.isDealOfTheDay).slice(0, 4);
   const dealProduct = products.find(p => p.isDealOfTheDay);
 
-  // Helper to compute remaining time from dealExpiresAt timestamp
-  const getExpiresAtTimeLeft = (expiresAt: string) => {
-    const diffMs = new Date(expiresAt).getTime() - Date.now();
-    if (isNaN(diffMs) || diffMs <= 0) {
-      return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-    }
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
-    return { days, hours, minutes, seconds };
-  };
-
-  // Synchronize timeLeft state with dealProduct timer properties when they load or change
+  // Synchronize endMsRef and timeLeft with dealProduct when identity or timer config changes
   useEffect(() => {
-    if (dealProduct) {
+    if (!dealProduct) return;
+
+    const dealKey = `${dealProduct.id}_${dealProduct.dealExpiresAt || ''}_${dealProduct.dealDays ?? ''}_${dealProduct.dealHours ?? ''}_${dealProduct.dealMins ?? ''}_${dealProduct.dealSecs ?? ''}`;
+
+    if (dealKeyRef.current !== dealKey || endMsRef.current === null) {
+      dealKeyRef.current = dealKey;
       if (dealProduct.dealExpiresAt) {
-        setTimeLeft(getExpiresAtTimeLeft(dealProduct.dealExpiresAt));
+        const expiresMs = new Date(dealProduct.dealExpiresAt).getTime();
+        if (Number.isFinite(expiresMs) && expiresMs > Date.now()) {
+          endMsRef.current = expiresMs;
+        } else {
+          endMsRef.current = Date.now();
+        }
       } else {
-        setTimeLeft({
-          days: typeof dealProduct.dealDays === 'number' ? dealProduct.dealDays : 0,
-          hours: typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14,
-          minutes: typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40,
-          seconds: typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17
-        });
+        const days = typeof dealProduct.dealDays === 'number' ? dealProduct.dealDays : 0;
+        const hours = typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14;
+        const minutes = typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40;
+        const seconds = typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17;
+        const durationMs = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+        endMsRef.current = Date.now() + durationMs;
       }
+      setTimeLeft(getTimeLeftFromEnd(endMsRef.current));
     }
   }, [
-    dealProduct,
-    dealProduct?.dealExpiresAt
+    dealProduct?.id,
+    dealProduct?.dealExpiresAt,
+    dealProduct?.dealDays,
+    dealProduct?.dealHours,
+    dealProduct?.dealMins,
+    dealProduct?.dealSecs,
+    dealProduct
   ]);
 
   useEffect(() => {
@@ -101,22 +118,8 @@ export default function HomeClient() {
 
     // Deal of the day countdown interval
     const timer = setInterval(() => {
-      if (dealProduct?.dealExpiresAt) {
-        setTimeLeft(getExpiresAtTimeLeft(dealProduct.dealExpiresAt));
-      } else {
-        setTimeLeft(prev => {
-          if (prev.seconds > 0) {
-            return { ...prev, seconds: prev.seconds - 1 };
-          } else if (prev.minutes > 0) {
-            return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-          } else if (prev.hours > 0) {
-            return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-          } else if (prev.days > 0) {
-            return { days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
-          } else {
-            return { days: 0, hours: 24, minutes: 0, seconds: 0 }; // Reset
-          }
-        });
+      if (endMsRef.current !== null) {
+        setTimeLeft(getTimeLeftFromEnd(endMsRef.current));
       }
     }, 1000);
 
@@ -134,7 +137,7 @@ export default function HomeClient() {
       clearInterval(testimonialsTimer);
       clearTimeout(mountTimer);
     };
-  }, [activeTestimonials.length, dealProduct?.dealExpiresAt]);
+  }, [activeTestimonials.length]);
 
   if (!mounted) return null;
 
