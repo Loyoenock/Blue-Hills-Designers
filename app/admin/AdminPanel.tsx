@@ -1138,6 +1138,7 @@ export default function Admin() {
             {/* SUB-TAB: CATEGORIES MANAGEMENT */}
             {activeTab === 'categories' && canSeeCategories && (
               <CategoriesTab
+                canSeeCategories={canSeeCategories}
                 canModifyCategories={canModifyCategories}
                 handleOpenCategoryModal={handleOpenCategoryModal}
                 categorySearch={categorySearch}
@@ -1151,6 +1152,7 @@ export default function Admin() {
             {/* SUB-TAB: TESTIMONIALS MANAGEMENT */}
             {activeTab === 'testimonials' && canSeeTestimonials && (
               <TestimonialsTab
+                canSeeTestimonials={canSeeTestimonials}
                 canModifyTestimonials={canModifyTestimonials}
                 handleOpenTestimonialModal={handleOpenTestimonialModal}
                 testimonialSearch={testimonialSearch}
