@@ -18,7 +18,7 @@ const mockOr = vi.fn();
 const mockOrder = vi.fn();
 const mockRange = vi.fn();
 
-function createChainableQueryMock(resultData = [], resultCount = 0, resultError = null) {
+function createChainableQueryMock(resultData: any = [], resultCount = 0, resultError = null) {
   const queryMock: any = {};
 
   queryMock.eq = mockEq.mockImplementation(() => queryMock);

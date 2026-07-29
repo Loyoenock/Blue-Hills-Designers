@@ -596,14 +596,9 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         name: prodName,
         slug,
         description: fullProd.description || '',
-        short_description: JSON.stringify({
-          sizes: fullProd.sizes || [],
-          colors: fullProd.colors || [],
-          original_short: fullProd.shortDescription || fullProd.description?.slice(0, 150) || '',
-          dealHours: fullProd.dealHours !== undefined ? fullProd.dealHours : undefined,
-          dealMins: fullProd.dealMins !== undefined ? fullProd.dealMins : undefined,
-          dealSecs: fullProd.dealSecs !== undefined ? fullProd.dealSecs : undefined
-        }),
+        short_description: fullProd.shortDescription || fullProd.description?.slice(0, 150) || '',
+        sizes: fullProd.sizes || [],
+        colors: fullProd.colors || [],
         price: fullProd.price !== undefined && fullProd.price !== null ? Number(fullProd.price) : 0,
         discount_percentage: Number(fullProd.discountPercentage) || 0,
         is_featured: !!fullProd.isFeatured,
@@ -1306,8 +1301,12 @@ export const useStore = create<StoreState>()(
             : [];
           const finalImages = productImages.length > 0 ? productImages : (localProd?.images || [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
 
-          let parsedSizes = localProd?.sizes || ['M', 'L', 'XL'];
-          let parsedColors = localProd?.colors || ['Classic Black'];
+          let parsedSizes = (Array.isArray(p.sizes) && p.sizes.length > 0)
+            ? p.sizes
+            : (localProd?.sizes || ['M', 'L', 'XL']);
+          let parsedColors = (Array.isArray(p.colors) && p.colors.length > 0)
+            ? p.colors
+            : (localProd?.colors || ['Classic Black']);
           let dealDays = p.deal_days !== undefined && p.deal_days !== null ? Number(p.deal_days) : (localProd?.dealDays !== undefined ? localProd.dealDays : 0);
           let dealHours = p.deal_hours !== undefined && p.deal_hours !== null ? Number(p.deal_hours) : (localProd?.dealHours !== undefined ? localProd.dealHours : 14);
           let dealMins = p.deal_mins !== undefined && p.deal_mins !== null ? Number(p.deal_mins) : (localProd?.dealMins !== undefined ? localProd.dealMins : 40);
@@ -1317,8 +1316,6 @@ export const useStore = create<StoreState>()(
             try {
               const parsed = JSON.parse(p.short_description);
               if (parsed && typeof parsed === 'object') {
-                if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) parsedSizes = parsed.sizes;
-                if (Array.isArray(parsed.colors) && parsed.colors.length > 0) parsedColors = parsed.colors;
                 if ((p.deal_days === undefined || p.deal_days === null) && parsed.dealDays !== undefined && parsed.dealDays !== null) dealDays = Number(parsed.dealDays);
                 if ((p.deal_hours === undefined || p.deal_hours === null) && parsed.dealHours !== undefined && parsed.dealHours !== null) dealHours = Number(parsed.dealHours);
                 if ((p.deal_mins === undefined || p.deal_mins === null) && parsed.dealMins !== undefined && parsed.dealMins !== null) dealMins = Number(parsed.dealMins);
@@ -1635,8 +1632,12 @@ export const useStore = create<StoreState>()(
           const existingIndex = products.findIndex(p => p.id === prodId || toValidUUID(p.id) === prodId);
           const existing = existingIndex !== -1 ? products[existingIndex] : null;
 
-          let parsedSizes = existing?.sizes || ['M', 'L', 'XL'];
-          let parsedColors = existing?.colors || ['Classic Black'];
+          let parsedSizes = (Array.isArray(newRow.sizes) && newRow.sizes.length > 0)
+            ? newRow.sizes
+            : (existing?.sizes || ['M', 'L', 'XL']);
+          let parsedColors = (Array.isArray(newRow.colors) && newRow.colors.length > 0)
+            ? newRow.colors
+            : (existing?.colors || ['Classic Black']);
           let dealDays = newRow.deal_days !== undefined && newRow.deal_days !== null ? Number(newRow.deal_days) : (existing?.dealDays ?? 0);
           let dealHours = newRow.deal_hours !== undefined && newRow.deal_hours !== null ? Number(newRow.deal_hours) : (existing?.dealHours ?? 14);
           let dealMins = newRow.deal_mins !== undefined && newRow.deal_mins !== null ? Number(newRow.deal_mins) : (existing?.dealMins ?? 40);
@@ -1646,8 +1647,6 @@ export const useStore = create<StoreState>()(
             try {
               const parsed = JSON.parse(newRow.short_description);
               if (parsed && typeof parsed === 'object') {
-                if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) parsedSizes = parsed.sizes;
-                if (Array.isArray(parsed.colors) && parsed.colors.length > 0) parsedColors = parsed.colors;
                 if ((newRow.deal_days === undefined || newRow.deal_days === null) && parsed.dealDays !== undefined) dealDays = Number(parsed.dealDays);
                 if ((newRow.deal_hours === undefined || newRow.deal_hours === null) && parsed.dealHours !== undefined) dealHours = Number(parsed.dealHours);
                 if ((newRow.deal_mins === undefined || newRow.deal_mins === null) && parsed.dealMins !== undefined) dealMins = Number(parsed.dealMins);

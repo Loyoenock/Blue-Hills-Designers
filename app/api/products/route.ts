@@ -93,18 +93,8 @@ export async function GET(req: NextRequest) {
 
     const mappedData = (rawData || []).map((p: any) => {
       const catName = p.categories?.name || p.category || 'Suits';
-      let sizes = ['M', 'L', 'XL'];
-      let colors = ['Classic Black'];
-
-      if (p.short_description) {
-        try {
-          const parsed = JSON.parse(p.short_description);
-          if (parsed && typeof parsed === 'object') {
-            if (Array.isArray(parsed.sizes) && parsed.sizes.length > 0) sizes = parsed.sizes;
-            if (Array.isArray(parsed.colors) && parsed.colors.length > 0) colors = parsed.colors;
-          }
-        } catch {}
-      }
+      const sizes = (Array.isArray(p.sizes) && p.sizes.length > 0) ? p.sizes : ['M', 'L', 'XL'];
+      const colors = (Array.isArray(p.colors) && p.colors.length > 0) ? p.colors : ['Classic Black'];
 
       const productImages = Array.isArray(p.product_images) && p.product_images.length > 0
         ? p.product_images
