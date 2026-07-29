@@ -3,6 +3,7 @@
 import { motion } from 'motion/react';
 import { Plus, Search, Filter, Users, Edit, Trash2 } from 'lucide-react';
 import { User } from '../../../types';
+import { isUUID } from '../../../lib/utils';
 
 interface UsersTabProps {
   canModifyUsers: boolean;
@@ -100,15 +101,22 @@ export default function UsersTab({
                     <p className="text-xs text-white/60 font-mono">{u.email}</p>
                     {u.phone && <p className="text-xs text-white/50 font-mono">Tel: {u.phone}</p>}
                   </div>
-                  <span className={`text-[9px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                    u.role === 'Super Admin' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                    u.role === 'Admin' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                    u.role === 'Manager' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                    u.role === 'Staff' ? 'bg-yellow-500/10 text-[#20D9A1] border border-yellow-500/20' :
-                    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  }`}>
-                    {u.role}
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className={`text-[9px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full ${
+                      u.role === 'Super Admin' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                      u.role === 'Admin' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                      u.role === 'Manager' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                      u.role === 'Staff' ? 'bg-yellow-500/10 text-[#20D9A1] border border-yellow-500/20' :
+                      'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      {u.role}
+                    </span>
+                    {(u.source === 'local-demo' || !isUUID(u.id)) && (
+                      <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        Demo
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Stats / Spending / Rewards section */}

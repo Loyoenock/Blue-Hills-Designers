@@ -53,6 +53,7 @@ export interface User {
   district?: string;
   city?: string;
   address?: string;
+  source?: 'local-demo' | 'db' | string;
 }
 
 export interface Coupon {

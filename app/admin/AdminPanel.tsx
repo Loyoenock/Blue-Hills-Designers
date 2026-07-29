@@ -925,13 +925,14 @@ export default function Admin() {
     setIsUserModalOpen(true);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const adminName = currentUser?.name || 'Master Admin';
     const adminRole = currentUser?.role || 'Super Admin';
 
+    let res: { success: boolean; error?: string };
     if (editingUser) {
-      adminUpdateUser(editingUser.id, {
+      res = await adminUpdateUser(editingUser.id, {
         name: uName,
         email: uEmail,
         phone: uPhone,
@@ -940,7 +941,7 @@ export default function Admin() {
         rewardsPoints: Number(uRewardsPoints)
       }, adminName, adminRole);
     } else {
-      adminAddUser({
+      res = await adminAddUser({
         name: uName,
         email: uEmail,
         phone: uPhone,
@@ -949,7 +950,12 @@ export default function Admin() {
         rewardsPoints: Number(uRewardsPoints)
       }, adminName, adminRole);
     }
-    setIsUserModalOpen(false);
+
+    if (!res.success && res.error) {
+      alert(res.error);
+    } else {
+      setIsUserModalOpen(false);
+    }
   };
 
   const handleOpenDeleteUserModal = (user: User) => {
@@ -961,11 +967,14 @@ export default function Admin() {
     setIsDeleteUserModalOpen(true);
   };
 
-  const handleConfirmDeleteUser = () => {
+  const handleConfirmDeleteUser = async () => {
     if (userToDelete) {
       const adminName = currentUser?.name || 'Master Admin';
       const adminRole = currentUser?.role || 'Super Admin';
-      adminDeleteUser(userToDelete.id, adminName, adminRole);
+      const res = await adminDeleteUser(userToDelete.id, adminName, adminRole);
+      if (!res.success && res.error) {
+        alert(res.error);
+      }
       setIsDeleteUserModalOpen(false);
       setUserToDelete(null);
     }

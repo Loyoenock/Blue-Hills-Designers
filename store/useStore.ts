@@ -304,7 +304,8 @@ const INITIAL_USERS: User[] = [
     phone: '+256 700 000000',
     role: 'Super Admin',
     spending: 0,
-    rewardsPoints: 0
+    rewardsPoints: 0,
+    source: 'local-demo'
   },
   {
     id: 'usr-1',
@@ -313,7 +314,8 @@ const INITIAL_USERS: User[] = [
     phone: '+256 772 123456',
     role: 'Customer',
     spending: 2700,
-    rewardsPoints: 270
+    rewardsPoints: 270,
+    source: 'local-demo'
   },
   {
     id: 'usr-admin',
@@ -322,7 +324,8 @@ const INITIAL_USERS: User[] = [
     phone: '+256 701 987654',
     role: 'Super Admin',
     spending: 0,
-    rewardsPoints: 0
+    rewardsPoints: 0,
+    source: 'local-demo'
   },
   {
     id: 'usr-manager',
@@ -331,7 +334,8 @@ const INITIAL_USERS: User[] = [
     phone: '+256 703 456789',
     role: 'Manager',
     spending: 0,
-    rewardsPoints: 0
+    rewardsPoints: 0,
+    source: 'local-demo'
   },
   {
     id: 'usr-staff',
@@ -340,7 +344,8 @@ const INITIAL_USERS: User[] = [
     phone: '+256 752 321654',
     role: 'Staff',
     spending: 0,
-    rewardsPoints: 0
+    rewardsPoints: 0,
+    source: 'local-demo'
   }
 ];
 
@@ -982,6 +987,12 @@ async function safeSupabaseInsert(tableName: string, payload: any): Promise<{ su
 }
 
 async function safeSupabaseUpsert(tableName: string, payload: any, options?: any): Promise<{ success: boolean; error?: string }> {
+  if (tableName === 'profiles' && payload?.id && !isUUID(payload.id)) {
+    return {
+      success: false,
+      error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+    };
+  }
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unconfigured).`);
     return { success: true };
@@ -1016,6 +1027,12 @@ async function safeSupabaseUpsert(tableName: string, payload: any, options?: any
 }
 
 async function safeSupabaseDelete(tableName: string, filters: Record<string, any>): Promise<{ success: boolean; error?: string }> {
+  if (tableName === 'profiles' && filters?.id && !isUUID(filters.id)) {
+    return {
+      success: false,
+      error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+    };
+  }
   if (!isSupabaseConfigured()) {
     console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unconfigured).`);
     return { success: true };
@@ -1226,19 +1243,24 @@ export const useStore = create<StoreState>()(
         }
 
         // 2. Profiles / Users
-        const { data: dbProfiles } = await supabase.from('profiles').select('*');
-        const mappedUsers = (dbProfiles || []).map((p: any) => ({
-          id: p.id,
-          name: p.full_name || p.name || 'Gentleman Customer',
-          email: p.email,
-          phone: p.phone,
-          role: capitalizeRole(p.role),
-          spending: p.lifetime_spending || p.spending || 0,
-          rewardsPoints: p.reward_points || p.rewardsPoints || 0
-        }));
-        const localUsers = get().users.length > 0 ? get().users : INITIAL_USERS;
-        const missingUsers = localUsers.filter(lu => !mappedUsers.some(mu => mu.id === lu.id));
-        set({ users: [...mappedUsers, ...missingUsers] as User[] });
+        const { data: dbProfiles, error: profilesError } = await supabase.from('profiles').select('*');
+        if (dbProfiles !== null && !profilesError) {
+          const mappedUsers = dbProfiles.map((p: any) => ({
+            id: p.id,
+            name: p.full_name || p.name || 'Gentleman Customer',
+            email: p.email,
+            phone: p.phone,
+            role: capitalizeRole(p.role),
+            spending: p.lifetime_spending || p.spending || 0,
+            rewardsPoints: p.reward_points || p.rewardsPoints || 0,
+            source: 'db'
+          }));
+          set({ users: mappedUsers as User[] });
+        } else {
+          if (get().users.length === 0) {
+            set({ users: INITIAL_USERS });
+          }
+        }
 
         // 3. Products & Reviews & Product Images
         const { data: dbProducts } = await supabase.from('products').select('*');
@@ -3344,39 +3366,67 @@ export const useStore = create<StoreState>()(
       },
 
       adminAddUser: async (userData, adminName, adminRole) => {
-        const previousUsers = get().users;
-        const id = 'usr-' + Math.random().toString(36).substring(2, 11);
-        const newUser: User = {
-          id,
-          name: userData.name,
-          email: userData.email,
-          phone: userData.phone || '',
-          role: userData.role || 'Customer',
-          spending: userData.spending || 0,
-          rewardsPoints: userData.rewardsPoints || 0
-        };
+        try {
+          const headers = await getAuthHeaders();
+          const response = await fetchWithRetry('/api/admin/users/create', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              name: userData.name,
+              email: userData.email,
+              phone: userData.phone || '',
+              role: userData.role || 'Customer',
+              spending: userData.spending || 0,
+              rewardsPoints: userData.rewardsPoints || 0,
+              password: (userData as any).password
+            })
+          });
 
-        set(state => ({
-          users: [newUser, ...state.users]
-        }));
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || !res.success) {
+            const errorMsg = res.error || 'Failed to create user account.';
+            set({ adminError: `Failed to add user '${userData.name}': ${errorMsg}` });
+            return { success: false, error: errorMsg };
+          }
 
-        get().addAuditLog(
-          'User Registered',
-          `Admin registered a new user '${newUser.name}' with role '${newUser.role}'.`,
-          'admin-modifier',
-          adminName,
-          adminRole as User['role']
-        );
+          const createdUser: User = {
+            id: res.user.id,
+            name: res.user.name || userData.name,
+            email: res.user.email || userData.email,
+            phone: res.user.phone || userData.phone || '',
+            role: capitalizeRole(res.user.role || userData.role),
+            spending: userData.spending || 0,
+            rewardsPoints: userData.rewardsPoints || 0,
+            source: 'db'
+          };
 
-        const dbRes = await safeSupabaseUpsert('profiles', newUser);
-        if (dbRes && !dbRes.success) {
-          set({ users: previousUsers, adminError: `Failed to add user '${newUser.name}': ${dbRes.error}` });
-          return { success: false, error: dbRes.error };
+          set(state => ({
+            users: [createdUser, ...state.users.filter(u => u.id !== createdUser.id)]
+          }));
+
+          get().addAuditLog(
+            'User Registered',
+            `Admin registered a new user '${createdUser.name}' with role '${createdUser.role}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+
+          return { success: true };
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Failed to create user profile.';
+          set({ adminError: `Failed to add user '${userData.name}': ${errorMsg}` });
+          return { success: false, error: errorMsg };
         }
-        return { success: true };
       },
 
       adminUpdateUser: async (id, updatedFields, adminName, adminRole) => {
+        if (!isUUID(id)) {
+          return {
+            success: false,
+            error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+          };
+        }
         const previousUsers = get().users;
         const previousCurrentUser = get().currentUser;
         set(state => {
@@ -3410,6 +3460,12 @@ export const useStore = create<StoreState>()(
       },
 
       adminDeleteUser: async (id, adminName, adminRole) => {
+        if (!isUUID(id)) {
+          return {
+            success: false,
+            error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+          };
+        }
         const previousUsers = get().users;
         const userToDelete = previousUsers.find(u => u.id === id);
         set(state => ({
