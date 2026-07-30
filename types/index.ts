@@ -142,7 +142,7 @@ export interface Payment {
   customerEmail: string;
   amount: number;
   paymentMethod: 'Mobile Money' | 'Visa' | 'Cash on Delivery';
-  status: 'Paid' | 'Pending' | 'Refunded' | 'Failed';
+  status: 'Paid' | 'Pending' | 'Refunded' | 'Failed' | 'Cancelled';
   transactionId: string;
   date: string;
 }

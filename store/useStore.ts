@@ -561,6 +561,26 @@ function toValidUUID(str: string): string {
   return `${hex.substr(0, 8)}-${hex.substr(8, 4)}-4${hex.substr(13, 3)}-8${hex.substr(17, 3)}-${hex.substr(20, 12)}`;
 }
 
+export const mapUiPaymentStatusToDb = (status: string): string => {
+  const s = status?.toLowerCase() || '';
+  if (s === 'paid' || s === 'success' || s === 'completed') return 'success';
+  if (s === 'pending') return 'pending';
+  if (s === 'refunded') return 'refunded';
+  if (s === 'failed') return 'failed';
+  if (s === 'cancelled' || s === 'canceled') return 'cancelled';
+  return 'pending';
+};
+
+export const mapDbPaymentStatusToUi = (status: string): 'Paid' | 'Pending' | 'Refunded' | 'Failed' | 'Cancelled' => {
+  const s = status?.toLowerCase() || '';
+  if (s === 'success' || s === 'paid' || s === 'completed') return 'Paid';
+  if (s === 'pending') return 'Pending';
+  if (s === 'refunded') return 'Refunded';
+  if (s === 'failed') return 'Failed';
+  if (s === 'cancelled' || s === 'canceled') return 'Cancelled';
+  return 'Pending';
+};
+
 function mapToSupabasePayload(tableName: string, payload: any): any {
   if (!payload) return payload;
 
@@ -573,7 +593,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
   };
 
-  const state = useStore.getState ? useStore.getState() : { users: [], products: [] };
+  const state = useStore.getState ? useStore.getState() : { users: [], products: [], orders: [], payments: [] };
   const localUsers = state.users || [];
 
   switch (tableName) {
@@ -645,25 +665,29 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
 
     case 'orders': {
-      const orderId = toValidUUID(payload.id);
-      let userId = payload.userId || payload.user_id;
-      if (!userId && payload.customerEmail) {
-        const matchedUser = localUsers.find((u: any) => u.email.toLowerCase() === payload.customerEmail.toLowerCase());
-        userId = matchedUser ? matchedUser.id : toValidUUID('usr-' + payload.customerEmail.toLowerCase());
+      const existingOrder = state.orders?.find((o: any) => o.id === payload.id || toValidUUID(o.id) === toValidUUID(payload.id));
+      const fullOrder = existingOrder ? { ...existingOrder, ...payload } : payload;
+      const orderId = toValidUUID(fullOrder.id);
+      let userId = fullOrder.userId || fullOrder.user_id;
+      if (!userId && fullOrder.customerEmail) {
+        const matchedUser = localUsers.find((u: any) => u.email?.toLowerCase() === fullOrder.customerEmail.toLowerCase());
+        userId = matchedUser ? matchedUser.id : toValidUUID('usr-' + fullOrder.customerEmail.toLowerCase());
       }
       return {
         id: orderId,
         user_id: userId ? toValidUUID(userId) : null,
-        order_number: payload.id,
-        amount: Number(payload.amount) || 0,
+        order_number: fullOrder.id,
+        amount: Number(fullOrder.amount) || 0,
         status: (() => {
-          const s = payload.status?.toLowerCase() || 'pending';
-          if (s === 'delivered') return 'completed';
-          return s;
+          const s = fullOrder.status?.toLowerCase() || 'pending';
+          if (s === 'delivered' || s === 'completed') return 'completed';
+          if (s === 'processing') return 'processing';
+          if (s === 'cancelled' || s === 'canceled') return 'cancelled';
+          return 'pending';
         })(),
-        payment_method: payload.paymentMethod || payload.payment_method || 'Cash on Delivery',
-        notes: payload.notes || null,
-        created_at: getTimestamp(payload.date || payload.created_at)
+        payment_method: fullOrder.paymentMethod || fullOrder.payment_method || 'Cash on Delivery',
+        notes: fullOrder.notes || null,
+        created_at: getTimestamp(fullOrder.date || fullOrder.createdAt || fullOrder.created_at)
       };
     }
 
@@ -741,14 +765,17 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
 
     case 'payments': {
+      const existingPay = state.payments?.find((p: any) => p.id === payload.id || toValidUUID(p.id) === toValidUUID(payload.id));
+      const fullPay = existingPay ? { ...existingPay, ...payload } : payload;
+      const rawStatus = fullPay.status;
       return {
-        id: toValidUUID(payload.id || `pay-${payload.orderId || payload.order_id}`),
-        order_id: toValidUUID(payload.orderId || payload.order_id),
-        provider: payload.provider || 'Cash on Delivery',
-        transaction_id: payload.transactionId || payload.transaction_id || '',
-        amount: Number(payload.amount) || 0,
-        status: payload.status || 'success',
-        created_at: getTimestamp(payload.createdAt || payload.created_at)
+        id: toValidUUID(fullPay.id || `pay-${fullPay.orderId || fullPay.order_id}`),
+        order_id: toValidUUID(fullPay.orderId || fullPay.order_id),
+        provider: fullPay.paymentMethod || fullPay.provider || 'Cash on Delivery',
+        transaction_id: fullPay.transactionId || fullPay.transaction_id || '',
+        amount: Number(fullPay.amount) || 0,
+        status: mapUiPaymentStatusToDb(rawStatus),
+        created_at: getTimestamp(fullPay.date || fullPay.createdAt || fullPay.created_at)
       };
     }
 
@@ -1457,6 +1484,36 @@ export const useStore = create<StoreState>()(
         const localOrders = get().orders.length > 0 ? get().orders : INITIAL_ORDERS;
         const missingOrders = localOrders.filter(lo => !formattedOrders.some(fo => fo.id === lo.id));
         set({ orders: [...formattedOrders, ...missingOrders] as Order[] });
+
+        // 4b. Payments
+        try {
+          const { data: dbPayments } = await supabase.from('payments').select('*');
+          if (dbPayments && dbPayments.length > 0) {
+            const formattedPayments: Payment[] = dbPayments.map((p: any) => {
+              const matchedOrder = (formattedOrders || []).find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id) ||
+                get().orders.find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id);
+              const matchedUser = dbProfiles?.find((prof: any) => prof.id === p.user_id) || get().users?.find((u: any) => u.id === p.user_id);
+
+              return {
+                id: p.id,
+                orderId: matchedOrder?.id || p.order_id || '',
+                customerName: matchedUser?.full_name || matchedUser?.name || matchedOrder?.customerName || p.customer_name || 'Gentleman Customer',
+                customerEmail: matchedUser?.email || matchedOrder?.customerEmail || p.customer_email || '',
+                amount: p.amount !== undefined && p.amount !== null ? Number(p.amount) : (matchedOrder?.amount || 0),
+                paymentMethod: p.provider || matchedOrder?.paymentMethod || 'Mobile Money',
+                status: mapDbPaymentStatusToUi(p.status),
+                transactionId: p.transaction_id || p.id,
+                date: p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+              };
+            });
+
+            const localPayments = get().payments.length > 0 ? get().payments : INITIAL_PAYMENTS;
+            const missingPayments = localPayments.filter(lp => !formattedPayments.some(fp => fp.id === lp.id));
+            set({ payments: [...formattedPayments, ...missingPayments] });
+          }
+        } catch (payErr) {
+          console.warn('Failed to fetch payments from DB:', payErr);
+        }
 
         // 5. Consultations
         try {
@@ -3083,13 +3140,7 @@ export const useStore = create<StoreState>()(
             safeSupabaseInsert('order_items', { ...item, orderId: newOrder.id });
           }
           safeSupabaseInsert('order_addresses', { ...shippingAddress, orderId: newOrder.id });
-          safeSupabaseInsert('payments', {
-            orderId: newOrder.id,
-            amount: newOrder.amount,
-            paymentMethod: newOrder.paymentMethod,
-            status: 'Completed',
-            date: newOrder.date
-          });
+          safeSupabaseInsert('payments', newPayment);
 
           // Sync updated stocks
           for (const item of items) {
@@ -3128,28 +3179,84 @@ export const useStore = create<StoreState>()(
       },
 
       updatePaymentStatus: async (paymentId, status, modifierName, modifierRole) => {
-        const previousPayments = get().payments;
+        const previousPayments = get().payments || [];
+        const previousOrders = get().orders || [];
+
+        const targetPayment = previousPayments.find(p => p.id === paymentId);
+        if (!targetPayment) {
+          return { success: false, error: 'Payment record not found.' };
+        }
+
+        const updatedPayment: Payment = {
+          ...targetPayment,
+          status
+        };
+
+        // Resolve linked order
+        const targetOrder = previousOrders.find(
+          o => o.id === targetPayment.orderId || toValidUUID(o.id) === targetPayment.orderId
+        );
+
+        let updatedOrder: Order | null = null;
+        let nextOrderStatus: Order['status'] | null = null;
+
+        if (targetOrder) {
+          if (status === 'Paid') {
+            if (targetOrder.status === 'Pending') {
+              nextOrderStatus = 'Processing';
+            }
+          } else if (status === 'Cancelled' || status === 'Failed') {
+            nextOrderStatus = 'Cancelled';
+          }
+
+          if (nextOrderStatus && nextOrderStatus !== targetOrder.status) {
+            updatedOrder = {
+              ...targetOrder,
+              status: nextOrderStatus
+            };
+          }
+        }
+
+        // Optimistic state updates
         set(state => ({
-          payments: (state.payments || []).map(p => p.id === paymentId ? { ...p, status } : p)
+          payments: (state.payments || []).map(p => p.id === paymentId ? updatedPayment : p),
+          orders: updatedOrder 
+            ? (state.orders || []).map(o => o.id === updatedOrder!.id ? updatedOrder! : o)
+            : state.orders
         }));
 
-        const payment = get().payments?.find(p => p.id === paymentId);
-        const refDetails = payment ? `for Order ${payment.orderId} (Client: ${payment.customerName})` : `ID ${paymentId}`;
-
+        const refDetails = `for Order ${targetPayment.orderId} (Client: ${targetPayment.customerName})`;
         get().addAuditLog(
           'Payment Status Adjusted',
-          `Payment status ${refDetails} adjusted to '${status}' by staff.`,
+          `Payment status ${refDetails} adjusted to '${status}' by ${modifierName || 'staff'}.${updatedOrder ? ` Linked order ${updatedOrder.id} status transitioned to '${updatedOrder.status}'.` : ''}`,
           'staff-modifier',
           modifierName,
           modifierRole as User['role']
         );
 
-        // Sync status with Supabase
-        const dbRes = await safeSupabaseUpsert('payments', { id: paymentId, status });
-        if (dbRes && !dbRes.success) {
-          set({ payments: previousPayments, adminError: `Failed to update payment status: ${dbRes.error}` });
-          return { success: false, error: dbRes.error };
+        // Perform DB updates
+        const dbPayRes = await safeSupabaseUpsert('payments', updatedPayment);
+        if (dbPayRes && !dbPayRes.success) {
+          set({ 
+            payments: previousPayments, 
+            orders: previousOrders, 
+            adminError: `Failed to update payment status: ${dbPayRes.error}` 
+          });
+          return { success: false, error: dbPayRes.error };
         }
+
+        if (updatedOrder) {
+          const dbOrderRes = await safeSupabaseUpsert('orders', updatedOrder);
+          if (dbOrderRes && !dbOrderRes.success) {
+            set({ 
+              payments: previousPayments, 
+              orders: previousOrders, 
+              adminError: `Failed to sync linked order status: ${dbOrderRes.error}` 
+            });
+            return { success: false, error: dbOrderRes.error };
+          }
+        }
+
         return { success: true };
       },
 

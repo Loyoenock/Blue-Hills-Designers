@@ -102,6 +102,7 @@ export default function PaymentsTab({
               <option value="Pending">Pending</option>
               <option value="Refunded">Refunded</option>
               <option value="Failed">Failed</option>
+              <option value="Cancelled">Cancelled</option>
             </select>
           </div>
 
@@ -180,6 +181,7 @@ export default function PaymentsTab({
                         <option value="Pending">Pending</option>
                         <option value="Refunded">Refunded</option>
                         <option value="Failed">Failed</option>
+                        <option value="Cancelled">Cancelled</option>
                       </select>
                     </td>
                   </tr>
