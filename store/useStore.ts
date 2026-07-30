@@ -1482,7 +1482,7 @@ export const useStore = create<StoreState>()(
         // 4b. Payments
         try {
           const { data: dbPayments } = await supabase.from('payments').select('*');
-          if (dbPayments && dbPayments.length > 0) {
+          if (dbPayments) {
             const formattedPayments: Payment[] = dbPayments.map((p: any) => {
               const matchedOrder = (formattedOrders || []).find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id) ||
                 get().orders.find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id);
@@ -3066,7 +3066,9 @@ export const useStore = create<StoreState>()(
           customerEmail: newOrder.customerEmail,
           amount: newOrder.amount,
           paymentMethod: newOrder.paymentMethod,
-          status: orderData.paymentStatus || (newOrder.paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid'),
+          status: orderData.paymentStatus 
+            ? mapDbPaymentStatusToUi(orderData.paymentStatus) 
+            : (newOrder.paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Paid'),
           transactionId: orderData.paymentTransactionId || (newOrder.paymentMethod === 'Cash on Delivery' 
             ? 'COD-PENDING' 
             : `TXN-${newOrder.paymentMethod === 'Visa' ? 'VISA' : 'MM'}-${Math.floor(100000 + Math.random() * 900000)}`),
