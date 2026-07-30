@@ -588,6 +588,58 @@ UPDATE storage.buckets
 SET allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
 WHERE id = 'app-file';
 
+-- Helper Function: Reserve product stock atomically
+CREATE OR REPLACE FUNCTION public.reserve_product_stock(
+    p_product_id UUID,
+    p_quantity INT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_rows_affected INT;
+BEGIN
+    IF p_quantity IS NULL OR p_quantity <= 0 THEN
+        RETURN TRUE;
+    END IF;
+
+    UPDATE public.products
+    SET stock = stock - p_quantity,
+        updated_at = NOW()
+    WHERE id = p_product_id
+      AND stock >= p_quantity;
+
+    GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+    RETURN v_rows_affected > 0;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.reserve_product_stock TO anon, authenticated, service_role;
+
+-- Helper Function: Release product stock atomically
+CREATE OR REPLACE FUNCTION public.release_product_stock(
+    p_product_id UUID,
+    p_quantity INT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    IF p_quantity IS NULL OR p_quantity <= 0 THEN
+        RETURN;
+    END IF;
+
+    UPDATE public.products
+    SET stock = stock + p_quantity,
+        updated_at = NOW()
+    WHERE id = p_product_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.release_product_stock TO anon, authenticated, service_role;
+
 -- Atomic Transaction Function for Checkout Order Creation
 CREATE OR REPLACE FUNCTION public.create_checkout_order(
     p_order_id UUID,
@@ -612,9 +664,23 @@ SECURITY DEFINER
 AS $$
 DECLARE
     item RECORD;
+    stock_item RECORD;
     v_current_spending NUMERIC;
     v_current_points INT;
 BEGIN
+    -- 0. Reserve stock atomically for all items in p_items (aggregated by product_id)
+    -- If any product has insufficient stock, reserve_product_stock returns FALSE and we RAISE EXCEPTION,
+    -- which automatically aborts and rolls back the entire PL/pgSQL transaction.
+    FOR stock_item IN
+        SELECT (x.product_id)::UUID AS product_id, SUM(x.quantity)::INT AS total_quantity
+        FROM jsonb_to_recordset(p_items) AS x(product_id UUID, quantity INT, price NUMERIC)
+        GROUP BY x.product_id
+    LOOP
+        IF NOT public.reserve_product_stock(stock_item.product_id, stock_item.total_quantity) THEN
+            RAISE EXCEPTION 'Insufficient stock for product ID %', stock_item.product_id;
+        END IF;
+    END LOOP;
+
     -- 1. Insert shipping order details
     INSERT INTO public.orders (
         id,

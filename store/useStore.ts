@@ -3135,14 +3135,6 @@ export const useStore = create<StoreState>()(
           }
           safeSupabaseInsert('order_addresses', { ...shippingAddress, orderId: newOrder.id });
           safeSupabaseInsert('payments', newPayment);
-
-          // Sync updated stocks
-          for (const item of items) {
-            const matchedP = get().products.find(p => p.id === item.productId);
-            if (matchedP) {
-              safeSupabaseUpsert('products', { id: matchedP.id, stock: matchedP.stock });
-            }
-          }
         }
 
         get().clearCart();

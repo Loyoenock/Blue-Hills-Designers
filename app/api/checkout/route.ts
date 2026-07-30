@@ -330,45 +330,12 @@ export async function POST(req: NextRequest) {
       paymentProvider = chargeRes.provider;
     }
 
-    // 7. Transactional database updates (Products inventory, Orders, Items, Address, Payments)
+    // 7. Transactional database updates (Products stock reservation, Orders, Items, Address, Payments in PL/pgSQL)
     const orderNumber = `ORD-${crypto.randomInt(1000, 9999)}`;
     const orderUUID = crypto.randomUUID();
 
-    const rolledBackItems: { productId: string; originalStock: number }[] = [];
-
     try {
-      logger.info('Reducing inventory stock with atomic rollback safeguards', { orderNumber });
-      // Build per-product aggregated map for atomic stock reduction (handles multiple cart line items referencing same product)
-      const aggregatedProductsMap = new Map<string, { product: any; totalQuantity: number }>();
-      for (const item of validatedCartItems) {
-        const existing = aggregatedProductsMap.get(item.product.id);
-        if (existing) {
-          existing.totalQuantity += item.quantity;
-        } else {
-          aggregatedProductsMap.set(item.product.id, {
-            product: item.product,
-            totalQuantity: item.quantity,
-          });
-        }
-      }
-
-      // Step A: Decrement inventory stock on products atomically (optimistic conditional locking)
-      for (const { product, totalQuantity } of aggregatedProductsMap.values()) {
-        const { data: updatedProduct, error: updateErr } = await supabase
-          .from('products')
-          .update({ stock: product.stock - totalQuantity, updated_at: new Date().toISOString() })
-          .eq('id', product.id)
-          .gte('stock', totalQuantity) // Conditional update ensuring sufficient total stock is still available!
-          .select()
-          .single();
-
-        if (updateErr || !updatedProduct) {
-          throw new Error(`Inventory reservation failed for "${product.name}". High request density: stock was depleted or changed. Please try checking out again.`);
-        }
-        rolledBackItems.push({ productId: product.id, originalStock: product.stock });
-      }
-
-      // Steps B through H: Execute atomic order creation transaction in PL/pgSQL
+      logger.info('Executing atomic checkout transaction in DB via create_checkout_order RPC', { orderNumber });
       const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
       const orderNotes = paymentMethod === 'Mobile Money' 
         ? `MoMo Operator: ${paymentDetails?.momoProvider || 'MTN'}, Wallet: ${paymentDetails?.momoNumber || 'N/A'}` 
@@ -404,13 +371,16 @@ export async function POST(req: NextRequest) {
       });
 
       if (orderTxErr) {
-        throw new Error(`Failed to log checkout order details: ${orderTxErr.message}`);
+        if (orderTxErr.message?.includes('Insufficient stock')) {
+          throw new ApiError('Apologies, one or more items in your cart became out of stock during checkout. Please review your cart.', 400);
+        }
+        throw new Error(`Failed to process checkout transaction: ${orderTxErr.message}`);
       }
 
     } catch (dbErr: any) {
-      logger.error('Checkout transactional DB failure, initiating stock rollbacks', dbErr);
+      logger.error('Checkout transactional DB failure', dbErr);
 
-      // Best-effort insert into reconciliation_flags for manual payment reconciliation
+      // Best-effort insert into reconciliation_flags for manual payment reconciliation if payment was charged
       try {
         await supabase
           .from('reconciliation_flags')
@@ -426,20 +396,11 @@ export async function POST(req: NextRequest) {
         logger.error('Failed to log reconciliation flag during checkout error handling', recErr);
       }
 
-      // Rollback: Restore original stock levels on failure
-      for (const rollback of rolledBackItems) {
-        try {
-          await supabase
-            .from('products')
-            .update({ stock: rollback.originalStock })
-            .eq('id', rollback.productId);
-          logger.info(`Successfully restored original stock for product ${rollback.productId} to ${rollback.originalStock}`);
-        } catch (rollErr) {
-          logger.error(`Rollback stock failure for product ${rollback.productId}`, rollErr);
-        }
+      if (dbErr instanceof ApiError) {
+        throw dbErr;
       }
 
-      throw new ApiError(`Checkout DB failure: ${dbErr.message || dbErr}. All product reservations have been rolled back safely.`, 500);
+      throw new ApiError(`Checkout DB failure: ${dbErr.message || dbErr}`, 500);
     }
 
     // 8. Generate plain-text / HTML email invoice confirmation
