@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
 // Mocks
 const mockChargeMobileMoney = vi.fn();
@@ -21,10 +23,19 @@ let mockDbData: {
   coupons?: Record<string, any>;
   orders?: Record<string, any>;
   payments?: Record<string, any>;
+  rpcError?: any;
 } = {};
+
+const mockRpc = vi.fn().mockImplementation((fnName: string, params: any) => {
+  if (mockDbData.rpcError) {
+    return Promise.resolve({ data: null, error: mockDbData.rpcError });
+  }
+  return Promise.resolve({ data: null, error: null });
+});
 
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: vi.fn().mockImplementation(() => ({
+    rpc: (fnName: string, params: any) => mockRpc(fnName, params),
     from: (table: string) => {
       const chain = {
         select: () => chain,
@@ -101,6 +112,7 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
       coupons: {},
       orders: {},
       payments: {},
+      rpcError: null,
     };
   });
 
@@ -137,6 +149,70 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
     expect(res.status).toBe(400);
     expect(data.error).toContain('insufficient stock');
     expect(data.error).toContain('Available stock is 2');
+  });
+
+  it('surfaces 400 inventory message when create_checkout_order RPC fails due to concurrent reservation (insufficient stock)', async () => {
+    mockDbData.rpcError = { message: 'Insufficient stock for product prod-suit-1' };
+
+    const req = createCheckoutRequest({
+      email: 'buyer@example.com',
+      phone: '+256770000000',
+      paymentMethod: 'Cash on Delivery',
+      shippingAddress: { city: 'Kampala', address: 'Plot 10 Kampala Rd' },
+      cart: [
+        {
+          id: 'cart-1',
+          product: { id: 'prod-suit-1', name: 'Savile Midnight Suit' },
+          quantity: 2, // stock in cache is 2, so pre-check passes
+          selectedSize: '50R',
+          selectedColor: 'Navy',
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain('became out of stock during checkout');
+    expect(mockRpc).toHaveBeenCalledWith('create_checkout_order', expect.any(Object));
+  });
+
+  it('handles generic DB error from create_checkout_order RPC without leaving partial orders or executing absolute stock writes', async () => {
+    mockDbData.rpcError = { message: 'Deadlock detected during atomic transaction' };
+
+    const req = createCheckoutRequest({
+      email: 'buyer@example.com',
+      phone: '+256770000000',
+      paymentMethod: 'Cash on Delivery',
+      shippingAddress: { city: 'Kampala', address: 'Plot 10 Kampala Rd' },
+      cart: [
+        {
+          id: 'cart-1',
+          product: { id: 'prod-suit-1', name: 'Savile Midnight Suit' },
+          quantity: 1,
+          selectedSize: '50R',
+          selectedColor: 'Navy',
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(data.error).toContain('Checkout DB failure');
+    expect(mockRpc).toHaveBeenCalledWith('create_checkout_order', expect.any(Object));
+  });
+
+  it('documents and asserts that absolute stock update write (.from("products").update({ stock: ... })) is prohibited in route code', () => {
+    const routeFilePath = path.join(process.cwd(), 'app/api/checkout/route.ts');
+    const routeCode = fs.readFileSync(routeFilePath, 'utf8');
+
+    // Regression protection: Absolute stock updates must not exist in route code
+    expect(routeCode).not.toMatch(/\.from\(['"]products['"]\)\s*\.update\(/i);
+    // Must execute atomic RPC checkout transaction
+    expect(routeCode).toContain('create_checkout_order');
   });
 
   it('rejects checkout with 400 for invalid/inactive coupon code', async () => {
