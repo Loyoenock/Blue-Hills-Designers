@@ -346,7 +346,8 @@ export default function CheckoutClient() {
 
       // 3. Prepare local order objects
       const localOrder = {
-        id: resData.orderNumber,
+        id: resData.orderUUID || resData.orderNumber,
+        orderNumber: resData.orderNumber,
         customerName: payload.customerName,
         customerEmail: email,
         customerPhone: phone,

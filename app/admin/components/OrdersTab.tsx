@@ -100,7 +100,7 @@ export default function OrdersTab({
             <tbody className="divide-y divide-white/5">
               {filteredOrders.map((o) => (
                 <tr key={o.id} className="hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{o.id}</td>
+                  <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{o.orderNumber || o.id}</td>
                   <td className="py-3 px-2 space-y-0.5">
                     <span className="font-semibold text-white block">{o.customerName}</span>
                     <span className="text-[10px] text-white/40 block">{o.customerEmail}</span>

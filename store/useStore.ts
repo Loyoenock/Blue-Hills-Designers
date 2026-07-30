@@ -351,7 +351,8 @@ const INITIAL_USERS: User[] = [
 
 const INITIAL_ORDERS: Order[] = [
   {
-    id: 'ORD-9841',
+    id: toValidUUID('ORD-9841'),
+    orderNumber: 'ORD-9841',
     customerName: 'Amama Mbabazi',
     customerEmail: 'amama@diplomats.gov',
     customerPhone: '+256 772 123456',
@@ -387,7 +388,8 @@ const INITIAL_ORDERS: Order[] = [
     paymentMethod: 'Visa'
   },
   {
-    id: 'ORD-9902',
+    id: toValidUUID('ORD-9902'),
+    orderNumber: 'ORD-9902',
     customerName: 'Patrick Kaboyo',
     customerEmail: 'kaboyo@corporate.co.ug',
     customerPhone: '+256 781 112233',
@@ -430,7 +432,7 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
 const INITIAL_PAYMENTS: Payment[] = [
   {
     id: 'PAY-9841',
-    orderId: 'ORD-9841',
+    orderId: toValidUUID('ORD-9841'),
     customerName: 'Amama Mbabazi',
     customerEmail: 'amama@diplomats.gov',
     amount: 1400,
@@ -441,7 +443,7 @@ const INITIAL_PAYMENTS: Payment[] = [
   },
   {
     id: 'PAY-9902',
-    orderId: 'ORD-9902',
+    orderId: toValidUUID('ORD-9902'),
     customerName: 'Patrick Kaboyo',
     customerEmail: 'kaboyo@corporate.co.ug',
     amount: 1250,
@@ -1452,7 +1454,8 @@ export const useStore = create<StoreState>()(
           }) : [];
 
           return {
-            id: o.order_number || o.id,
+            id: o.id,
+            orderNumber: o.order_number || o.id,
             customerName: profile?.full_name || 'Gentleman Customer',
             customerEmail: profile?.email || '',
             customerPhone: profile?.phone || '',
@@ -1484,13 +1487,13 @@ export const useStore = create<StoreState>()(
           const { data: dbPayments } = await supabase.from('payments').select('*');
           if (dbPayments) {
             const formattedPayments: Payment[] = dbPayments.map((p: any) => {
-              const matchedOrder = (formattedOrders || []).find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id) ||
-                get().orders.find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id);
+              const matchedOrder = (formattedOrders || []).find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id || o.orderNumber === p.order_id) ||
+                get().orders.find((o: any) => o.id === p.order_id || toValidUUID(o.id) === p.order_id || o.orderNumber === p.order_id);
               const matchedUser = dbProfiles?.find((prof: any) => prof.id === p.user_id) || get().users?.find((u: any) => u.id === p.user_id);
 
               return {
                 id: p.id,
-                orderId: matchedOrder?.id || p.order_id || '',
+                orderId: p.order_id || matchedOrder?.id || '',
                 customerName: matchedUser?.full_name || matchedUser?.name || matchedOrder?.customerName || p.customer_name || 'Gentleman Customer',
                 customerEmail: matchedUser?.email || matchedOrder?.customerEmail || p.customer_email || '',
                 amount: p.amount !== undefined && p.amount !== null ? Number(p.amount) : (matchedOrder?.amount || 0),
@@ -1799,17 +1802,17 @@ export const useStore = create<StoreState>()(
         const orders = get().orders;
 
         if (eventType === 'DELETE') {
-          const deletedId = oldRow?.id || oldRow?.order_number || newRow?.id;
+          const deletedId = oldRow?.id || newRow?.id;
           if (deletedId) {
-            set({ orders: orders.filter(o => o.id !== deletedId) });
+            set({ orders: orders.filter(o => o.id !== deletedId && o.orderNumber !== deletedId) });
           }
           return;
         }
 
         if (eventType === 'INSERT' || eventType === 'UPDATE') {
           if (!newRow) return;
-          const orderId = newRow.order_number || newRow.id;
-          const existingIndex = orders.findIndex(o => o.id === orderId);
+          const orderId = newRow.id;
+          const existingIndex = orders.findIndex(o => o.id === orderId || o.orderNumber === newRow.order_number);
           const existing = existingIndex !== -1 ? orders[existingIndex] : null;
 
           const formattedStatus = (() => {
@@ -1822,6 +1825,7 @@ export const useStore = create<StoreState>()(
 
           const updatedOrder: Order = {
             id: orderId,
+            orderNumber: newRow.order_number || existing?.orderNumber || newRow.id,
             customerName: existing?.customerName || 'Gentleman Customer',
             customerEmail: existing?.customerEmail || '',
             customerPhone: existing?.customerPhone || '',
@@ -3053,9 +3057,15 @@ export const useStore = create<StoreState>()(
       },
 
       placeOrder: (orderData, skipDbSync = false) => {
+        const orderId = (orderData.id && orderData.id.includes('-') && orderData.id.length > 20)
+          ? orderData.id 
+          : toValidUUID(orderData.id || `ORD-${Math.floor(1000 + Math.random() * 9000)}`);
+        const orderNum = orderData.orderNumber || (orderData.id && orderData.id.startsWith('ORD-') ? orderData.id : `ORD-${Math.floor(1000 + Math.random() * 9000)}`);
+
         const newOrder: Order = {
           ...orderData,
-          id: orderData.id || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+          id: orderId,
+          orderNumber: orderNum,
           date: orderData.date || new Date().toISOString().split('T')[0]
         } as Order;
 
@@ -3145,20 +3155,23 @@ export const useStore = create<StoreState>()(
 
       updateOrderStatus: async (orderId, status, modifierName, modifierRole) => {
         const previousOrders = get().orders;
+        const targetOrder = previousOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+        const resolvedOrderId = targetOrder ? targetOrder.id : orderId;
+
         set(state => ({
-          orders: state.orders.map(o => o.id === orderId ? { ...o, status } : o)
+          orders: state.orders.map(o => (o.id === resolvedOrderId || o.orderNumber === orderId) ? { ...o, status } : o)
         }));
 
         get().addAuditLog(
           'Order Status Adjusted',
-          `Order ${orderId} status transitioned to '${status}' by staff.`,
+          `Order ${targetOrder?.orderNumber || resolvedOrderId} status transitioned to '${status}' by staff.`,
           'staff-modifier',
           modifierName,
           modifierRole as User['role']
         );
 
-        // Sync status with Supabase
-        const dbRes = await safeSupabaseUpsert('orders', { id: orderId, status });
+        // Sync status with Supabase using resolved UUID
+        const dbRes = await safeSupabaseUpsert('orders', { id: resolvedOrderId, status });
         if (dbRes && !dbRes.success) {
           set({ orders: previousOrders, adminError: `Failed to update order status: ${dbRes.error}` });
           return { success: false, error: dbRes.error };
@@ -3182,7 +3195,7 @@ export const useStore = create<StoreState>()(
 
         // Resolve linked order
         const targetOrder = previousOrders.find(
-          o => o.id === targetPayment.orderId || toValidUUID(o.id) === targetPayment.orderId
+          o => o.id === targetPayment.orderId || o.orderNumber === targetPayment.orderId || toValidUUID(o.id) === targetPayment.orderId
         );
 
         let updatedOrder: Order | null = null;
@@ -3194,7 +3207,9 @@ export const useStore = create<StoreState>()(
               nextOrderStatus = 'Processing';
             }
           } else if (status === 'Cancelled' || status === 'Failed') {
-            nextOrderStatus = 'Cancelled';
+            if (targetOrder.status !== 'Cancelled') {
+              nextOrderStatus = 'Cancelled';
+            }
           }
 
           if (nextOrderStatus && nextOrderStatus !== targetOrder.status) {
@@ -3209,14 +3224,14 @@ export const useStore = create<StoreState>()(
         set(state => ({
           payments: (state.payments || []).map(p => p.id === paymentId ? updatedPayment : p),
           orders: updatedOrder 
-            ? (state.orders || []).map(o => o.id === updatedOrder!.id ? updatedOrder! : o)
+            ? (state.orders || []).map(o => o.id === targetOrder!.id ? updatedOrder! : o)
             : state.orders
         }));
 
-        const refDetails = `for Order ${targetPayment.orderId} (Client: ${targetPayment.customerName})`;
+        const refDetails = `for Order ${targetOrder?.orderNumber || targetPayment.orderId} (Client: ${targetPayment.customerName})`;
         get().addAuditLog(
           'Payment Status Adjusted',
-          `Payment status ${refDetails} adjusted to '${status}' by ${modifierName || 'staff'}.${updatedOrder ? ` Linked order ${updatedOrder.id} status transitioned to '${updatedOrder.status}'.` : ''}`,
+          `Payment status ${refDetails} adjusted to '${status}' by ${modifierName || 'staff'}.${updatedOrder ? ` Linked order ${targetOrder?.orderNumber || updatedOrder.id} status transitioned to '${updatedOrder.status}'.` : ''}`,
           'staff-modifier',
           modifierName,
           modifierRole as User['role']
@@ -3233,8 +3248,8 @@ export const useStore = create<StoreState>()(
           return { success: false, error: dbPayRes.error };
         }
 
-        if (updatedOrder) {
-          const dbOrderRes = await safeSupabaseUpsert('orders', updatedOrder);
+        if (updatedOrder && targetOrder) {
+          const dbOrderRes = await safeSupabaseUpsert('orders', { id: targetOrder.id, status: updatedOrder.status });
           if (dbOrderRes && !dbOrderRes.success) {
             set({ 
               payments: previousPayments, 

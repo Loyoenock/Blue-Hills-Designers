@@ -1235,6 +1235,7 @@ export default function Admin() {
                 filteredPayments={filteredPayments}
                 updatePaymentStatus={updatePaymentStatus}
                 currentUser={currentUser}
+                orders={orders}
               />
             )}
 

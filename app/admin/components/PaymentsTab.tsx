@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { CreditCard, Search, X } from 'lucide-react';
-import { User } from '../../../types';
+import { Order, User } from '../../../types';
 
 interface PaymentsTabProps {
   paymentStats: {
@@ -20,6 +20,7 @@ interface PaymentsTabProps {
   filteredPayments: any[];
   updatePaymentStatus: (id: string, status: any, name: string, role: string) => Promise<any>;
   currentUser: User | null;
+  orders?: Order[];
 }
 
 export default function PaymentsTab({
@@ -33,6 +34,7 @@ export default function PaymentsTab({
   filteredPayments,
   updatePaymentStatus,
   currentUser,
+  orders = [],
 }: PaymentsTabProps) {
   return (
     <motion.div 
@@ -145,10 +147,13 @@ export default function PaymentsTab({
                   </td>
                 </tr>
               ) : (
-                filteredPayments.map((p) => (
-                  <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                    <td className="py-4 px-4 font-mono text-white/80 font-bold">{p.transactionId}</td>
-                    <td className="py-4 px-4 font-mono font-bold text-[#20D9A1]">{p.orderId}</td>
+                filteredPayments.map((p) => {
+                  const matchedOrder = orders.find(o => o.id === p.orderId || o.orderNumber === p.orderId);
+                  const displayOrderRef = matchedOrder?.orderNumber || (p.orderId && p.orderId.startsWith('ORD-') ? p.orderId : p.orderId);
+                  return (
+                    <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                      <td className="py-4 px-4 font-mono text-white/80 font-bold">{p.transactionId}</td>
+                      <td className="py-4 px-4 font-mono font-bold text-[#20D9A1]">{displayOrderRef}</td>
                     <td className="py-4 px-4 space-y-0.5">
                       <span className="font-semibold text-white block">{p.customerName}</span>
                       <span className="text-[10px] text-white/40 block">{p.customerEmail}</span>
@@ -185,8 +190,9 @@ export default function PaymentsTab({
                       </select>
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>
