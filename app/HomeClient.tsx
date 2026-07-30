@@ -107,8 +107,7 @@ export default function HomeClient() {
     dealProduct?.dealDays,
     dealProduct?.dealHours,
     dealProduct?.dealMins,
-    dealProduct?.dealSecs,
-    dealProduct
+    dealProduct?.dealSecs
   ]);
 
   useEffect(() => {
