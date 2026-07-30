@@ -1105,30 +1105,32 @@ async function seedCategories() {
 
 
 
+let isSyncingInProgress = false;
+
 export const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
-      products: INITIAL_PRODUCTS,
-      users: INITIAL_USERS,
+      products: [],
+      users: [],
       currentUser: null,
       cart: [],
       appliedCoupon: null,
       coupons: [],
-      categories: INITIAL_CATEGORIES,
-      testimonials: INITIAL_TESTIMONIALS,
+      categories: [],
+      testimonials: [],
       selectedShippingMethod: 'standard',
       cartError: null,
       adminError: null,
       clearAdminError: () => set({ adminError: null }),
-      orders: INITIAL_ORDERS,
-      payments: INITIAL_PAYMENTS,
+      orders: [],
+      payments: [],
       settings: INITIAL_SETTINGS,
       bookings: [],
       subscribers: [],
-      auditLogs: INITIAL_AUDIT_LOGS,
+      auditLogs: [],
       wishlist: [],
       savedAddresses: [],
-      isSyncing: false,
+      isSyncing: true,
 
       seedIfEmpty: async () => {
         const supabase = getSupabaseClient();
@@ -1240,9 +1242,7 @@ export const useStore = create<StoreState>()(
             createdAt: c.created_at,
             updatedAt: c.updated_at
           }));
-          if (mappedCategories.length > 0) {
-            set({ categories: mappedCategories });
-          }
+          set({ categories: mappedCategories });
         }
 
         const { data: dbSettings } = await supabase.from('app_settings').select('*').limit(1).maybeSingle();
@@ -1285,9 +1285,7 @@ export const useStore = create<StoreState>()(
             }));
           set({ users: mappedUsers as User[] });
         } else {
-          if (get().users.length === 0) {
-            set({ users: INITIAL_USERS.filter(u => isUUID(u.id)) });
-          }
+          set({ users: [] });
         }
 
         // 3. Products & Reviews & Product Images
@@ -1377,9 +1375,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        const localProducts = get().products.length > 0 ? get().products : INITIAL_PRODUCTS;
-        const missingProducts = localProducts.filter(lp => !mappedProducts.some(mp => mp.id === lp.id || toValidUUID(mp.id) === toValidUUID(lp.id)));
-        const combinedProducts = [...mappedProducts, ...missingProducts];
+        const combinedProducts = mappedProducts;
 
         // Signed URLs resolution
         const privatePaths: string[] = [];
@@ -1481,9 +1477,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        const localOrders = get().orders.length > 0 ? get().orders : INITIAL_ORDERS;
-        const missingOrders = localOrders.filter(lo => !formattedOrders.some(fo => fo.id === lo.id));
-        set({ orders: [...formattedOrders, ...missingOrders] as Order[] });
+        set({ orders: formattedOrders as Order[] });
 
         // 4b. Payments
         try {
@@ -1507,9 +1501,7 @@ export const useStore = create<StoreState>()(
               };
             });
 
-            const localPayments = get().payments.length > 0 ? get().payments : INITIAL_PAYMENTS;
-            const missingPayments = localPayments.filter(lp => !formattedPayments.some(fp => fp.id === lp.id));
-            set({ payments: [...formattedPayments, ...missingPayments] });
+            set({ payments: formattedPayments });
           }
         } catch (payErr) {
           console.warn('Failed to fetch payments from DB:', payErr);
@@ -1657,7 +1649,8 @@ export const useStore = create<StoreState>()(
       },
 
       syncFromSupabase: async () => {
-        if (get().isSyncing) return;
+        if (isSyncingInProgress) return;
+        isSyncingInProgress = true;
         set({ isSyncing: true });
 
         try {
@@ -1667,6 +1660,7 @@ export const useStore = create<StoreState>()(
         } catch (err: any) {
           console.error('[syncFromSupabase] Sync error:', err);
         } finally {
+          isSyncingInProgress = false;
           set({ isSyncing: false });
         }
       },
