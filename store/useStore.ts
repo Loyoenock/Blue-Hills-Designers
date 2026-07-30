@@ -1317,7 +1317,6 @@ export const useStore = create<StoreState>()(
 
         const mappedProducts = (dbProducts || []).map((p: any) => {
           const catName = dbCats ? (dbCats.find((c: any) => c.id === p.category_id)?.name || 'Suits') : 'Suits';
-          const localProd = INITIAL_PRODUCTS.find(lp => toValidUUID(lp.id) === p.id || lp.id === p.id);
           const prodReviews = reviewsWithProfiles.filter(r => r.productId === p.id || toValidUUID(r.productId) === p.id);
 
           const productImages = dbImages
@@ -1326,18 +1325,21 @@ export const useStore = create<StoreState>()(
                 .sort((a: any, b: any) => (a.display_order || 1) - (b.display_order || 1))
                 .map((img: any) => img.image_url)
             : [];
-          const finalImages = productImages.length > 0 ? productImages : (localProd?.images || [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
+          const rawImages = (Array.isArray(p.images) && p.images.length > 0) ? p.images : [];
+          const finalImages = productImages.length > 0
+            ? productImages
+            : (rawImages.length > 0 ? rawImages : [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
 
           let parsedSizes = (Array.isArray(p.sizes) && p.sizes.length > 0)
             ? p.sizes
-            : (localProd?.sizes || ['M', 'L', 'XL']);
+            : ['M', 'L', 'XL'];
           let parsedColors = (Array.isArray(p.colors) && p.colors.length > 0)
             ? p.colors
-            : (localProd?.colors || ['Classic Black']);
-          let dealDays = p.deal_days !== undefined && p.deal_days !== null ? Number(p.deal_days) : (localProd?.dealDays !== undefined ? localProd.dealDays : 0);
-          let dealHours = p.deal_hours !== undefined && p.deal_hours !== null ? Number(p.deal_hours) : (localProd?.dealHours !== undefined ? localProd.dealHours : 14);
-          let dealMins = p.deal_mins !== undefined && p.deal_mins !== null ? Number(p.deal_mins) : (localProd?.dealMins !== undefined ? localProd.dealMins : 40);
-          let dealSecs = p.deal_secs !== undefined && p.deal_secs !== null ? Number(p.deal_secs) : (localProd?.dealSecs !== undefined ? localProd.dealSecs : 17);
+            : ['Classic Black'];
+          let dealDays = p.deal_days !== undefined && p.deal_days !== null ? Number(p.deal_days) : 0;
+          let dealHours = p.deal_hours !== undefined && p.deal_hours !== null ? Number(p.deal_hours) : 14;
+          let dealMins = p.deal_mins !== undefined && p.deal_mins !== null ? Number(p.deal_mins) : 40;
+          let dealSecs = p.deal_secs !== undefined && p.deal_secs !== null ? Number(p.deal_secs) : 17;
 
           if (p.short_description) {
             try {
@@ -1351,12 +1353,10 @@ export const useStore = create<StoreState>()(
             } catch {}
           }
 
-          const targetId = localProd?.id || p.id;
-
           return {
-            id: targetId,
-            name: p.name || localProd?.name || 'Luxury Product',
-            description: p.description || localProd?.description || '',
+            id: p.id,
+            name: p.name || 'Luxury Product',
+            description: p.description || '',
             category: catName,
             price: Number(p.price) || 0,
             images: finalImages,
@@ -1364,15 +1364,15 @@ export const useStore = create<StoreState>()(
             colors: parsedColors,
             stock: Number(p.stock) || 0,
             rating: Number(p.rating) || 0,
-            isNew: p.is_new,
-            isFeatured: p.is_featured,
-            isDealOfTheDay: p.is_deal,
+            isNew: !!p.is_new,
+            isFeatured: !!p.is_featured,
+            isDealOfTheDay: !!p.is_deal,
             discountPercentage: Number(p.discount_percentage) || 0,
             dealDays,
             dealHours,
             dealMins,
             dealSecs,
-            dealExpiresAt: p.deal_expires_at !== undefined ? p.deal_expires_at : (localProd?.dealExpiresAt || null),
+            dealExpiresAt: p.deal_expires_at !== undefined ? p.deal_expires_at : null,
             reviews: prodReviews
           };
         });
