@@ -1,3 +1,8 @@
+import { toDisplayRole, toDbRole, normalizeRole, UserRole, DbUserRole } from '@/types';
+
+export { toDisplayRole, toDbRole, normalizeRole };
+export type { UserRole, DbUserRole };
+
 /**
  * Helper to check if an email is listed in the ADMIN_BOOTSTRAP_EMAILS environment variable.
  * MUST only be executed in server-side contexts (API routes, middleware).

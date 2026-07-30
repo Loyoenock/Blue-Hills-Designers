@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireAuth, enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
+import { normalizeRole } from '@/lib/adminBootstrap';
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     const cleanName = name.trim().slice(0, 80);
     const cleanPhone = typeof phone === 'string' ? phone.trim().slice(0, 25).replace(/[^\d+\-\s()]/g, '') : '';
     const requestedRole = typeof role === 'string' ? role.trim() : 'Customer';
+    const rolePair = normalizeRole(requestedRole);
 
     // 4. Role Escalation Protection:
     // Rank: Super Admin (4) > Admin (3) > Manager (2) > Staff (1) > Customer (0)
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
       throw new ApiError('Supabase admin client could not be initialized.', 500);
     }
 
-    logger.info('Admin creating user account', { createdBy: caller.id, email: emailTrimmed, role: requestedRole });
+    logger.info('Admin creating user account', { createdBy: caller.id, email: emailTrimmed, role: rolePair.display });
 
     // 5. Create user in auth.users
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
         name: cleanName,
         full_name: cleanName,
         phone: cleanPhone,
-        role: requestedRole
+        role: rolePair.display
       }
     });
 
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
       name: cleanName,
       email: emailTrimmed,
       phone: cleanPhone,
-      role: requestedRole,
+      role: rolePair.db,
       lifetime_spending: 0,
       reward_points: 0,
       updated_at: new Date().toISOString()
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest) {
         name: cleanName,
         email: emailTrimmed,
         phone: cleanPhone,
-        role: requestedRole,
+        role: rolePair.display,
         spending: 0,
         rewardsPoints: 0,
         source: 'db'

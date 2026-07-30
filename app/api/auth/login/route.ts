@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAuthClient } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, validateFields, ApiError, logger } from '@/lib/apiUtils';
-import { isBootstrapAdminEmail } from '@/lib/adminBootstrap';
+import { isBootstrapAdminEmail, toDisplayRole } from '@/lib/adminBootstrap';
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Capitalize user role if found in metadata
-    let userRole = user.user_metadata?.role || 'Customer';
+    let userRole = toDisplayRole(user.user_metadata?.role);
     if (isBootstrapAdminEmail(emailTrimmed)) {
       userRole = 'Super Admin';
     }

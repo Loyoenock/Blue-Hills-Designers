@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   Product, User, CartItem, Order, ConsultationBooking, 
-  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category, Testimonial, SavedAddress, ChatMessage
+  NewsletterSubscriber, AuditLog, Review, Payment, AppSettings, Coupon, Category, Testimonial, SavedAddress, ChatMessage,
+  toDisplayRole, toDbRole
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
@@ -529,13 +530,7 @@ function keysToSnake(obj: any): any {
 }
 
 function capitalizeRole(role: string): User['role'] {
-  if (!role) return 'Customer';
-  const r = role.toLowerCase().trim();
-  if (r === 'super admin' || r === 'super_admin') return 'Super Admin';
-  if (r === 'admin') return 'Admin';
-  if (r === 'manager') return 'Manager';
-  if (r === 'staff') return 'Staff';
-  return 'Customer';
+  return toDisplayRole(role) as User['role'];
 }
 
 function isUUID(str: string): boolean {
@@ -659,7 +654,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         full_name: payload.name || payload.fullName || payload.full_name || 'Gentleman Customer',
         email: payload.email,
         phone: payload.phone || null,
-        role: payload.role?.toLowerCase() || 'customer',
+        role: toDbRole(payload.role),
         reward_points: Number(payload.rewardsPoints) || Number(payload.rewardPoints) || Number(payload.reward_points) || 0,
         lifetime_spending: Number(payload.spending) || Number(payload.lifetimeSpending) || Number(payload.lifetime_spending) || 0,
         is_active: true

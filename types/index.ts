@@ -41,12 +41,41 @@ export interface Product {
   dealExpiresAt?: string | null;
 }
 
+export type UserRole = 'Super Admin' | 'Admin' | 'Manager' | 'Staff' | 'Customer';
+export type DbUserRole = 'super admin' | 'admin' | 'manager' | 'staff' | 'customer';
+
+export function toDisplayRole(role?: string | null): UserRole | string {
+  if (!role) return 'Customer';
+  const r = role.trim();
+  const lower = r.toLowerCase();
+  if (lower === 'super admin' || lower === 'super_admin' || lower === 'superadmin') return 'Super Admin';
+  if (lower === 'admin') return 'Admin';
+  if (lower === 'manager') return 'Manager';
+  if (lower === 'staff') return 'Staff';
+  if (lower === 'customer') return 'Customer';
+  return r;
+}
+
+export function toDbRole(role?: string | null): DbUserRole | string {
+  if (!role) return 'customer';
+  const display = toDisplayRole(role);
+  return display.toLowerCase();
+}
+
+export function normalizeRole(role?: string | null): { display: UserRole | string; db: DbUserRole | string } {
+  const display = toDisplayRole(role);
+  return {
+    display,
+    db: toDbRole(role),
+  };
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   phone?: string;
-  role: 'Super Admin' | 'Admin' | 'Manager' | 'Staff' | 'Customer';
+  role: UserRole;
   spending: number;
   rewardsPoints: number;
   country?: string;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
 import { isNetworkOrConnectionError } from '@/lib/utils';
-import { isBootstrapAdminEmail } from '@/lib/adminBootstrap';
+import { isBootstrapAdminEmail, normalizeRole } from '@/lib/adminBootstrap';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -35,12 +35,10 @@ export async function POST(req: NextRequest) {
 
     // 4. Role Escalation Protection: Public signups can ONLY be 'Customer'.
     // Only emails configured in ADMIN_BOOTSTRAP_EMAILS gain 'Super Admin' privilege during sign up.
-    let resolvedRole = 'Customer';
-    if (isBootstrapAdminEmail(emailTrimmed)) {
-      resolvedRole = 'Super Admin';
-    }
+    const resolvedRole = isBootstrapAdminEmail(emailTrimmed) ? 'Super Admin' : 'Customer';
+    const rolePair = normalizeRole(resolvedRole);
 
-    logger.info('Attempting new profile registration', { email: emailTrimmed, role: resolvedRole });
+    logger.info('Attempting new profile registration', { email: emailTrimmed, role: rolePair.display });
 
     const supabaseAdmin = getSupabaseAdmin();
     if (!supabaseAdmin) {
@@ -60,7 +58,7 @@ export async function POST(req: NextRequest) {
           name: cleanName,
           full_name: cleanName,
           phone: cleanPhone,
-          role: resolvedRole
+          role: rolePair.display
         }
       });
 
@@ -106,7 +104,7 @@ export async function POST(req: NextRequest) {
         email: authUser.email,
         name: cleanName,
         phone: cleanPhone,
-        role: resolvedRole
+        role: rolePair.display
       }
     });
   } catch (err: any) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from './supabase';
 import { checkRateLimit, RateLimitResult } from './rateLimit';
-import { isBootstrapAdminEmail } from './adminBootstrap';
+import { isBootstrapAdminEmail, toDisplayRole } from './adminBootstrap';
 
 interface RoleCacheRecord {
   role: string;
@@ -333,13 +333,13 @@ export async function authenticate(req: NextRequest): Promise<AuthenticatedUser 
           .maybeSingle();
 
         if (profile && profile.role) {
-          userRole = profile.role;
+          userRole = toDisplayRole(profile.role);
         } else {
-          userRole = user.user_metadata?.role || 'Customer';
+          userRole = toDisplayRole(user.user_metadata?.role);
         }
       } catch (profileErr) {
         logger.error('[AUTHENTICATE] Profile DB lookup failed, falling back to user_metadata:', profileErr);
-        userRole = user.user_metadata?.role || 'Customer';
+        userRole = toDisplayRole(user.user_metadata?.role);
       }
 
       roleCacheMap.set(user.id, {
