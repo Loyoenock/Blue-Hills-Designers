@@ -1912,10 +1912,11 @@ export const useStore = create<StoreState>()(
 
             const res = await response.json().catch(() => ({}));
             if (!response.ok || !res.success) {
-              if (response.status === 502 || response.status === 503 || response.status === 504) {
+              const errorMessage = res.error || res.message;
+              if ((response.status === 502 || response.status === 503 || response.status === 504) && !errorMessage) {
                 return { success: false, error: 'Our authentication service is temporarily unavailable. Please try again shortly.' };
               }
-              return { success: false, error: res.error || 'Authentication failed.' };
+              return { success: false, error: errorMessage || 'Authentication failed.' };
             }
 
             resUser = res.user;

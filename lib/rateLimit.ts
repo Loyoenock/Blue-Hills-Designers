@@ -99,37 +99,18 @@ export async function checkRateLimit(
         reset: resetSeconds,
       };
     } catch (err) {
-      logger.error('[RateLimiter] Distributed Redis request failed during rate limit check:', err);
+      logger.error('[RateLimiter] Distributed Redis request failed during rate limit check, falling back to in-memory rate limiting:', err);
 
       /*
-       * UNREACHABLE / NETWORK ERROR FAILURE POLICY:
+       * REDIS OUTAGE FALLBACK POLICY:
        * -----------------------------------------------------------------------------------
-       * FAIL CLOSED for sensitive security routes (/api/auth/*) and high-cost AI routes (/api/gemini).
-       * Denying access when Redis is unreachable preserves critical security properties
-       * (e.g. preventing brute-force login attacks and credential stuffing during Redis outages).
-       *
-       * FAIL OPEN for non-sensitive public routes (/api/health, /api/db, /api/storage, /api/checkout).
-       * Allowing access preserves system availability for general e-commerce operations when Redis fluctuates.
+       * When Upstash Redis experiences network errors or outages, rate limiting falls back
+       * to process-local in-memory sliding window tracking.
+       * This allows legitimate authentication (/api/auth/login) and API requests to proceed without
+       * causing full outage errors for real users, while still enforcing local rate limit thresholds
+       * against brute-force attempts.
        * -----------------------------------------------------------------------------------
        */
-      const isSensitiveRoute = ip.includes('/api/auth') || ip.includes('/api/gemini');
-      const defaultResetSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-
-      if (isSensitiveRoute) {
-        return {
-          success: false,
-          limit,
-          remaining: 0,
-          reset: defaultResetSeconds,
-        };
-      } else {
-        return {
-          success: true,
-          limit,
-          remaining: 1,
-          reset: defaultResetSeconds,
-        };
-      }
     }
   }
 

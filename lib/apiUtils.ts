@@ -231,7 +231,7 @@ export function createErrorResponse(req: NextRequest, error: any): NextResponse 
     logger.warn(`API Client Error/Warning in ${path}: ${message}`, { path, status });
   }
 
-  if (path.includes('/api/auth/register')) {
+  if (path.includes('/api/auth/register') || path.includes('/api/auth/login')) {
     return NextResponse.json({ success: false, error: message }, { status, headers });
   }
 

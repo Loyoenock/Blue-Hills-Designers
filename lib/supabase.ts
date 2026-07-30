@@ -42,7 +42,7 @@ async function retryableFetch(url: string, options?: RequestInit, maxRetries = 3
 }
 
 /**
- * Returns the standard Supabase client for public/anonymous access.
+ * Returns a standard Supabase client for public/anonymous access.
  * Uses lazy initialization to prevent startup crashes when keys are missing.
  */
 export function getSupabaseClient(): SupabaseClient | null {
@@ -63,6 +63,31 @@ export function getSupabaseClient(): SupabaseClient | null {
     });
   }
   return supabaseClientInstance;
+}
+
+/**
+ * Returns a server-side Supabase client using the anonymous key for auth operations
+ * (e.g. signInWithPassword) that do not require privileged service-role access.
+ */
+export function getSupabaseAuthClient(): SupabaseClient | null {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      fetch: (url, options) => {
+        return retryableFetch(url as string, options);
+      }
+    }
+  });
 }
 
 /**

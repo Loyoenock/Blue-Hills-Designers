@@ -81,36 +81,36 @@ describe('checkRateLimit', () => {
       expect(res.remaining).toBe(9);
     });
 
-    it('fails closed for sensitive auth route when Redis throws network error', async () => {
+    it('falls back to in-memory rate limiting for auth route when Redis throws network error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Redis Connection Failure'));
 
-      const res = await checkRateLimit('192.168.1.1:/api/auth/login', 10, 60000);
-      expect(res.success).toBe(false);
-      expect(res.remaining).toBe(0);
+      const res = await checkRateLimit('test-ip-redis-auth-fallback:/api/auth/login', 10, 60000);
+      expect(res.success).toBe(true);
+      expect(res.limit).toBe(10);
     });
 
-    it('fails closed for sensitive gemini route when Redis throws network error', async () => {
+    it('falls back to in-memory rate limiting for gemini route when Redis throws network error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Redis Timeout'));
 
-      const res = await checkRateLimit('192.168.1.1:/api/gemini', 10, 60000);
-      expect(res.success).toBe(false);
-      expect(res.remaining).toBe(0);
+      const res = await checkRateLimit('test-ip-redis-gemini-fallback:/api/gemini', 10, 60000);
+      expect(res.success).toBe(true);
+      expect(res.limit).toBe(10);
     });
 
-    it('fails open for non-sensitive public checkout route when Redis throws error', async () => {
+    it('falls back to in-memory rate limiting for checkout route when Redis throws error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Redis Connection Refused'));
 
-      const res = await checkRateLimit('192.168.1.1:/api/checkout', 10, 60000);
+      const res = await checkRateLimit('test-ip-redis-checkout-fallback:/api/checkout', 10, 60000);
       expect(res.success).toBe(true);
-      expect(res.remaining).toBe(1);
+      expect(res.limit).toBe(10);
     });
 
-    it('fails open for non-sensitive db route when Redis throws error', async () => {
+    it('falls back to in-memory rate limiting for db route when Redis throws error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Network error'));
 
-      const res = await checkRateLimit('192.168.1.1:/api/db', 10, 60000);
+      const res = await checkRateLimit('test-ip-redis-db-fallback:/api/db', 10, 60000);
       expect(res.success).toBe(true);
-      expect(res.remaining).toBe(1);
+      expect(res.limit).toBe(10);
     });
   });
 });

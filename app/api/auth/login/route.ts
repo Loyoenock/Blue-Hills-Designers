@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAuthClient } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, validateFields, ApiError, logger } from '@/lib/apiUtils';
 import { isBootstrapAdminEmail } from '@/lib/adminBootstrap';
 
@@ -19,9 +19,9 @@ export async function POST(req: NextRequest) {
 
     logger.info('API Login Request received', { email: emailTrimmed });
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAuthClient();
     if (!supabase) {
-      throw new ApiError('Database service is unconfigured.', 500);
+      throw new ApiError('Authentication is not configured (missing Supabase URL or anon key).', 503);
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       logger.warn('API Login Failure', { email: emailTrimmed, error: error.message });
-      throw new ApiError(error.message, 400);
+      throw new ApiError(error.message, (error as any).status || 400);
     }
 
     const session = data?.session;
