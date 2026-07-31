@@ -193,6 +193,16 @@ export interface AppSettings {
     visa: boolean;
     cashOnDelivery: boolean;
   };
+  courierFees: {
+    standard: number;
+    express: number;
+    pickup: number;
+  };
+  courierMethods: {
+    standard: boolean;
+    express: boolean;
+    pickup: boolean;
+  };
 }
 
 export interface Testimonial {

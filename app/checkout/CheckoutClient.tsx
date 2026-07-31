@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   CheckCircle, Shield, ShoppingBag, CreditCard, Landmark, 
-  MapPin, CheckCircle2, ChevronRight, Truck, Award
+  MapPin, CheckCircle2, ChevronRight, Truck, Award, Zap, Store
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getSafeImageSrc } from '../../lib/utils';
@@ -109,7 +109,18 @@ export default function CheckoutClient() {
   
   const appliedCoupon = useStore((state) => state.appliedCoupon);
   const selectedShippingMethod = useStore((state) => state.selectedShippingMethod);
+  const setShippingMethod = useStore((state) => state.setShippingMethod);
   const clearCart = useStore((state) => state.clearCart);
+
+  const courierFees = settings?.courierFees ?? { standard: 50, express: 120, pickup: 0 };
+  const courierMethods = settings?.courierMethods ?? { standard: true, express: true, pickup: true };
+
+  useEffect(() => {
+    if (!courierMethods[selectedShippingMethod]) {
+      const fallback = courierMethods.standard ? 'standard' : courierMethods.express ? 'express' : courierMethods.pickup ? 'pickup' : 'standard';
+      setShippingMethod(fallback);
+    }
+  }, [courierMethods, selectedShippingMethod, setShippingMethod]);
 
   const [mounted, setMounted] = useState(false);
   const [isQuick, setIsQuick] = useState(false);
@@ -235,11 +246,11 @@ export default function CheckoutClient() {
   // 2. Shipping fee calculation
   let deliveryFee = 0;
   if (selectedShippingMethod === 'standard') {
-    deliveryFee = subtotal > threshold ? 0 : 50;
+    deliveryFee = subtotal > threshold ? 0 : courierFees.standard;
   } else if (selectedShippingMethod === 'express') {
-    deliveryFee = 120;
+    deliveryFee = courierFees.express;
   } else if (selectedShippingMethod === 'pickup') {
-    deliveryFee = 0;
+    deliveryFee = courierFees.pickup;
   }
 
   // 3. Tax computation (VAT 18% inclusive)
@@ -414,7 +425,7 @@ export default function CheckoutClient() {
                 <h2 className="font-serif text-3xl text-[#1D2B3F] font-bold">Purchase Order Confirmed</h2>
                 <p className="text-[#657892] text-xs font-mono font-semibold">Registry Number: {createdOrderNumber}</p>
                 <p className="text-[#657892] text-xs font-light leading-relaxed max-w-sm mx-auto pt-2">
-                  Your order has been confirmed. Our delivery courier is dispatching your premium ready-made corporate clothing directly from our Lubowa Shopping Mall showroom.
+                  Your order has been confirmed. Our BHD Courier Dispatch is delivering your premium ready-made corporate clothing directly from our Lubowa Shopping Mall showroom.
                 </p>
               </div>
 
@@ -831,6 +842,95 @@ export default function CheckoutClient() {
                         />
                       </div>
 
+                      {/* BHD Courier Method Selection */}
+                      <div className="space-y-3 pt-2">
+                        <label className="text-[10px] text-[#657892] uppercase tracking-widest font-mono flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-[#C6A15B]" /> Select BHD Courier Method
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {courierMethods.standard && (
+                            <button
+                              type="button"
+                              onClick={() => setShippingMethod('standard')}
+                              className={`text-left p-3.5 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                                selectedShippingMethod === 'standard' 
+                                  ? 'bg-[#1C4D8D]/10 border-[#1C4D8D] text-[#1D2B3F] shadow-sm' 
+                                  : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1C4D8D]/40 bg-[#F7F5F0]'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start w-full">
+                                <Truck className={`w-4 h-4 ${selectedShippingMethod === 'standard' ? 'text-[#C6A15B]' : 'text-[#657892]/50'}`} />
+                                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                  selectedShippingMethod === 'standard' ? 'bg-[#C6A15B] border-[#C6A15B]' : 'border-[#657892]/25'
+                                }`}>
+                                  {selectedShippingMethod === 'standard' && <div className="w-1.5 h-1.5 rounded-full bg-[#1D2B3F]"></div>}
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <h4 className="text-xs font-bold text-[#1D2B3F] font-serif uppercase tracking-wide">Standard Courier</h4>
+                                <p className="text-[10px] text-[#657892] mt-0.5 leading-normal">
+                                  {subtotal > threshold ? 'Complimentary' : `${currency} ${courierFees.standard}`}
+                                </p>
+                              </div>
+                            </button>
+                          )}
+
+                          {courierMethods.express && (
+                            <button
+                              type="button"
+                              onClick={() => setShippingMethod('express')}
+                              className={`text-left p-3.5 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                                selectedShippingMethod === 'express' 
+                                  ? 'bg-[#1C4D8D]/10 border-[#1C4D8D] text-[#1D2B3F] shadow-sm' 
+                                  : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1C4D8D]/40 bg-[#F7F5F0]'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start w-full">
+                                <Zap className={`w-4 h-4 ${selectedShippingMethod === 'express' ? 'text-[#C6A15B]' : 'text-[#657892]/50'}`} />
+                                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                  selectedShippingMethod === 'express' ? 'bg-[#C6A15B] border-[#C6A15B]' : 'border-[#657892]/25'
+                                }`}>
+                                  {selectedShippingMethod === 'express' && <div className="w-1.5 h-1.5 rounded-full bg-[#1D2B3F]"></div>}
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <h4 className="text-xs font-bold text-[#1D2B3F] font-serif uppercase tracking-wide">Express Courier</h4>
+                                <p className="text-[10px] text-[#657892] mt-0.5 leading-normal">
+                                  {currency} {courierFees.express}
+                                </p>
+                              </div>
+                            </button>
+                          )}
+
+                          {courierMethods.pickup && (
+                            <button
+                              type="button"
+                              onClick={() => setShippingMethod('pickup')}
+                              className={`text-left p-3.5 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                                selectedShippingMethod === 'pickup' 
+                                  ? 'bg-[#1C4D8D]/10 border-[#1C4D8D] text-[#1D2B3F] shadow-sm' 
+                                  : 'border-[#657892]/20 text-[#1D2B3F]/60 hover:border-[#1C4D8D]/40 bg-[#F7F5F0]'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start w-full">
+                                <Store className={`w-4 h-4 ${selectedShippingMethod === 'pickup' ? 'text-[#C6A15B]' : 'text-[#657892]/50'}`} />
+                                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                  selectedShippingMethod === 'pickup' ? 'bg-[#C6A15B] border-[#C6A15B]' : 'border-[#657892]/25'
+                                }`}>
+                                  {selectedShippingMethod === 'pickup' && <div className="w-1.5 h-1.5 rounded-full bg-[#1D2B3F]"></div>}
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <h4 className="text-xs font-bold text-[#1D2B3F] font-serif uppercase tracking-wide">Showroom Pickup</h4>
+                                <p className="text-[10px] text-[#657892] mt-0.5 leading-normal">
+                                  {courierFees.pickup === 0 ? 'Complimentary' : `${currency} ${courierFees.pickup}`}
+                                </p>
+                              </div>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="pt-4 flex justify-end">
                         <button
                           type="button"
@@ -1075,7 +1175,7 @@ export default function CheckoutClient() {
                       </div>
                     )}
                     <div className="flex justify-between text-[#657892]">
-                      <span>Courier Protocol ({selectedShippingMethod === 'standard' ? 'Standard' : selectedShippingMethod === 'express' ? 'Express' : 'Pickup'})</span>
+                      <span>BHD Courier Method ({selectedShippingMethod === 'standard' ? 'Standard' : selectedShippingMethod === 'express' ? 'Express' : 'Pickup'})</span>
                       <span className="text-[#C6A15B] font-semibold uppercase">{deliveryFee === 0 ? 'Complimentary' : `${currency} ${deliveryFee}`}</span>
                     </div>
                     <div className="flex justify-between text-[#657892]">

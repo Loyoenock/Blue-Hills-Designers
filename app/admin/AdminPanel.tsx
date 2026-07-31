@@ -100,11 +100,13 @@ export default function Admin() {
       isActive: testiIsActiveInput
     };
 
+    let res;
     if (editingTestimonial && editingTestimonial.id) {
-      await updateTestimonial(editingTestimonial.id, payload, adminName, adminRole);
+      res = await updateTestimonial(editingTestimonial.id, payload, adminName, adminRole);
     } else {
-      await addTestimonial(payload, adminName, adminRole);
+      res = await addTestimonial(payload, adminName, adminRole);
     }
+    if (res && !res.success) return;
     setIsTestimonialModalOpen(false);
   };
 
@@ -115,7 +117,8 @@ export default function Admin() {
 
   const handleConfirmDeleteTestimonial = async () => {
     if (testimonialToDelete && testimonialToDelete.id) {
-      await deleteTestimonial(testimonialToDelete.id, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin');
+      const res = await deleteTestimonial(testimonialToDelete.id, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin');
+      if (res && !res.success) return;
     }
     setIsDeleteTestimonialModalOpen(false);
     setTestimonialToDelete(null);
@@ -154,19 +157,21 @@ export default function Admin() {
     const adminRole = currentUser?.role || 'Super Admin';
     const slug = catSlugInput.trim() ? catSlugInput.trim().toLowerCase() : catNameInput.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     
+    let res;
     if (editingCategory) {
-      await updateCategory(editingCategory.id || editingCategory.slug, {
+      res = await updateCategory(editingCategory.id || editingCategory.slug, {
         name: catNameInput.trim(),
         slug,
         description: catDescInput.trim()
       }, adminName, adminRole);
     } else {
-      await addCategory({
+      res = await addCategory({
         name: catNameInput.trim(),
         slug,
         description: catDescInput.trim()
       }, adminName, adminRole);
     }
+    if (res && !res.success) return;
     setIsCategoryModalOpen(false);
   };
 
@@ -261,11 +266,13 @@ export default function Admin() {
       isActive: cpnIsActive
     };
 
+    let res;
     if (editingCoupon && editingCoupon.id) {
-      await updateCoupon(editingCoupon.id, payload, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+      res = await updateCoupon(editingCoupon.id, payload, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
     } else {
-      await addCoupon(payload, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+      res = await addCoupon(payload, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
     }
+    if (res && !res.success) return;
 
     setIsCouponModalOpen(false);
   };
@@ -277,7 +284,8 @@ export default function Admin() {
 
   const handleConfirmDeleteCoupon = async () => {
     if (couponToDelete && couponToDelete.id) {
-      await deleteCoupon(couponToDelete.id, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+      const res = await deleteCoupon(couponToDelete.id, currentUser?.name || 'Admin', currentUser?.role || 'Staff');
+      if (res && !res.success) return;
     }
     setIsDeleteCouponModalOpen(false);
     setCouponToDelete(null);
@@ -455,6 +463,12 @@ export default function Admin() {
   const [sPayMomo, setSPayMomo] = useState(() => settings?.paymentMethods?.mobileMoney !== false);
   const [sPayVisa, setSPayVisa] = useState(() => settings?.paymentMethods?.visa !== false);
   const [sPayCod, setSPayCod] = useState(() => settings?.paymentMethods?.cashOnDelivery !== false);
+  const [sCourierStdFee, setSCourierStdFee] = useState(() => settings?.courierFees?.standard ?? 50);
+  const [sCourierExpFee, setSCourierExpFee] = useState(() => settings?.courierFees?.express ?? 120);
+  const [sCourierPickFee, setSCourierPickFee] = useState(() => settings?.courierFees?.pickup ?? 0);
+  const [sCourierStdActive, setSCourierStdActive] = useState(() => settings?.courierMethods?.standard !== false);
+  const [sCourierExpActive, setSCourierExpActive] = useState(() => settings?.courierMethods?.express !== false);
+  const [sCourierPickActive, setSCourierPickActive] = useState(() => settings?.courierMethods?.pickup !== false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
@@ -473,6 +487,12 @@ export default function Admin() {
       setSPayMomo(settings.paymentMethods?.mobileMoney !== false);
       setSPayVisa(settings.paymentMethods?.visa !== false);
       setSPayCod(settings.paymentMethods?.cashOnDelivery !== false);
+      setSCourierStdFee(settings.courierFees?.standard ?? 50);
+      setSCourierExpFee(settings.courierFees?.express ?? 120);
+      setSCourierPickFee(settings.courierFees?.pickup ?? 0);
+      setSCourierStdActive(settings.courierMethods?.standard !== false);
+      setSCourierExpActive(settings.courierMethods?.express !== false);
+      setSCourierPickActive(settings.courierMethods?.pickup !== false);
     }
   }, [settings]);
 
@@ -662,9 +682,9 @@ export default function Admin() {
   });
 
   // Handle Save Boutique Settings
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings({
+    const res = await updateSettings({
       showroomHours: sHours,
       conciergePhone: sPhone,
       supportPhone: sPhone,
@@ -679,8 +699,20 @@ export default function Admin() {
         mobileMoney: sPayMomo,
         visa: sPayVisa,
         cashOnDelivery: sPayCod
+      },
+      courierFees: {
+        standard: Number(sCourierStdFee),
+        express: Number(sCourierExpFee),
+        pickup: Number(sCourierPickFee)
+      },
+      courierMethods: {
+        standard: !!sCourierStdActive,
+        express: !!sCourierExpActive,
+        pickup: !!sCourierPickActive
       }
     }, currentUser?.name || 'Master Admin', currentUser?.role || 'Super Admin');
+
+    if (res && !res.success) return;
 
     setSettingsSuccess(true);
     setTimeout(() => {
@@ -828,7 +860,7 @@ export default function Admin() {
   };
 
   // Save product (create or update)
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const operatorName = currentUser?.name || 'Master Admin';
     const operatorRole = currentUser?.role || 'Super Admin';
@@ -866,8 +898,9 @@ export default function Admin() {
       dealExpiresAt: computedIsDeal ? calculatedDealExpiresAt : null
     };
 
+    let res;
     if (editingProduct) {
-      updateProduct(editingProduct.id, {
+      res = await updateProduct(editingProduct.id, {
         name: pName,
         description: pDesc,
         category: pCategory as any,
@@ -881,7 +914,7 @@ export default function Admin() {
         ...dealPayload
       }, operatorName, operatorRole);
     } else {
-      addProduct({
+      res = await addProduct({
         name: pName,
         description: pDesc,
         category: pCategory as any,
@@ -895,6 +928,7 @@ export default function Admin() {
         ...dealPayload
       }, operatorName, operatorRole);
     }
+    if (res && !res.success) return;
     setIsProductModalOpen(false);
   };
 
@@ -908,11 +942,12 @@ export default function Admin() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (productToDelete) {
       const operatorName = currentUser?.name || 'Master Admin';
       const operatorRole = currentUser?.role || 'Super Admin';
-      deleteProduct(productToDelete.id, operatorName, operatorRole);
+      const res = await deleteProduct(productToDelete.id, operatorName, operatorRole);
+      if (res && !res.success) return;
       setIsDeleteModalOpen(false);
       setProductToDelete(null);
     }
@@ -1322,6 +1357,18 @@ export default function Admin() {
                 setSPayVisa={setSPayVisa}
                 sPayCod={sPayCod}
                 setSPayCod={setSPayCod}
+                sCourierStdFee={sCourierStdFee}
+                setSCourierStdFee={setSCourierStdFee}
+                sCourierExpFee={sCourierExpFee}
+                setSCourierExpFee={setSCourierExpFee}
+                sCourierPickFee={sCourierPickFee}
+                setSCourierPickFee={setSCourierPickFee}
+                sCourierStdActive={sCourierStdActive}
+                setSCourierStdActive={setSCourierStdActive}
+                sCourierExpActive={sCourierExpActive}
+                setSCourierExpActive={setSCourierExpActive}
+                sCourierPickActive={sCourierPickActive}
+                setSCourierPickActive={setSCourierPickActive}
                 settings={settings}
               />
             )}

@@ -4,7 +4,8 @@ import { VALID_COUPONS } from '@/lib/coupons';
 function calculateCheckoutInvoice(
   cart: { price: number; quantity: number }[],
   couponCode?: string,
-  shippingMethod: 'standard' | 'express' | 'pickup' = 'standard'
+  shippingMethod: 'standard' | 'express' | 'pickup' = 'standard',
+  courierFees = { standard: 50, express: 120, pickup: 0 }
 ) {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -24,11 +25,11 @@ function calculateCheckoutInvoice(
   let deliveryFee = 0;
   if (shippingMethod === 'standard') {
     const threshold = 2000;
-    deliveryFee = subtotal > threshold ? 0 : 50;
+    deliveryFee = subtotal > threshold ? 0 : courierFees.standard;
   } else if (shippingMethod === 'express') {
-    deliveryFee = 120;
+    deliveryFee = courierFees.express;
   } else if (shippingMethod === 'pickup') {
-    deliveryFee = 0;
+    deliveryFee = courierFees.pickup;
   }
 
   const total = Math.max(0, subtotal - couponDiscount + deliveryFee);

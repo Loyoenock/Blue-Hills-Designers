@@ -470,6 +470,16 @@ const INITIAL_SETTINGS: AppSettings = {
     mobileMoney: true,
     visa: true,
     cashOnDelivery: true
+  },
+  courierFees: {
+    standard: 50,
+    express: 120,
+    pickup: 0
+  },
+  courierMethods: {
+    standard: true,
+    express: true,
+    pickup: true
   }
 };
 
@@ -866,6 +876,12 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         payment_method_mobile_money: payload.paymentMethods?.mobileMoney !== undefined ? !!payload.paymentMethods.mobileMoney : (payload.payment_method_mobile_money !== undefined ? !!payload.payment_method_mobile_money : true),
         payment_method_visa: payload.paymentMethods?.visa !== undefined ? !!payload.paymentMethods.visa : (payload.payment_method_visa !== undefined ? !!payload.payment_method_visa : true),
         payment_method_cash_on_delivery: payload.paymentMethods?.cashOnDelivery !== undefined ? !!payload.paymentMethods.cashOnDelivery : (payload.payment_method_cash_on_delivery !== undefined ? !!payload.payment_method_cash_on_delivery : true),
+        courier_standard_fee: payload.courierFees?.standard !== undefined && payload.courierFees?.standard !== null ? Number(payload.courierFees.standard) : (payload.courier_standard_fee !== undefined && payload.courier_standard_fee !== null ? Number(payload.courier_standard_fee) : 50),
+        courier_express_fee: payload.courierFees?.express !== undefined && payload.courierFees?.express !== null ? Number(payload.courierFees.express) : (payload.courier_express_fee !== undefined && payload.courier_express_fee !== null ? Number(payload.courier_express_fee) : 120),
+        courier_pickup_fee: payload.courierFees?.pickup !== undefined && payload.courierFees?.pickup !== null ? Number(payload.courierFees.pickup) : (payload.courier_pickup_fee !== undefined && payload.courier_pickup_fee !== null ? Number(payload.courier_pickup_fee) : 0),
+        courier_method_standard: payload.courierMethods?.standard !== undefined ? !!payload.courierMethods.standard : (payload.courier_method_standard !== undefined ? !!payload.courier_method_standard : true),
+        courier_method_express: payload.courierMethods?.express !== undefined ? !!payload.courierMethods.express : (payload.courier_method_express !== undefined ? !!payload.courier_method_express : true),
+        courier_method_pickup: payload.courierMethods?.pickup !== undefined ? !!payload.courierMethods.pickup : (payload.courier_method_pickup !== undefined ? !!payload.courier_method_pickup : true),
         updated_at: new Date().toISOString()
       };
     }
@@ -1301,6 +1317,16 @@ export const useStore = create<StoreState>()(
                 mobileMoney: dbSettings.payment_method_mobile_money !== undefined && dbSettings.payment_method_mobile_money !== null ? dbSettings.payment_method_mobile_money : true,
                 visa: dbSettings.payment_method_visa !== undefined && dbSettings.payment_method_visa !== null ? dbSettings.payment_method_visa : true,
                 cashOnDelivery: dbSettings.payment_method_cash_on_delivery !== undefined && dbSettings.payment_method_cash_on_delivery !== null ? dbSettings.payment_method_cash_on_delivery : true
+              },
+              courierFees: {
+                standard: dbSettings.courier_standard_fee !== null && dbSettings.courier_standard_fee !== undefined ? Number(dbSettings.courier_standard_fee) : INITIAL_SETTINGS.courierFees.standard,
+                express: dbSettings.courier_express_fee !== null && dbSettings.courier_express_fee !== undefined ? Number(dbSettings.courier_express_fee) : INITIAL_SETTINGS.courierFees.express,
+                pickup: dbSettings.courier_pickup_fee !== null && dbSettings.courier_pickup_fee !== undefined ? Number(dbSettings.courier_pickup_fee) : INITIAL_SETTINGS.courierFees.pickup,
+              },
+              courierMethods: {
+                standard: dbSettings.courier_method_standard !== undefined && dbSettings.courier_method_standard !== null ? !!dbSettings.courier_method_standard : true,
+                express: dbSettings.courier_method_express !== undefined && dbSettings.courier_method_express !== null ? !!dbSettings.courier_method_express : true,
+                pickup: dbSettings.courier_method_pickup !== undefined && dbSettings.courier_method_pickup !== null ? !!dbSettings.courier_method_pickup : true,
               }
             }
           });
@@ -3115,6 +3141,17 @@ export const useStore = create<StoreState>()(
       },
 
       setShippingMethod: (method) => {
+        const { settings } = get();
+        const enabled = settings?.courierMethods || INITIAL_SETTINGS.courierMethods;
+        if (!enabled[method]) {
+          const current = get().selectedShippingMethod;
+          if (enabled[current]) {
+            return;
+          }
+          const fallback = enabled.standard ? 'standard' : enabled.express ? 'express' : enabled.pickup ? 'pickup' : 'standard';
+          set({ selectedShippingMethod: fallback });
+          return;
+        }
         set({ selectedShippingMethod: method });
       },
 

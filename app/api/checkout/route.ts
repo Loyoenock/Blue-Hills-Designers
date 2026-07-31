@@ -213,13 +213,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const courierFees = {
+      standard: dbSettings?.courier_standard_fee !== undefined && dbSettings?.courier_standard_fee !== null ? Number(dbSettings.courier_standard_fee) : 50,
+      express: dbSettings?.courier_express_fee !== undefined && dbSettings?.courier_express_fee !== null ? Number(dbSettings.courier_express_fee) : 120,
+      pickup: dbSettings?.courier_pickup_fee !== undefined && dbSettings?.courier_pickup_fee !== null ? Number(dbSettings.courier_pickup_fee) : 0,
+    };
+
+    const courierMethods = {
+      standard: dbSettings?.courier_method_standard !== undefined && dbSettings?.courier_method_standard !== null ? !!dbSettings.courier_method_standard : true,
+      express: dbSettings?.courier_method_express !== undefined && dbSettings?.courier_method_express !== null ? !!dbSettings.courier_method_express : true,
+      pickup: dbSettings?.courier_method_pickup !== undefined && dbSettings?.courier_method_pickup !== null ? !!dbSettings.courier_method_pickup : true,
+    };
+
+    if (selectedShippingMethod === 'standard' && !courierMethods.standard) {
+      throw new ApiError('Selected BHD Courier Method (Standard) is currently disabled.', 400);
+    }
+    if (selectedShippingMethod === 'express' && !courierMethods.express) {
+      throw new ApiError('Selected BHD Courier Method (Express) is currently disabled.', 400);
+    }
+    if (selectedShippingMethod === 'pickup' && !courierMethods.pickup) {
+      throw new ApiError('Selected BHD Courier Method (Pickup) is currently disabled.', 400);
+    }
+
     let deliveryFee = 0;
     if (selectedShippingMethod === 'standard') {
-      deliveryFee = subtotal > freeShippingThreshold ? 0 : 50;
+      deliveryFee = subtotal > freeShippingThreshold ? 0 : courierFees.standard;
     } else if (selectedShippingMethod === 'express') {
-      deliveryFee = 120;
+      deliveryFee = courierFees.express;
     } else if (selectedShippingMethod === 'pickup') {
-      deliveryFee = 0;
+      deliveryFee = courierFees.pickup;
     }
 
     let taxRate = 18; // default VAT 18% inclusive

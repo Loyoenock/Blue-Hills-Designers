@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Calendar, DollarSign, Compass, CheckCircle, Plus } from 'lucide-react';
+import { Calendar, DollarSign, Compass, CheckCircle, Plus, Truck } from 'lucide-react';
 
 interface SettingsTabProps {
   canSeeSettings: boolean;
@@ -31,6 +31,18 @@ interface SettingsTabProps {
   setSPayVisa: (b: boolean) => void;
   sPayCod: boolean;
   setSPayCod: (b: boolean) => void;
+  sCourierStdFee: number;
+  setSCourierStdFee: (n: number) => void;
+  sCourierExpFee: number;
+  setSCourierExpFee: (n: number) => void;
+  sCourierPickFee: number;
+  setSCourierPickFee: (n: number) => void;
+  sCourierStdActive: boolean;
+  setSCourierStdActive: (b: boolean) => void;
+  sCourierExpActive: boolean;
+  setSCourierExpActive: (b: boolean) => void;
+  sCourierPickActive: boolean;
+  setSCourierPickActive: (b: boolean) => void;
   settings: any;
 }
 
@@ -62,6 +74,18 @@ export default function SettingsTab({
   setSPayVisa,
   sPayCod,
   setSPayCod,
+  sCourierStdFee,
+  setSCourierStdFee,
+  sCourierExpFee,
+  setSCourierExpFee,
+  sCourierPickFee,
+  setSCourierPickFee,
+  sCourierStdActive,
+  setSCourierStdActive,
+  sCourierExpActive,
+  setSCourierExpActive,
+  sCourierPickActive,
+  setSCourierPickActive,
   settings,
 }: SettingsTabProps) {
   if (!canSeeSettings) return null;
@@ -302,6 +326,96 @@ export default function SettingsTab({
                     </button>
                   </div>
                 </div>
+
+                {/* BHD COURIER METHOD CONTROLS GROUP */}
+                <div className="pt-4 border-t border-white/5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-white/40" />
+                    <span className="text-[10px] text-white/50 uppercase tracking-wider font-mono block font-bold">BHD Courier Method Controls</span>
+                  </div>
+                  <p className="text-[9px] text-white/40">Configure courier method availability and fee structures. Disabled methods are hidden at checkout; free shipping threshold applies only to Standard Courier.</p>
+
+                  {/* TOGGLE & FEE: STANDARD COURIER */}
+                  <div className="p-3 bg-black/40 border border-white/5 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-white block">Standard Courier</span>
+                        <span className="text-[9px] text-white/40">Standard delivery option (subject to free-shipping threshold).</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSCourierStdActive(!sCourierStdActive)}
+                        className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sCourierStdActive ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sCourierStdActive ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className="text-[10px] text-white/50 font-mono w-28">Standard Fee ({sCurrency}):</label>
+                      <input 
+                        type="number"
+                        value={sCourierStdFee}
+                        onChange={(e) => setSCourierStdFee(Number(e.target.value))}
+                        className="bg-black border border-white/10 rounded px-2 py-1 text-xs text-white font-mono w-24 focus:border-[#5F39FF] outline-none"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* TOGGLE & FEE: EXPRESS COURIER */}
+                  <div className="p-3 bg-black/40 border border-white/5 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-white block">Express Courier</span>
+                        <span className="text-[9px] text-white/40">Priority VIP dispatch delivery option.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSCourierExpActive(!sCourierExpActive)}
+                        className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sCourierExpActive ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sCourierExpActive ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className="text-[10px] text-white/50 font-mono w-28">Express Fee ({sCurrency}):</label>
+                      <input 
+                        type="number"
+                        value={sCourierExpFee}
+                        onChange={(e) => setSCourierExpFee(Number(e.target.value))}
+                        className="bg-black border border-white/10 rounded px-2 py-1 text-xs text-white font-mono w-24 focus:border-[#5F39FF] outline-none"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* TOGGLE & FEE: SHOWROOM PICKUP */}
+                  <div className="p-3 bg-black/40 border border-white/5 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-white block">Showroom Pickup</span>
+                        <span className="text-[9px] text-white/40">Direct collection option from Lubowa showroom.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSCourierPickActive(!sCourierPickActive)}
+                        className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none ${sCourierPickActive ? 'bg-[#20D9A1]' : 'bg-white/10'}`}
+                      >
+                        <div className={`bg-black w-4 h-4 rounded-full transition-transform duration-200 ${sCourierPickActive ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className="text-[10px] text-white/50 font-mono w-28">Pickup Fee ({sCurrency}):</label>
+                      <input 
+                        type="number"
+                        value={sCourierPickFee}
+                        onChange={(e) => setSCourierPickFee(Number(e.target.value))}
+                        className="bg-black border border-white/10 rounded px-2 py-1 text-xs text-white font-mono w-24 focus:border-[#5F39FF] outline-none"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -325,6 +439,12 @@ export default function SettingsTab({
                 setSPayMomo(settings.paymentMethods?.mobileMoney !== false);
                 setSPayVisa(settings.paymentMethods?.visa !== false);
                 setSPayCod(settings.paymentMethods?.cashOnDelivery !== false);
+                setSCourierStdFee(settings.courierFees?.standard ?? 50);
+                setSCourierExpFee(settings.courierFees?.express ?? 120);
+                setSCourierPickFee(settings.courierFees?.pickup ?? 0);
+                setSCourierStdActive(settings.courierMethods?.standard !== false);
+                setSCourierExpActive(settings.courierMethods?.express !== false);
+                setSCourierPickActive(settings.courierMethods?.pickup !== false);
               }
             }}
             className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-white/80 font-medium transition-colors"
