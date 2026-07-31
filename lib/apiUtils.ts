@@ -299,12 +299,18 @@ export interface AuthenticatedUser {
 }
 
 export async function authenticate(req: NextRequest): Promise<AuthenticatedUser | null> {
+  let token: string | null = null;
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else {
+    token = req.cookies.get('sb-access-token')?.value || null;
+  }
+
+  if (!token) {
     return null;
   }
 
-  const token = authHeader.substring(7);
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return null;

@@ -64,7 +64,9 @@ export async function POST(req: NextRequest) {
     });
 
     // Set HTTP-only, secure, lax cookies server-side
-    const isSecure = req.nextUrl.protocol === 'https:';
+    const isSecure =
+      req.nextUrl.protocol === 'https:' ||
+      req.headers.get('x-forwarded-proto') === 'https';
     const cookieOptions = {
       path: '/',
       maxAge: session.expires_in || 3600,
