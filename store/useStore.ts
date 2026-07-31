@@ -1269,7 +1269,7 @@ export const useStore = create<StoreState>()(
 
         // 2. Profiles / Users
         const { data: dbProfiles, error: profilesError } = await supabase.from('profiles').select('*');
-        if (dbProfiles !== null && !profilesError) {
+        if (Array.isArray(dbProfiles) && !profilesError) {
           const mappedUsers = dbProfiles
             .filter((p: any) => p && p.id && isUUID(p.id))
             .map((p: any) => ({
@@ -1598,21 +1598,21 @@ export const useStore = create<StoreState>()(
         try {
           const { data: authData } = await supabase.auth.getUser();
           const authUser = authData?.user;
-          const targetUserId = authUser?.id || get().currentUserId;
 
-          if (targetUserId) {
+          if (authUser?.id) {
+            const targetUserId = authUser.id;
             const { data: p } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', targetUserId)
               .maybeSingle();
             
-            const meta = authUser?.user_metadata || {};
+            const meta = authUser.user_metadata || {};
             const userObj: User = {
               id: targetUserId,
-              name: p?.full_name || p?.name || authUser?.user_metadata?.name || (authUser ? authUser.email?.split('@')[0].toUpperCase() : 'Gentleman Customer'),
-              email: p?.email || authUser?.email || '',
-              phone: p?.phone || authUser?.user_metadata?.phone || '',
+              name: p?.full_name || p?.name || meta.name || meta.full_name || authUser.email?.split('@')[0].toUpperCase() || 'Gentleman Customer',
+              email: p?.email || authUser.email || '',
+              phone: p?.phone || meta.phone || '',
               role: p ? capitalizeRole(p.role) : 'Customer',
               spending: p ? (p.lifetime_spending || p.spending || 0) : 0,
               rewardsPoints: p ? (p.reward_points || p.rewardsPoints || 0) : 0,
@@ -1621,7 +1621,7 @@ export const useStore = create<StoreState>()(
               city: meta.city || undefined,
               address: meta.address || undefined
             };
-            set({ currentUser: userObj });
+            set({ currentUser: userObj, currentUserId: targetUserId });
 
             try {
               const { data: dbWishlists } = await supabase
@@ -1644,8 +1644,12 @@ export const useStore = create<StoreState>()(
                 set({ savedAddresses: dbAddresses });
               }
             } catch {}
+          } else {
+            set({ currentUser: null, currentUserId: null });
           }
-        } catch {}
+        } catch {
+          set({ currentUser: null, currentUserId: null });
+        }
       },
 
       syncFromSupabase: async () => {
@@ -2086,7 +2090,12 @@ export const useStore = create<StoreState>()(
         } catch (err) {
           console.error('Logout error:', err);
         } finally {
-          set({ currentUser: null });
+          set({
+            currentUser: null,
+            currentUserId: null,
+            wishlist: [],
+            savedAddresses: []
+          });
         }
       },
 

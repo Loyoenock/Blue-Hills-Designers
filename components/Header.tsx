@@ -45,6 +45,9 @@ export default function Header() {
       // Set up onAuthStateChange listener for session synchronization
       const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Header Supabase Auth Change:', event, !!session);
+        if (event === 'SIGNED_OUT') {
+          useStore.setState({ currentUser: null, currentUserId: null, wishlist: [], savedAddresses: [] });
+        }
         syncFromSupabase();
       });
       authSubscription = authSub;
