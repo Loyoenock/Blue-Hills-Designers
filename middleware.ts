@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { isBootstrapAdminEmail } from './lib/adminBootstrap';
 
 const log = {
   info: console.log,
   warn: console.warn,
   error: console.error,
 };
+
+function isBootstrapAdminEmail(email: string | null | undefined): boolean {
+  if (!email || typeof email !== 'string') return false;
+  const raw = process.env.ADMIN_BOOTSTRAP_EMAILS || '';
+  const list = raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return list.includes(email.trim().toLowerCase());
+}
 
 /**
  * Helper to perform fetch requests with an AbortController timeout.
@@ -177,11 +183,8 @@ export async function middleware(request: NextRequest) {
 
               if (profileRes.ok) {
                 const profiles = await profileRes.json();
-                if (Array.isArray(profiles) && profiles.length > 0) {
-                  userRole = profiles[0].role || 'Customer';
-                } else {
-                  userRole = user.user_metadata?.role || 'Customer';
-                }
+                const rawRole = profiles?.[0]?.role;
+                userRole = (typeof rawRole === 'string' && rawRole.trim()) ? rawRole : (user.user_metadata?.role || 'Customer');
                 setCachedRole(user.id, userRole);
               } else {
                 log.warn(`[MIDDLEWARE] Profile DB lookup failed with status: ${profileRes.status}, falling back to auth metadata`);
@@ -194,7 +197,7 @@ export async function middleware(request: NextRequest) {
           }
         }
 
-        const normalizedRole = userRole.trim().toLowerCase();
+        const normalizedRole = String(userRole || 'Customer').trim().toLowerCase();
         const authorizedRoles = ['super admin', 'admin', 'manager', 'staff'];
         
         if (!authorizedRoles.includes(normalizedRole)) {
@@ -207,7 +210,9 @@ export async function middleware(request: NextRequest) {
 
       // 5. Append new credentials in response cookies if refreshed silently
       if (newAccessToken) {
-        const isSecure = request.nextUrl.protocol === 'https:';
+        const isSecure =
+          request.nextUrl.protocol === 'https:' ||
+          request.headers.get('x-forwarded-proto') === 'https';
         const cookieOptions = {
           path: '/',
           maxAge: expiresIn,
