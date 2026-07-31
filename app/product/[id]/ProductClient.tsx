@@ -381,14 +381,19 @@ export default function ProductClient({ productId: propProductId, initialProduct
     router.push('/checkout?quick=true');
   };
 
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewerName || !reviewComment) {
       alert("Please fill out both your name and styling feedback.");
       return;
     }
 
-    addReview(activeProduct.id, reviewRating, reviewComment, reviewerName, 'Executive Client');
+    const res = await addReview(activeProduct.id, reviewRating, reviewComment, reviewerName, 'Executive Client');
+
+    if (res && res.error) {
+      alert(res.error);
+      return;
+    }
 
     setReviewSuccess(true);
     setReviewerName('');

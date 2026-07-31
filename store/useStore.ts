@@ -89,7 +89,7 @@ interface StoreState {
   addProduct: (productData: Omit<Product, 'id' | 'reviews' | 'rating'>, creatorName: string, creatorRole: string) => Promise<{ success: boolean; error?: string }>;
   updateProduct: (id: string, updatedFields: Partial<Product>, updaterName: string, updaterRole: string) => Promise<{ success: boolean; error?: string }>;
   deleteProduct: (id: string, deleterName: string, deleterRole: string) => Promise<{ success: boolean; error?: string }>; // Soft delete or remove
-  addReview: (productId: string, rating: number, comment: string, userName: string, userRole?: string) => void;
+  addReview: (productId: string, rating: number, comment: string, userName: string, userRole?: string) => Promise<{ success: boolean; error?: string }>;
   deleteReview: (productId: string, reviewId: string, modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
   updateProductStockQuick: (productId: string, newStock: number, modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
@@ -635,14 +635,18 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
 
     case 'reviews': {
       let userId = payload.userId || payload.user_id;
-      if (!userId && payload.userName) {
-        const matchedUser = localUsers.find((u: any) => u.name.toLowerCase() === payload.userName.toLowerCase());
-        userId = matchedUser ? matchedUser.id : toValidUUID('usr-' + payload.userName.toLowerCase());
+      if (userId && !isUUID(userId)) {
+        // only keep real UUIDs; otherwise treat as anonymous
+        userId = null;
+      }
+      const activeUserId = state.currentUserId || state.currentUser?.id;
+      if (!userId && activeUserId && isUUID(activeUserId)) {
+        userId = activeUserId;
       }
       return {
-        id: toValidUUID(payload.id || `rev-${payload.productId}-${payload.userName || 'anon'}`),
-        product_id: toValidUUID(payload.productId || payload.product_id),
-        user_id: toValidUUID(userId || 'usr-guest'),
+        ...(isUUID(payload.id) ? { id: payload.id } : {}),
+        product_id: toValidUUID(payload.productId || payload.product_id), // product must be real UUID
+        user_id: userId || null, // null for guests — never hashed 'usr-guest'
         rating: Number(payload.rating) || 5,
         comment: payload.comment || '',
         created_at: getTimestamp(payload.date || payload.created_at)
@@ -3649,9 +3653,10 @@ export const useStore = create<StoreState>()(
         return { success: true };
       },
 
-      addReview: (productId, rating, comment, userName, userRole = 'Executive Client') => {
+      addReview: async (productId, rating, comment, userName, userRole = 'Executive Client') => {
+        const previousProducts = get().products;
         const newReview: Review = {
-          id: `rev-${Date.now()}`,
+          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rev-${Date.now()}`,
           userName,
           userRole,
           rating,
@@ -3676,6 +3681,17 @@ export const useStore = create<StoreState>()(
           })
         }));
 
+        const currentUserId = get().currentUser?.id;
+        const validUserId = currentUserId && isUUID(currentUserId) ? currentUserId : null;
+
+        // Sync review in Supabase
+        const dbRes = await safeSupabaseInsert('reviews', { ...newReview, productId, userId: validUserId });
+
+        if (dbRes && !dbRes.success) {
+          set({ products: previousProducts });
+          return { success: false, error: dbRes.error || 'Failed to submit review' };
+        }
+
         get().addAuditLog(
           'Review Added',
           `Added standard product review on asset ID ${productId}. Rating: ${rating}/5.`,
@@ -3684,18 +3700,17 @@ export const useStore = create<StoreState>()(
           'Customer'
         );
 
-        // Sync review in Supabase
-        safeSupabaseInsert('reviews', { ...newReview, productId });
-
         // Update overall product rating in products table
         const matched = get().products.find(p => p.id === productId);
         if (matched) {
-          const updatedReviews = [...matched.reviews, newReview];
+          const updatedReviews = matched.reviews;
           const avgRating = Number(
             (updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1)
           );
           safeSupabaseUpsert('products', { id: productId, rating: avgRating });
         }
+
+        return { success: true };
       },
 
       deleteReview: async (productId, reviewId, modifierName, modifierRole) => {
