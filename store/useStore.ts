@@ -745,9 +745,15 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
 
     case 'wishlists': {
+      const activeUserId = state.currentUserId || state.currentUser?.id;
+      const uid = payload.userId || payload.user_id || activeUserId;
+      if (!uid || !isUUID(uid)) {
+        // skip DB write for pure guests; local-only is fine
+        return null;
+      }
       return {
-        id: toValidUUID(payload.id || `${payload.userId || payload.user_id}-${payload.productId || payload.product_id}`),
-        user_id: toValidUUID(payload.userId || payload.user_id),
+        ...(isUUID(payload.id) ? { id: payload.id } : {}),
+        user_id: uid,
         product_id: toValidUUID(payload.productId || payload.product_id),
         created_at: getTimestamp(payload.createdAt || payload.created_at)
       };
@@ -997,6 +1003,9 @@ async function safeSupabaseInsert(tableName: string, payload: any): Promise<{ su
 
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
+    if (mappedPayload === null) {
+      return { success: true };
+    }
     const headers = await getAuthHeaders();
     const response = await fetchWithRetry('/api/db', {
       method: 'POST',
@@ -1039,6 +1048,9 @@ async function safeSupabaseUpsert(tableName: string, payload: any, options?: any
 
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
+    if (mappedPayload === null) {
+      return { success: true };
+    }
     const headers = await getAuthHeaders();
     const response = await fetchWithRetry('/api/db', {
       method: 'POST',
@@ -3882,33 +3894,55 @@ export const useStore = create<StoreState>()(
         return { success: true, message: 'Welcome to the Gentlemen\'s Circle. Exquisite journals will arrive soon.' };
       },
 
-      toggleWishlist: (productId) => {
+      toggleWishlist: async (productId) => {
         const wishlist = get().wishlist;
         const exists = wishlist.includes(productId);
         let updatedWishlist: string[] = [];
         if (exists) {
           updatedWishlist = wishlist.filter(id => id !== productId);
-          set(state => ({ wishlist: updatedWishlist }));
-
-          // Sync wishlist item delete
-          const current = get().currentUser;
-          if (current) {
-            safeSupabaseDelete('wishlists', {
-              user_id: current.id,
-              product_id: productId
-            });
-          }
         } else {
           updatedWishlist = [...wishlist, productId];
-          set(state => ({ wishlist: updatedWishlist }));
+        }
+        set({ wishlist: updatedWishlist });
 
-          // Sync wishlist item insert
-          const current = get().currentUser;
-          if (current) {
-            safeSupabaseInsert('wishlists', {
-              userId: current.id,
-              productId: productId
+        const currentUser = get().currentUser;
+        const activeUserId = get().currentUserId || currentUser?.id;
+        const isAuthUser = activeUserId && isUUID(activeUserId);
+
+        if (isAuthUser) {
+          const validProductId = toValidUUID(productId);
+          if (exists) {
+            const dbRes = await safeSupabaseDelete('wishlists', {
+              user_id: activeUserId,
+              product_id: validProductId
             });
+            if (dbRes && !dbRes.success) {
+              console.warn(`Failed to sync wishlist removal for product ${productId}:`, dbRes.error);
+            } else {
+              get().addAuditLog(
+                'Wishlist Item Removed',
+                `Product ID ${productId} removed from wishlist.`,
+                activeUserId,
+                currentUser?.name || 'Customer',
+                currentUser?.role || 'Customer'
+              );
+            }
+          } else {
+            const dbRes = await safeSupabaseInsert('wishlists', {
+              userId: activeUserId,
+              productId: validProductId
+            });
+            if (dbRes && !dbRes.success) {
+              console.warn(`Failed to sync wishlist addition for product ${productId}:`, dbRes.error);
+            } else {
+              get().addAuditLog(
+                'Wishlist Item Added',
+                `Product ID ${productId} added to wishlist.`,
+                activeUserId,
+                currentUser?.name || 'Customer',
+                currentUser?.role || 'Customer'
+              );
+            }
           }
         }
       },
