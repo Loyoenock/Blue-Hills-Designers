@@ -85,6 +85,14 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
+      const authStartTime = Date.now();
+      const AUTH_TOTAL_TIMEOUT_MS = 8000;
+
+      const getRemainingTimeout = (maxTimeoutMs = 5000) => {
+        const remaining = AUTH_TOTAL_TIMEOUT_MS - (Date.now() - authStartTime);
+        return Math.max(100, Math.min(maxTimeoutMs, remaining));
+      };
+
       let user: any = null;
       let newAccessToken: string | null = null;
       let newRefreshToken: string | null = null;
@@ -100,7 +108,7 @@ export async function middleware(request: NextRequest) {
               'apikey': supabaseAnonKey,
             },
             cache: 'no-store'
-          }, 5000);
+          }, getRemainingTimeout(5000));
 
           if (response.ok) {
             user = await response.json();
@@ -113,7 +121,7 @@ export async function middleware(request: NextRequest) {
       }
 
       // 2. If token is invalid/expired/missing but refresh token exists, attempt silent refresh
-      if ((!user || !user.id) && refreshToken) {
+      if ((!user || !user.id) && refreshToken && (Date.now() - authStartTime < AUTH_TOTAL_TIMEOUT_MS)) {
         log.info('[MIDDLEWARE] Access token missing or invalid. Attempting silent token refresh.');
         try {
           const refreshResponse = await fetchWithTimeout(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/token?grant_type=refresh_token`, {
@@ -124,7 +132,7 @@ export async function middleware(request: NextRequest) {
             },
             body: JSON.stringify({ refresh_token: refreshToken }),
             cache: 'no-store'
-          }, 5000);
+          }, getRemainingTimeout(5000));
 
           if (refreshResponse.ok) {
             const refreshData = await refreshResponse.json();
@@ -169,17 +177,17 @@ export async function middleware(request: NextRequest) {
           const cachedRole = getCachedRole(user.id);
           if (cachedRole) {
             userRole = cachedRole;
-          } else {
+          } else if (Date.now() - authStartTime < AUTH_TOTAL_TIMEOUT_MS) {
             // Query the database profiles table directly via REST API using the validated JWT
             try {
-              const profileRes = await fetchWithTimeout(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${user.id}&select=*`, {
+              const profileRes = await fetchWithTimeout(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=*`, {
                 method: 'GET',
                 headers: {
                   'Authorization': `Bearer ${accessToken}`,
                   'apikey': supabaseAnonKey,
                 },
                 cache: 'no-store'
-              }, 5000);
+              }, getRemainingTimeout(5000));
 
               if (profileRes.ok) {
                 const profiles = await profileRes.json();
@@ -235,10 +243,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (err) {
     console.error('[MIDDLEWARE] Unexpected middleware error:', err);
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('redirect', request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    try {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('redirect', request.nextUrl.pathname);
+      return NextResponse.redirect(url);
+    } catch (fallbackErr) {
+      console.error('[MIDDLEWARE] Fallback redirect error:', fallbackErr);
+      return new NextResponse(null, { status: 307, headers: { Location: '/login' } });
+    }
   }
 }
 
