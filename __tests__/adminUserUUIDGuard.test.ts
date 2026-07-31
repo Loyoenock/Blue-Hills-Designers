@@ -46,4 +46,24 @@ describe('Admin User UUID Pre-flight Guardrails', () => {
     // Verify network layer fetch was NEVER called
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('deleteCoupon rejects non-UUID demo ids via safeSupabaseDelete guard without network calls', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const result = await useStore.getState().deleteCoupon('cpn-demo-1', 'Master Admin', 'Super Admin');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('This record only exists locally and has no corresponding database entry to delete/update');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('deleteProduct rejects non-UUID demo ids via safeSupabaseDelete guard without network calls', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const result = await useStore.getState().deleteProduct('prod-1', 'Master Admin', 'Super Admin');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('This record only exists locally and has no corresponding database entry to delete/update');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

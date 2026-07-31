@@ -1005,11 +1005,13 @@ async function safeSupabaseInsert(tableName: string, payload: any): Promise<{ su
   }
 }
 
+const LOCAL_DEMO_RECORD_ERROR = 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.';
+
 async function safeSupabaseUpsert(tableName: string, payload: any, options?: any): Promise<{ success: boolean; error?: string }> {
-  if (tableName === 'profiles' && payload?.id && !isUUID(payload.id)) {
+  if (payload?.id && !isUUID(payload.id)) {
     return {
       success: false,
-      error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+      error: LOCAL_DEMO_RECORD_ERROR
     };
   }
   if (!isSupabaseConfigured()) {
@@ -1046,10 +1048,10 @@ async function safeSupabaseUpsert(tableName: string, payload: any, options?: any
 }
 
 async function safeSupabaseDelete(tableName: string, filters: Record<string, any>): Promise<{ success: boolean; error?: string }> {
-  if (tableName === 'profiles' && filters?.id && !isUUID(filters.id)) {
+  if (filters?.id && !isUUID(filters.id)) {
     return {
       success: false,
-      error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+      error: LOCAL_DEMO_RECORD_ERROR
     };
   }
   if (!isSupabaseConfigured()) {
