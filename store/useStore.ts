@@ -802,7 +802,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
 
     case 'product_images': {
       return {
-        id: toValidUUID(payload.id || `img-${payload.productId || payload.product_id}-${payload.imageUrl || payload.image_url}`),
+        ...(isUUID(payload.id) ? { id: payload.id } : {}),
         product_id: toValidUUID(payload.productId || payload.product_id),
         image_url: payload.imageUrl || payload.image_url,
         display_order: Number(payload.displayOrder || payload.display_order) || 1,
@@ -3396,12 +3396,18 @@ export const useStore = create<StoreState>()(
 
         // Sync images in product_images table
         if (finalImages && finalImages.length > 0) {
+          const validProdId = toValidUUID(productId);
+          await safeSupabaseDelete('product_images', { product_id: validProdId });
+
           for (let i = 0; i < finalImages.length; i++) {
-            await safeSupabaseInsert('product_images', {
-              productId,
+            const imgRes = await safeSupabaseInsert('product_images', {
+              productId: validProdId,
               imageUrl: finalImages[i],
               displayOrder: i + 1
             });
+            if (imgRes && !imgRes.success) {
+              console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${productId}:`, imgRes.error);
+            }
           }
         }
 
@@ -3479,16 +3485,20 @@ export const useStore = create<StoreState>()(
 
         // Update product_images table
         if (updatedFields.images) {
+          const validProdId = toValidUUID(id);
           // Delete old image references in DB
-          await safeSupabaseDelete('product_images', { product_id: toValidUUID(id) });
+          await safeSupabaseDelete('product_images', { product_id: validProdId });
 
           // Insert new image references
           for (let i = 0; i < finalImages.length; i++) {
-            await safeSupabaseInsert('product_images', {
-              productId: id,
+            const imgRes = await safeSupabaseInsert('product_images', {
+              productId: validProdId,
               imageUrl: finalImages[i],
               displayOrder: i + 1
             });
+            if (imgRes && !imgRes.success) {
+              console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${id}:`, imgRes.error);
+            }
           }
         }
 
