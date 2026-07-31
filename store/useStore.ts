@@ -99,7 +99,7 @@ interface StoreState {
   adminDeleteUser: (id: string, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // Consultation Actions
-  bookConsultation: (bookingData: Omit<ConsultationBooking, 'id' | 'status'>) => void;
+  bookConsultation: (bookingData: Omit<ConsultationBooking, 'id' | 'status'>) => Promise<{ success: boolean; error?: string }>;
   updateBookingStatus: (bookingId: string, status: ConsultationBooking['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // Newsletter Actions
@@ -591,7 +591,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
   };
 
-  const state = useStore.getState ? useStore.getState() : { users: [], products: [], orders: [], payments: [] };
+  const state: any = useStore.getState ? useStore.getState() : { users: [], products: [], orders: [], payments: [], bookings: [] };
   const localUsers = state.users || [];
 
   switch (tableName) {
@@ -751,15 +751,29 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
 
     case 'consultations': {
-      return {
-        id: toValidUUID(payload.id),
-        user_id: toValidUUID(payload.userId || payload.user_id || 'usr-guest'),
-        booking_date: payload.bookingDate || payload.booking_date,
-        booking_time: payload.bookingTime || payload.booking_time,
-        notes: payload.notes || '',
-        status: payload.status?.toLowerCase() || 'pending',
-        created_at: getTimestamp(payload.createdAt || payload.created_at)
+      const existingBooking = state.bookings?.find((b: any) => b.id === payload.id);
+      const fullBooking = existingBooking ? { ...existingBooking, ...payload } : payload;
+
+      const rawUserId = fullBooking.userId || fullBooking.user_id;
+      const currentUserId = state.currentUser?.id;
+      const validUserId = rawUserId && isUUID(rawUserId)
+        ? rawUserId
+        : (currentUserId && isUUID(currentUserId) ? currentUserId : null);
+
+      const out: any = {
+        user_id: validUserId,
+        client_name: fullBooking.clientName || fullBooking.client_name || '',
+        client_email: fullBooking.clientEmail || fullBooking.client_email || '',
+        client_phone: fullBooking.clientPhone || fullBooking.client_phone || '',
+        booking_date: fullBooking.date || fullBooking.bookingDate || fullBooking.booking_date || '',
+        booking_time: fullBooking.time || fullBooking.bookingTime || fullBooking.booking_time || '',
+        notes: fullBooking.notes || '',
+        status: (fullBooking.status || 'pending').toLowerCase()
       };
+      if (fullBooking.id && isUUID(fullBooking.id)) {
+        out.id = fullBooking.id;
+      }
+      return out;
     }
 
     case 'payments': {
@@ -1521,8 +1535,24 @@ export const useStore = create<StoreState>()(
         try {
           const { data: dbBookings } = await supabase.from('consultations').select('*');
           if (dbBookings) {
-            const camelBookings = keysToCamel(dbBookings) as ConsultationBooking[];
-            set({ bookings: camelBookings });
+            const formatStatus = (s?: string): ConsultationBooking['status'] => {
+              if (!s) return 'Pending';
+              const lower = s.toLowerCase();
+              if (lower === 'confirmed') return 'Confirmed';
+              if (lower === 'completed') return 'Completed';
+              return 'Pending';
+            };
+            const formattedBookings: ConsultationBooking[] = dbBookings.map((row: any) => ({
+              id: row.id,
+              clientName: row.client_name || row.clientName || '',
+              clientEmail: row.client_email || row.clientEmail || '',
+              clientPhone: row.client_phone || row.clientPhone || '',
+              date: row.booking_date || row.date || '',
+              time: row.booking_time || row.time || '',
+              notes: row.notes || '',
+              status: formatStatus(row.status)
+            }));
+            set({ bookings: formattedBookings });
           }
         } catch {}
 
@@ -3738,13 +3768,15 @@ export const useStore = create<StoreState>()(
         return { success: true };
       },
 
-      bookConsultation: (bookingData) => {
+      bookConsultation: async (bookingData) => {
+        const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Math.floor(Math.random() * 1000000000000).toString().padStart(12, '0')}`;
         const newBooking: ConsultationBooking = {
           ...bookingData,
-          id: `BOK-${Math.floor(100 + Math.random() * 900)}`,
+          id,
           status: 'Pending'
         };
 
+        const previousBookings = get().bookings;
         set(state => ({
           bookings: [newBooking, ...state.bookings]
         }));
@@ -3758,7 +3790,12 @@ export const useStore = create<StoreState>()(
         );
 
         // Sync booking with Supabase
-        safeSupabaseInsert('consultations', newBooking);
+        const dbRes = await safeSupabaseInsert('consultations', newBooking);
+        if (dbRes && !dbRes.success) {
+          set({ bookings: previousBookings });
+          return { success: false, error: dbRes.error };
+        }
+        return { success: true };
       },
 
       updateBookingStatus: async (bookingId, status, modifierName, modifierRole) => {

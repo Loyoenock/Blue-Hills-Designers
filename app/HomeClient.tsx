@@ -169,7 +169,7 @@ export default function HomeClient() {
     }
 
     try {
-      await bookConsultation({
+      const res = await bookConsultation({
         clientName,
         clientEmail,
         clientPhone,
@@ -177,6 +177,10 @@ export default function HomeClient() {
         time: bookingTime,
         notes: bookingNotes
       });
+      if (res && !res.success) {
+        setBookingError(res.error || 'Failed to submit booking. Please try again.');
+        return;
+      }
       setBookingSuccess(true);
       setTimeout(() => {
         setBookingSuccess(false);
