@@ -103,7 +103,7 @@ interface StoreState {
   updateBookingStatus: (bookingId: string, status: ConsultationBooking['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // Newsletter Actions
-  subscribeNewsletter: (email: string) => { success: boolean; message: string };
+  subscribeNewsletter: (email: string) => Promise<{ success: boolean; message: string }>;
 
   // Wishlist Actions
   toggleWishlist: (productId: string) => void;
@@ -717,10 +717,9 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
 
     case 'newsletter_subscribers': {
-      const subId = payload.id || payload.email;
       return {
-        id: toValidUUID(subId),
-        email: payload.email,
+        ...(payload.id && isUUID(payload.id) ? { id: payload.id } : {}),
+        email: (payload.email || '').trim().toLowerCase(),
         subscribed_at: getTimestamp(payload.date || payload.subscribedAt || payload.subscribed_at || payload.created_at)
       };
     }
@@ -3824,9 +3823,10 @@ export const useStore = create<StoreState>()(
         return { success: true };
       },
 
-      subscribeNewsletter: (email) => {
+      subscribeNewsletter: async (email) => {
+        const normalizedEmail = (email || '').trim().toLowerCase();
         const subs = get().subscribers;
-        const exists = subs.find(s => s.email.toLowerCase() === email.toLowerCase());
+        const exists = subs.find(s => s.email.trim().toLowerCase() === normalizedEmail);
         
         if (exists) {
           // Always ensure the existing local subscriber is synced to Supabase
@@ -3834,26 +3834,35 @@ export const useStore = create<StoreState>()(
           return { success: false, message: 'You are already a valued member of the Gentlemen\'s Circle.' };
         }
 
+        const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Math.floor(Math.random() * 1000000000000).toString().padStart(12, '0')}`;
         const newSub: NewsletterSubscriber = {
-          id: `sub-${Date.now()}`,
-          email,
+          id,
+          email: normalizedEmail,
           date: new Date().toISOString().split('T')[0]
         };
 
+        const previousSubscribers = get().subscribers;
         set(state => ({
           subscribers: [...state.subscribers, newSub]
         }));
+
+        // Sync subscriber with Supabase
+        const dbRes = await safeSupabaseInsert('newsletter_subscribers', newSub);
+        if (dbRes && !dbRes.success) {
+          set({ subscribers: previousSubscribers });
+          return {
+            success: false,
+            message: dbRes.error || "Unable to join the Gentlemen's Circle right now. Please try again."
+          };
+        }
 
         get().addAuditLog(
           'Newsletter Subscription',
           `Email registry added to 'Gentlemen\\'s Circle'.`,
           'guest',
-          email,
+          normalizedEmail,
           'Customer'
         );
-
-        // Sync subscriber with Supabase
-        safeSupabaseInsert('newsletter_subscribers', newSub);
 
         return { success: true, message: 'Welcome to the Gentlemen\'s Circle. Exquisite journals will arrive soon.' };
       },

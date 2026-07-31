@@ -198,7 +198,7 @@ export default function HomeClient() {
     }
   };
 
-  const handleNewsletterSubmit = (e: React.FormEvent) => {
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setNewsSuccess('');
     setNewsError('');
@@ -209,7 +209,7 @@ export default function HomeClient() {
     }
 
     try {
-      const res = subscribeNewsletter(newsEmail);
+      const res = await subscribeNewsletter(newsEmail);
       if (res.success) {
         setNewsSuccess(res.message);
         setNewsEmail('');
