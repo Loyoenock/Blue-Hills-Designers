@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Search } from 'lucide-react';
 import { User } from '../../../types';
@@ -23,6 +24,8 @@ export default function BookingsTab({
   updateBookingStatus,
   currentUser,
 }: BookingsTabProps) {
+  const [error, setError] = useState<string | null>(null);
+
   return (
     <motion.div 
       key="bookings"
@@ -37,6 +40,12 @@ export default function BookingsTab({
           <span className="text-[10px] text-[#20D9A1] font-mono uppercase tracking-widest font-bold">Bookings Desk Active</span>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-xl font-sans">
+          {error}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#111111] p-4 rounded-xl border border-white/10">
@@ -105,12 +114,19 @@ export default function BookingsTab({
                     <td className="py-3 px-2">
                       <select
                         value={b.status}
-                        onChange={(e) => updateBookingStatus(
-                          b.id, 
-                          e.target.value as any,
-                          currentUser?.name || 'Master Admin',
-                          currentUser?.role || 'Super Admin'
-                        )}
+                        onChange={async (e) => {
+                          setError(null);
+                          const newStatus = e.target.value as any;
+                          const res = await updateBookingStatus(
+                            b.id, 
+                            newStatus,
+                            currentUser?.name || 'Master Admin',
+                            currentUser?.role || 'Super Admin'
+                          );
+                          if (res && !res.success) {
+                            setError(res.error || `Failed to update booking status for ${b.clientName || b.id}`);
+                          }
+                        }}
                         className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
                           b.status === 'Completed' ? 'text-green-400' :
                           b.status === 'Confirmed' ? 'text-blue-400' :
