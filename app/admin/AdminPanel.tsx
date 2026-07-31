@@ -836,6 +836,36 @@ export default function Admin() {
     const finalSizes = pSizesInput.split(',').map(s => s.trim()).filter(s => s !== '');
     const finalColors = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
 
+    let calculatedDealExpiresAt: string | null = null;
+    let computedIsDeal = pIsDeal;
+
+    if (pIsDeal) {
+      if (pDealExpiresAt && pDealExpiresAt.trim() !== '' && !isNaN(new Date(pDealExpiresAt).getTime())) {
+        calculatedDealExpiresAt = new Date(pDealExpiresAt).toISOString();
+      } else {
+        const days = Number(pSecretDays) || 0;
+        const hours = Number(pSecretHours) || 0;
+        const mins = Number(pSecretMins) || 0;
+        const secs = Number(pSecretSecs) || 0;
+        const durationMs = (((days * 24 + hours) * 60 + mins) * 60 + secs) * 1000;
+        if (durationMs > 0) {
+          calculatedDealExpiresAt = new Date(Date.now() + durationMs).toISOString();
+        } else {
+          computedIsDeal = false;
+        }
+      }
+    }
+
+    const dealPayload = {
+      isDealOfTheDay: computedIsDeal,
+      discountPercentage: computedIsDeal ? Number(pDiscountPercentage) : 0,
+      dealDays: computedIsDeal ? Number(pSecretDays) : undefined,
+      dealHours: computedIsDeal ? Number(pSecretHours) : undefined,
+      dealMins: computedIsDeal ? Number(pSecretMins) : undefined,
+      dealSecs: computedIsDeal ? Number(pSecretSecs) : undefined,
+      dealExpiresAt: computedIsDeal ? calculatedDealExpiresAt : null
+    };
+
     if (editingProduct) {
       updateProduct(editingProduct.id, {
         name: pName,
@@ -848,13 +878,7 @@ export default function Admin() {
         images: pImages,
         isNew: pIsNew,
         isFeatured: pIsFeatured,
-        isDealOfTheDay: pIsDeal,
-        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0,
-        dealDays: pIsDeal ? Number(pSecretDays) : undefined,
-        dealHours: pIsDeal ? Number(pSecretHours) : undefined,
-        dealMins: pIsDeal ? Number(pSecretMins) : undefined,
-        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined,
-        dealExpiresAt: pIsDeal && pDealExpiresAt ? pDealExpiresAt : undefined
+        ...dealPayload
       }, operatorName, operatorRole);
     } else {
       addProduct({
@@ -868,13 +892,7 @@ export default function Admin() {
         images: pImages,
         isNew: pIsNew,
         isFeatured: pIsFeatured,
-        isDealOfTheDay: pIsDeal,
-        discountPercentage: pIsDeal ? Number(pDiscountPercentage) : 0,
-        dealDays: pIsDeal ? Number(pSecretDays) : undefined,
-        dealHours: pIsDeal ? Number(pSecretHours) : undefined,
-        dealMins: pIsDeal ? Number(pSecretMins) : undefined,
-        dealSecs: pIsDeal ? Number(pSecretSecs) : undefined,
-        dealExpiresAt: pIsDeal && pDealExpiresAt ? pDealExpiresAt : undefined
+        ...dealPayload
       }, operatorName, operatorRole);
     }
     setIsProductModalOpen(false);

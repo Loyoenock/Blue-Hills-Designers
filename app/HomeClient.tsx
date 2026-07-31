@@ -58,7 +58,7 @@ export default function HomeClient() {
   const [newsError, setNewsError] = useState('');
 
   // Countdown timer for Deal of the Day
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 14, minutes: 40, seconds: 17 });
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const endMsRef = useRef<number | null>(null);
   const dealKeyRef = useRef<string | null>(null);
 
@@ -92,12 +92,7 @@ export default function HomeClient() {
           endMsRef.current = Date.now();
         }
       } else {
-        const days = typeof dealProduct.dealDays === 'number' ? dealProduct.dealDays : 0;
-        const hours = typeof dealProduct.dealHours === 'number' ? dealProduct.dealHours : 14;
-        const minutes = typeof dealProduct.dealMins === 'number' ? dealProduct.dealMins : 40;
-        const seconds = typeof dealProduct.dealSecs === 'number' ? dealProduct.dealSecs : 17;
-        const durationMs = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
-        endMsRef.current = Date.now() + durationMs;
+        endMsRef.current = Date.now();
       }
       setTimeLeft(getTimeLeftFromEnd(endMsRef.current));
     }

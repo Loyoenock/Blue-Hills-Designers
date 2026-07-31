@@ -252,6 +252,7 @@ const INITIAL_PRODUCTS: Product[] = [
     dealHours: 14,
     dealMins: 40,
     dealSecs: 17,
+    dealExpiresAt: new Date(Date.now() + (((0 * 24 + 14) * 60 + 40) * 60 + 17) * 1000).toISOString(),
     reviews: [
       { id: 'rev-6', userName: 'Kassim Sempijja', userRole: 'Oil & Gas Director', rating: 5, comment: 'Breathtaking quality. The weight is fantastic, and the camel hair texture is incredibly soft. Well worth the investment.', date: '2026-06-20' }
     ]
@@ -1172,7 +1173,16 @@ export const useStore = create<StoreState>()(
           const { data: dbProducts } = await supabase.from('products').select('id').limit(1);
           if (!dbProducts || dbProducts.length === 0) {
             for (const prod of INITIAL_PRODUCTS) {
-              await safeSupabaseUpsert('products', prod);
+              const prodToSave = { ...prod };
+              if (prodToSave.isDealOfTheDay && !prodToSave.dealExpiresAt) {
+                const days = typeof prodToSave.dealDays === 'number' ? prodToSave.dealDays : 0;
+                const hours = typeof prodToSave.dealHours === 'number' ? prodToSave.dealHours : 14;
+                const minutes = typeof prodToSave.dealMins === 'number' ? prodToSave.dealMins : 40;
+                const seconds = typeof prodToSave.dealSecs === 'number' ? prodToSave.dealSecs : 17;
+                const durationMs = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+                prodToSave.dealExpiresAt = new Date(Date.now() + durationMs).toISOString();
+              }
+              await safeSupabaseUpsert('products', prodToSave);
               if (prod.images && prod.images.length > 0) {
                 for (let i = 0; i < prod.images.length; i++) {
                   await safeSupabaseUpsert('product_images', {
