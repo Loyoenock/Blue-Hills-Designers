@@ -3347,28 +3347,81 @@ export const useStore = create<StoreState>()(
       },
 
       updateOrderStatus: async (orderId, status, modifierName, modifierRole) => {
-        const previousOrders = get().orders;
+        const previousOrders = get().orders || [];
+        const previousPayments = get().payments || [];
+
         const targetOrder = previousOrders.find(o => o.id === orderId || o.orderNumber === orderId);
         const resolvedOrderId = targetOrder ? targetOrder.id : orderId;
 
+        const targetPayment = previousPayments.find(
+          p => p.orderId === resolvedOrderId ||
+               p.orderId === orderId ||
+               (targetOrder && p.orderId === targetOrder.orderNumber) ||
+               (targetOrder && toValidUUID(targetOrder.id) === p.orderId)
+        );
+
+        let updatedPayment: Payment | null = null;
+        if (targetPayment) {
+          let nextPaymentStatus: Payment['status'] | null = null;
+          if (status === 'Delivered') {
+            if (targetPayment.status === 'Pending') {
+              nextPaymentStatus = 'Paid';
+            }
+          } else if (status === 'Cancelled') {
+            if (targetPayment.status !== 'Cancelled' && targetPayment.status !== 'Refunded') {
+              nextPaymentStatus = 'Cancelled';
+            }
+          }
+
+          if (nextPaymentStatus && nextPaymentStatus !== targetPayment.status) {
+            updatedPayment = {
+              ...targetPayment,
+              status: nextPaymentStatus
+            };
+          }
+        }
+
         set(state => ({
-          orders: state.orders.map(o => (o.id === resolvedOrderId || o.orderNumber === orderId) ? { ...o, status } : o)
+          orders: (state.orders || []).map(o => (o.id === resolvedOrderId || o.orderNumber === orderId) ? { ...o, status } : o),
+          payments: updatedPayment
+            ? (state.payments || []).map(p => p.id === targetPayment!.id ? updatedPayment! : p)
+            : state.payments
         }));
 
         get().addAuditLog(
           'Order Status Adjusted',
-          `Order ${targetOrder?.orderNumber || resolvedOrderId} status transitioned to '${status}' by staff.`,
+          `Order ${targetOrder?.orderNumber || resolvedOrderId} status transitioned to '${status}' by staff.${updatedPayment ? ` Linked payment ${targetPayment!.id} status updated to '${updatedPayment.status}'.` : ''}`,
           'staff-modifier',
           modifierName,
           modifierRole as User['role']
         );
 
-        // Sync status with Supabase using resolved UUID
+        // Sync order status with Supabase using resolved UUID
         const dbRes = await safeSupabaseUpsert('orders', { id: resolvedOrderId, status });
         if (dbRes && !dbRes.success) {
-          set({ orders: previousOrders, adminError: `Failed to update order status: ${dbRes.error}` });
+          set({ 
+            orders: previousOrders, 
+            payments: previousPayments, 
+            adminError: `Failed to update order status: ${dbRes.error}` 
+          });
           return { success: false, error: dbRes.error };
         }
+
+        if (updatedPayment) {
+          const dbPayRes = await safeSupabaseUpsert('payments', updatedPayment);
+          if (dbPayRes && !dbPayRes.success) {
+            if (targetOrder) {
+              await safeSupabaseUpsert('orders', { id: resolvedOrderId, status: targetOrder.status });
+            }
+            set({ 
+              orders: previousOrders, 
+              payments: previousPayments, 
+              adminError: `Failed to update linked payment status: ${dbPayRes.error}` 
+            });
+            return { success: false, error: dbPayRes.error };
+          }
+        }
+
         return { success: true };
       },
 
