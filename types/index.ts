@@ -181,6 +181,7 @@ export interface AppSettings {
   showroomHours: string;
   supportPhone: string;
   conciergePhone?: string;
+  monthlyRevenueTarget?: number;
   freeShippingThreshold: number;
   taxRate: number;
   aiGreetingPrefix: string;

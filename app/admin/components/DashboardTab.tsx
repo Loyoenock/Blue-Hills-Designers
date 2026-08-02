@@ -9,14 +9,18 @@ interface DashboardTabProps {
   orders: Order[];
   activeCustomers: number;
   products: Product[];
+  revenueTarget?: number;
 }
 
 export default function DashboardTab({
   totalRevenue,
   orders,
   activeCustomers,
-  products
+  products,
+  revenueTarget = 50000
 }: DashboardTabProps) {
+  const achievedPct = revenueTarget > 0 ? Math.min(100, Math.round((totalRevenue / revenueTarget) * 100)) : 0;
+
   return (
     <motion.div 
       key="dashboard"
@@ -81,12 +85,12 @@ export default function DashboardTab({
               <span>Lubowa Retail Target</span>
               <TrendingUp className="w-4 h-4 text-[#20D9A1]" />
             </h4>
-            <p className="text-xs text-white/50 leading-relaxed font-light">Showroom target of Ugx 50,000 corporate investment on menswear collections is 65% completed.</p>
+            <p className="text-xs text-white/50 leading-relaxed font-light">Showroom target of Ugx {revenueTarget.toLocaleString()} corporate investment on menswear collections is {achievedPct}% completed.</p>
           </div>
 
           <div className="pt-4 font-mono text-sm font-semibold flex justify-between items-center text-[#20D9A1]">
-            <span>65% Achieved</span>
-            <span>Ugx 32,500</span>
+            <span>{achievedPct}% Achieved</span>
+            <span>Ugx {totalRevenue.toLocaleString()}</span>
           </div>
         </div>
       </div>

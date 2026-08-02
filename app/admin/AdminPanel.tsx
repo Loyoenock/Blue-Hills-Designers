@@ -31,6 +31,8 @@ import LogsTab from './components/LogsTab';
 import ReconciliationTab from './components/ReconciliationTab';
 import SettingsTab from './components/SettingsTab';
 
+const DEFAULT_REVENUE_TARGET = 50000;
+
 export default function Admin() {
   const router = useRouter();
   const { 
@@ -1161,6 +1163,7 @@ export default function Admin() {
                 orders={orders}
                 activeCustomers={activeCustomers}
                 products={products}
+                revenueTarget={settings?.monthlyRevenueTarget || DEFAULT_REVENUE_TARGET}
               />
             )}
 
