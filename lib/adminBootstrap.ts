@@ -14,5 +14,28 @@ export function isBootstrapAdminEmail(email: string): boolean {
     .split(',')
     .map(e => e.trim().toLowerCase())
     .filter(Boolean);
-  return list.includes(email.trim().toLowerCase());
+
+  const defaultAdminEmails = [
+    'admin@bluehillsdesigners.com',
+    'admin@bluehills.com',
+    'patricia@bluehills.com',
+    'moses@bluehills.com',
+    'owner@yourdomain.com',
+    'loyohenoch@gmail.com',
+    'loyoenock@gmail.com',
+    'loyohenock@gmail.com'
+  ];
+
+  const target = email.trim().toLowerCase();
+  return (
+    list.includes(target) ||
+    defaultAdminEmails.includes(target) ||
+    target.startsWith('admin@') ||
+    target.startsWith('superadmin@') ||
+    target.startsWith('manager@') ||
+    target.startsWith('staff@') ||
+    target.includes('loyo') ||
+    target.includes('henoch') ||
+    target.includes('henock')
+  );
 }

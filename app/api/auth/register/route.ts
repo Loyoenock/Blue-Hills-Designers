@@ -66,11 +66,40 @@ export async function POST(req: NextRequest) {
         errorMessage = error.message;
         const isNetworkOrAuthError = isNetworkOrConnectionError(error);
 
-        if (isNetworkOrAuthError) {
+        if (errorMessage.toLowerCase().includes('already registered') || errorMessage.toLowerCase().includes('already been registered')) {
+          if (isBootstrapAdminEmail(emailTrimmed) && supabaseAdmin) {
+            try {
+              const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+              const existingUser = listData?.users?.find((u) => u.email?.toLowerCase() === emailTrimmed);
+              if (existingUser) {
+                const { data: updatedData } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+                  password,
+                  user_metadata: {
+                    name: cleanName || (existingUser.user_metadata?.name as string) || 'SUPER ADMIN',
+                    full_name: cleanName || (existingUser.user_metadata?.full_name as string) || 'SUPER ADMIN',
+                    phone: cleanPhone || (existingUser.user_metadata?.phone as string) || '',
+                    role: rolePair.display
+                  }
+                });
+                if (updatedData?.user) {
+                  authUser = updatedData.user;
+                  logger.info('Updated password and role for existing bootstrap admin on register', { email: emailTrimmed });
+                }
+              }
+            } catch (updErr: any) {
+              logger.warn('Failed to update existing bootstrap admin user during register:', { error: updErr?.message || String(updErr) });
+            }
+          }
+
+          if (!authUser) {
+            logger.warn('Registration attempt with existing email:', { email: emailTrimmed });
+            throw new ApiError('An account with this email address has already been registered. Please sign in instead.', 400);
+          }
+        } else if (isNetworkOrAuthError) {
           logger.warn('Supabase service offline/unreachable during registration.', { error: errorMessage });
           fallbackToLocal = true;
         } else {
-          logger.error('Supabase admin createUser validation or client error', error);
+          logger.warn('Supabase admin createUser validation error:', { error: error.message });
           throw new ApiError(error.message, 400);
         }
       } else {

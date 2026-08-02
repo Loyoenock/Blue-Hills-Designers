@@ -94,23 +94,17 @@ export function getSupabaseAuthClient(): SupabaseClient | null {
  * Returns a privileged Supabase client using the service role key.
  * Strictly for server-side usage (API routes, server actions).
  */
-export function getSupabaseAdmin(): SupabaseClient {
+export function getSupabaseAdmin(): SupabaseClient | null {
   if (typeof window !== 'undefined') {
     throw new Error('getSupabaseAdmin can only be executed in a server-side environment.');
   }
 
   if (!supabaseAdminInstance) {
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseServiceKey) {
-      logger.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Falling back to anon key.');
-    }
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error(
-        'Supabase Admin configuration is incomplete. Please ensure both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.'
-      );
+      return null;
     }
 
     supabaseAdminInstance = createClient(supabaseUrl, supabaseServiceKey, {
