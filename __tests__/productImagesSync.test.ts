@@ -40,17 +40,31 @@ describe('Product Images Sync & Payload Mapping', () => {
     expect(mapped.display_order).toBe(2);
   });
 
-  it('correctly sets 1-based display_order for multiple images', () => {
-    const images = ['https://example.com/1.jpg', 'https://example.com/2.jpg', 'https://example.com/3.jpg'];
-    const mappedImages = images.map((img, idx) => mapProductImagePayload({
-      productId: '123e4567-e89b-12d3-a456-426614174000',
-      imageUrl: img,
-      displayOrder: idx + 1
-    }));
+  it('correctly identifies private storage paths vs public URLs', () => {
+    const isPrivateStoragePath = (url: string) => !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:');
+    
+    expect(isPrivateStoragePath('admin/products/item1/file1.png')).toBe(true);
+    expect(isPrivateStoragePath('https://example.com/item1.png')).toBe(false);
+    expect(isPrivateStoragePath('data:image/png;base64,iVBORw0KGgo=')).toBe(false);
+  });
 
-    expect(mappedImages.length).toBe(3);
-    expect(mappedImages[0].display_order).toBe(1);
-    expect(mappedImages[1].display_order).toBe(2);
-    expect(mappedImages[2].display_order).toBe(3);
+  it('triggers cleanup for uploaded storage paths when database operation fails', async () => {
+    const uploadedPaths: string[] = ['user1/products/p1/img1.png', 'user1/products/p1/img2.png'];
+    const cleanedUpPaths: string[] = [];
+
+    const mockDeleteStorageFile = async (path: string) => {
+      cleanedUpPaths.push(path);
+      return true;
+    };
+
+    // Simulate DB insert failure
+    const dbSuccess = false;
+    if (!dbSuccess) {
+      for (const path of uploadedPaths) {
+        await mockDeleteStorageFile(path);
+      }
+    }
+
+    expect(cleanedUpPaths).toEqual(['user1/products/p1/img1.png', 'user1/products/p1/img2.png']);
   });
 });

@@ -1,26 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-function calculateDealExpiresAt(
-  isDeal: boolean,
-  explicitDateTime?: string | null,
-  days = 0,
-  hours = 0,
-  mins = 0,
-  secs = 0
-): string | null {
-  if (!isDeal) return null;
-
-  if (explicitDateTime && explicitDateTime.trim() !== '' && !isNaN(new Date(explicitDateTime).getTime())) {
-    return new Date(explicitDateTime).toISOString();
-  }
-
-  const durationMs = (((days * 24 + hours) * 60 + mins) * 60 + secs) * 1000;
-  if (durationMs > 0) {
-    return new Date(Date.now() + durationMs).toISOString();
-  }
-
-  return null;
-}
+import { calculateDealExpiresAt } from '../store/useStore';
 
 describe('calculateDealExpiresAt', () => {
   it('returns null when deal is disabled', () => {

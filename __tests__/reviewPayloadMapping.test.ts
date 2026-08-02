@@ -17,6 +17,9 @@ function mapReviewPayload(payload: any, state: { currentUserId?: string; current
     user_id: userId || null,
     rating: Number(payload.rating) || 5,
     comment: payload.comment || '',
+    user_name: payload.userName || payload.user_name || 'Guest',
+    user_role: payload.userRole || payload.user_role || 'Customer',
+    user_company: payload.userCompany || payload.user_company || null,
     created_at: payload.date || payload.created_at || new Date().toISOString()
   };
 }
@@ -33,6 +36,8 @@ describe('mapReviewPayload', () => {
     expect(mapped.user_id).toBeNull();
     expect(mapped.product_id).toBe('123e4567-e89b-12d3-a456-426614174000');
     expect(mapped.rating).toBe(5);
+    expect(mapped.user_name).toBe('Guest User');
+    expect(mapped.user_role).toBe('Customer');
   });
 
   it('maps logged-in user review with their profile UUID', () => {

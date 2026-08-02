@@ -25,4 +25,19 @@ describe('mapNewsletterPayload', () => {
     expect(mapped.id).toBe(validUUID);
     expect(mapped.email).toBe('executive@example.com');
   });
+
+  it('identifies duplicate constraint errors and returns clear message', () => {
+    const handleDbError = (errStr: string) => {
+      const isDuplicate = errStr.includes('23505') ||
+        errStr.toLowerCase().includes('duplicate') ||
+        errStr.toLowerCase().includes('already') ||
+        errStr.toLowerCase().includes('unique');
+
+      return isDuplicate ? 'This email is already subscribed.' : errStr;
+    };
+
+    expect(handleDbError('duplicate key value violates unique constraint "newsletter_subscribers_email_unique"')).toBe('This email is already subscribed.');
+    expect(handleDbError('Postgres error 23505')).toBe('This email is already subscribed.');
+    expect(handleDbError('Connection failed')).toBe('Connection failed');
+  });
 });

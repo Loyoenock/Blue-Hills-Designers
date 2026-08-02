@@ -390,8 +390,8 @@ export default function ProductClient({ productId: propProductId, initialProduct
 
     const res = await addReview(activeProduct.id, reviewRating, reviewComment, reviewerName, 'Executive Client');
 
-    if (res && res.error) {
-      alert(res.error);
+    if (!res || !res.success || res.error) {
+      alert(res?.error || "Failed to submit review.");
       return;
     }
 

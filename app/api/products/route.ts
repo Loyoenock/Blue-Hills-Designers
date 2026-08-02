@@ -102,6 +102,28 @@ export async function GET(req: NextRequest) {
             .map((img: any) => img.image_url)
         : [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600'];
 
+      const rawIsDeal = Boolean(p.is_deal);
+      const dealDays = p.deal_days ?? 0;
+      const dealHours = p.deal_hours ?? 0;
+      const dealMins = p.deal_mins ?? 0;
+      const dealSecs = p.deal_secs ?? 0;
+      const rawExpiresAt = p.deal_expires_at;
+
+      let dealExpiresAt: string | null = null;
+      if (rawIsDeal) {
+        if (rawExpiresAt && typeof rawExpiresAt === 'string' && rawExpiresAt.trim() !== '' && !isNaN(new Date(rawExpiresAt).getTime())) {
+          dealExpiresAt = new Date(rawExpiresAt).toISOString();
+        } else {
+          const durationMs = (((dealDays * 24 + dealHours) * 60 + dealMins) * 60 + dealSecs) * 1000;
+          if (durationMs > 0) {
+            dealExpiresAt = new Date(Date.now() + durationMs).toISOString();
+          }
+        }
+      }
+
+      const isFuture = dealExpiresAt ? new Date(dealExpiresAt).getTime() > Date.now() : true;
+      const isDealOfTheDay = rawIsDeal && isFuture;
+
       return {
         id: p.id,
         name: p.name || 'Luxury Product',
@@ -124,12 +146,13 @@ export async function GET(req: NextRequest) {
         })) : [],
         isNew: Boolean(p.is_new),
         isFeatured: Boolean(p.is_featured),
-        isDealOfTheDay: Boolean(p.is_deal),
+        isDealOfTheDay,
         discountPercentage: Number(p.discount_percentage) || 0,
-        dealDays: p.deal_days ?? 0,
-        dealHours: p.deal_hours ?? 14,
-        dealMins: p.deal_mins ?? 40,
-        dealSecs: p.deal_secs ?? 17
+        dealDays,
+        dealHours,
+        dealMins,
+        dealSecs,
+        dealExpiresAt: isDealOfTheDay ? dealExpiresAt : null
       };
     });
 

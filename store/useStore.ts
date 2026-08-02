@@ -550,6 +550,28 @@ function isUUID(str: string): boolean {
   return uuidRegex.test(str);
 }
 
+export function calculateDealExpiresAt(
+  isDeal: boolean,
+  explicitDateTime?: string | null,
+  days = 0,
+  hours = 0,
+  mins = 0,
+  secs = 0
+): string | null {
+  if (!isDeal) return null;
+
+  if (explicitDateTime && typeof explicitDateTime === 'string' && explicitDateTime.trim() !== '' && !isNaN(new Date(explicitDateTime).getTime())) {
+    return new Date(explicitDateTime).toISOString();
+  }
+
+  const durationMs = (((days * 24 + hours) * 60 + mins) * 60 + secs) * 1000;
+  if (durationMs > 0) {
+    return new Date(Date.now() + durationMs).toISOString();
+  }
+
+  return null;
+}
+
 function toValidUUID(str: string): string {
   if (!str) return '00000000-0000-0000-0000-000000000000';
   if (isUUID(str)) {
@@ -618,6 +640,23 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
       const prodName = fullProd.name || 'Luxury Product';
       const slug = fullProd.slug || (prodName ? prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'product');
 
+      const isDeal = !!fullProd.isDealOfTheDay;
+      const dealDays = fullProd.dealDays !== undefined && fullProd.dealDays !== null ? Number(fullProd.dealDays) : 0;
+      const dealHours = fullProd.dealHours !== undefined && fullProd.dealHours !== null ? Number(fullProd.dealHours) : 0;
+      const dealMins = fullProd.dealMins !== undefined && fullProd.dealMins !== null ? Number(fullProd.dealMins) : 0;
+      const dealSecs = fullProd.dealSecs !== undefined && fullProd.dealSecs !== null ? Number(fullProd.dealSecs) : 0;
+
+      const dealExpiresAt = calculateDealExpiresAt(
+        isDeal,
+        fullProd.dealExpiresAt,
+        dealDays,
+        dealHours,
+        dealMins,
+        dealSecs
+      );
+
+      const isDealActive = isDeal && (dealExpiresAt ? new Date(dealExpiresAt).getTime() > Date.now() : true);
+
       return {
         id: toValidUUID(fullProd.id),
         ...(catId ? { category_id: catId } : {}),
@@ -631,12 +670,12 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         discount_percentage: Number(fullProd.discountPercentage) || 0,
         is_featured: !!fullProd.isFeatured,
         is_new: !!fullProd.isNew,
-        is_deal: !!fullProd.isDealOfTheDay,
-        deal_days: fullProd.dealDays !== undefined && fullProd.dealDays !== null ? Number(fullProd.dealDays) : null,
-        deal_hours: fullProd.dealHours !== undefined && fullProd.dealHours !== null ? Number(fullProd.dealHours) : null,
-        deal_mins: fullProd.dealMins !== undefined && fullProd.dealMins !== null ? Number(fullProd.dealMins) : null,
-        deal_secs: fullProd.dealSecs !== undefined && fullProd.dealSecs !== null ? Number(fullProd.dealSecs) : null,
-        deal_expires_at: fullProd.dealExpiresAt ? new Date(fullProd.dealExpiresAt).toISOString() : null,
+        is_deal: isDealActive,
+        deal_days: isDeal ? dealDays : null,
+        deal_hours: isDeal ? dealHours : null,
+        deal_mins: isDeal ? dealMins : null,
+        deal_secs: isDeal ? dealSecs : null,
+        deal_expires_at: isDealActive ? dealExpiresAt : null,
         rating: Number(fullProd.rating) || 0,
         stock: Number(fullProd.stock) || 0,
         status: 'Active'
@@ -659,6 +698,9 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         user_id: userId || null, // null for guests — never hashed 'usr-guest'
         rating: Number(payload.rating) || 5,
         comment: payload.comment || '',
+        user_name: payload.userName || payload.user_name || 'Guest',
+        user_role: payload.userRole || payload.user_role || 'Customer',
+        user_company: payload.userCompany || payload.user_company || null,
         created_at: getTimestamp(payload.date || payload.created_at)
       };
     }
@@ -897,6 +939,24 @@ function isPrivateStoragePath(url: string): boolean {
   return !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:');
 }
 
+async function deleteStorageFile(path: string): Promise<boolean> {
+  if (!path || !isPrivateStoragePath(path)) return false;
+  try {
+    const headers = await getAuthHeaders();
+    if (headers.Authorization || headers['Authorization']) {
+      await fetchWithRetry('/api/storage', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'delete', path })
+      });
+      return true;
+    }
+  } catch (err) {
+    console.warn('Failed to delete storage file:', path, err);
+  }
+  return false;
+}
+
 async function uploadProductImage(userId: string, productId: string, imageBase64: string, index: number): Promise<string> {
   let ext = 'png';
   if (imageBase64.startsWith('data:')) {
@@ -910,7 +970,7 @@ async function uploadProductImage(userId: string, productId: string, imageBase64
     const headers = await getAuthHeaders();
     if (!headers.Authorization && !headers['Authorization']) {
       console.warn('Cannot upload image to storage: User is not authenticated.');
-      return imageBase64;
+      throw new Error('User is not authenticated for storage upload.');
     }
     const response = await fetchWithRetry('/api/storage', {
       method: 'POST',
@@ -931,10 +991,13 @@ async function uploadProductImage(userId: string, productId: string, imageBase64
         return data.path;
       }
     } else {
-      console.error('Failed to upload image to Supabase Storage:', await response.text());
+      const errText = await response.text().catch(() => 'Upload failed');
+      console.error('Failed to upload image to Supabase Storage:', errText);
+      throw new Error(`Storage upload failed: ${errText}`);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error uploading product image:', err);
+    throw err;
   }
   return imageBase64;
 }
@@ -1370,8 +1433,9 @@ export const useStore = create<StoreState>()(
           return {
             id: r.id,
             productId: r.product_id,
-            userName: profile?.full_name || 'Gentleman Customer',
-            userRole: profile?.role || 'Customer',
+            userName: profile?.full_name || r.user_name || 'Gentleman Customer',
+            userRole: profile?.role || r.user_role || 'Customer',
+            userCompany: r.user_company || undefined,
             rating: Number(r.rating) || 5,
             comment: r.comment || '',
             date: r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
@@ -1416,6 +1480,21 @@ export const useStore = create<StoreState>()(
             } catch {}
           }
 
+          const rawIsDeal = !!p.is_deal;
+          const rawExpiresAt = p.deal_expires_at;
+
+          const dealExpiresAt = calculateDealExpiresAt(
+            rawIsDeal,
+            rawExpiresAt,
+            dealDays,
+            dealHours,
+            dealMins,
+            dealSecs
+          );
+
+          const isFuture = dealExpiresAt ? new Date(dealExpiresAt).getTime() > Date.now() : true;
+          const isDealOfTheDay = rawIsDeal && isFuture;
+
           return {
             id: p.id,
             name: p.name || 'Luxury Product',
@@ -1429,13 +1508,13 @@ export const useStore = create<StoreState>()(
             rating: Number(p.rating) || 0,
             isNew: !!p.is_new,
             isFeatured: !!p.is_featured,
-            isDealOfTheDay: !!p.is_deal,
+            isDealOfTheDay,
             discountPercentage: Number(p.discount_percentage) || 0,
             dealDays,
             dealHours,
             dealMins,
             dealSecs,
-            dealExpiresAt: p.deal_expires_at !== undefined ? p.deal_expires_at : null,
+            dealExpiresAt: isDealOfTheDay ? dealExpiresAt : null,
             reviews: prodReviews
           };
         });
@@ -1793,6 +1872,20 @@ export const useStore = create<StoreState>()(
           }
 
           const catName = newRow.category || existing?.category || 'Suits';
+          const rawIsDeal = newRow.is_deal !== undefined ? !!newRow.is_deal : (existing?.isDealOfTheDay || false);
+          const rawExpiresAt = newRow.deal_expires_at !== undefined ? newRow.deal_expires_at : (existing?.dealExpiresAt || null);
+
+          const dealExpiresAt = calculateDealExpiresAt(
+            rawIsDeal,
+            rawExpiresAt,
+            dealDays,
+            dealHours,
+            dealMins,
+            dealSecs
+          );
+
+          const isFuture = dealExpiresAt ? new Date(dealExpiresAt).getTime() > Date.now() : true;
+          const isDealOfTheDay = rawIsDeal && isFuture;
 
           const updatedProduct: Product = {
             id: prodId,
@@ -1807,13 +1900,13 @@ export const useStore = create<StoreState>()(
             rating: newRow.rating !== undefined ? Number(newRow.rating) : (existing?.rating || 0),
             isNew: newRow.is_new !== undefined ? !!newRow.is_new : (existing?.isNew || false),
             isFeatured: newRow.is_featured !== undefined ? !!newRow.is_featured : (existing?.isFeatured || false),
-            isDealOfTheDay: newRow.is_deal !== undefined ? !!newRow.is_deal : (existing?.isDealOfTheDay || false),
+            isDealOfTheDay,
             discountPercentage: newRow.discount_percentage !== undefined ? Number(newRow.discount_percentage) : (existing?.discountPercentage || 0),
             dealDays,
             dealHours,
             dealMins,
             dealSecs,
-            dealExpiresAt: newRow.deal_expires_at !== undefined ? newRow.deal_expires_at : (existing?.dealExpiresAt || null),
+            dealExpiresAt: isDealOfTheDay ? dealExpiresAt : null,
             reviews: existing?.reviews || []
           };
 
@@ -3388,161 +3481,192 @@ export const useStore = create<StoreState>()(
       addProduct: async (productData, creatorName, creatorRole) => {
         const previousProducts = get().products;
         const productId = `prod-${Date.now()}`;
+        const validProdId = toValidUUID(productId);
         const userId = get().currentUser?.id || 'admin';
 
-        // Upload any base64 images to Supabase Storage
+        const newlyUploadedPaths: string[] = [];
         const finalImages: string[] = [];
-        if (productData.images) {
-          for (let i = 0; i < productData.images.length; i++) {
-            const img = productData.images[i];
-            if (img.startsWith('data:')) {
-              const uploadedPath = await uploadProductImage(userId, productId, img, i);
-              finalImages.push(uploadedPath);
-            } else {
-              finalImages.push(img);
+
+        try {
+          if (productData.images) {
+            for (let i = 0; i < productData.images.length; i++) {
+              const img = productData.images[i];
+              if (img.startsWith('data:')) {
+                const uploadedPath = await uploadProductImage(userId, productId, img, i);
+                if (uploadedPath && uploadedPath !== img && isPrivateStoragePath(uploadedPath)) {
+                  newlyUploadedPaths.push(uploadedPath);
+                }
+                finalImages.push(uploadedPath);
+              } else {
+                finalImages.push(img);
+              }
             }
           }
-        }
 
-        const newProduct: Product = {
-          ...productData,
-          images: finalImages,
-          id: productId,
-          rating: 5.0,
-          reviews: []
-        };
+          const newProduct: Product = {
+            ...productData,
+            images: finalImages,
+            id: productId,
+            rating: 5.0,
+            reviews: []
+          };
 
-        set(state => ({
-          products: [newProduct, ...state.products]
-        }));
+          set(state => ({
+            products: [newProduct, ...state.products]
+          }));
 
-        get().addAuditLog(
-          'Product Registered',
-          `Added premium asset '${newProduct.name}' into boutique collection. Price: $${newProduct.price}.`,
-          'admin-modifier',
-          creatorName,
-          creatorRole as User['role']
-        );
+          get().addAuditLog(
+            'Product Registered',
+            `Added premium asset '${newProduct.name}' into boutique collection. Price: $${newProduct.price}.`,
+            'admin-modifier',
+            creatorName,
+            creatorRole as User['role']
+          );
 
-        // Sync product payload (excluding client-side only array nested reviews)
-        const { reviews, ...prodPayload } = newProduct;
-        const dbRes = await safeSupabaseInsert('products', prodPayload);
-        if (dbRes && !dbRes.success) {
-          set({ products: previousProducts, adminError: `Failed to add product '${newProduct.name}': ${dbRes.error}` });
-          return { success: false, error: dbRes.error };
-        }
+          // Sync product payload (excluding client-side only array nested reviews)
+          const { reviews, ...prodPayload } = newProduct;
+          const dbRes = await safeSupabaseInsert('products', prodPayload);
+          if (!dbRes || !dbRes.success) {
+            set({ products: previousProducts, adminError: `Failed to add product '${newProduct.name}': ${dbRes?.error || 'Insert failed'}` });
+            for (const path of newlyUploadedPaths) {
+              await deleteStorageFile(path);
+            }
+            return { success: false, error: dbRes?.error || 'Failed to insert product record' };
+          }
 
-        // Sync images in product_images table
-        if (finalImages && finalImages.length > 0) {
-          const validProdId = toValidUUID(productId);
-          await safeSupabaseDelete('product_images', { product_id: validProdId });
+          // Sync images in product_images table
+          if (finalImages && finalImages.length > 0) {
+            await safeSupabaseDelete('product_images', { product_id: validProdId });
 
-          for (let i = 0; i < finalImages.length; i++) {
-            const imgRes = await safeSupabaseInsert('product_images', {
-              productId: validProdId,
-              imageUrl: finalImages[i],
-              displayOrder: i + 1
-            });
-            if (imgRes && !imgRes.success) {
-              console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${productId}:`, imgRes.error);
+            for (let i = 0; i < finalImages.length; i++) {
+              const imgRes = await safeSupabaseInsert('product_images', {
+                productId: validProdId,
+                imageUrl: finalImages[i],
+                displayOrder: i + 1
+              });
+              if (!imgRes || !imgRes.success) {
+                console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${productId}:`, imgRes?.error);
+                set({ products: previousProducts, adminError: `Failed to save product image record: ${imgRes?.error || 'Insert failed'}` });
+                for (const path of newlyUploadedPaths) {
+                  await deleteStorageFile(path);
+                }
+                await safeSupabaseDelete('products', { id: validProdId });
+                return { success: false, error: imgRes?.error || 'Failed to save product image record' };
+              }
             }
           }
-        }
 
-        // Re-sync from Supabase to resolve signed URLs
-        get().syncFromSupabase();
-        return { success: true };
+          // Re-sync from Supabase to resolve signed URLs
+          await get().syncFromSupabase();
+          return { success: true };
+        } catch (err: any) {
+          set({ products: previousProducts, adminError: `Failed to add product '${productData.name}': ${err?.message || err}` });
+          for (const path of newlyUploadedPaths) {
+            await deleteStorageFile(path);
+          }
+          return { success: false, error: err?.message || 'Failed to add product' };
+        }
       },
 
       updateProduct: async (id, updatedFields, updaterName, updaterRole) => {
         const previousProducts = get().products;
         const userId = get().currentUser?.id || 'admin';
+        const validProdId = toValidUUID(id);
 
-        // Upload any new base64 images to Supabase Storage
+        const newlyUploadedPaths: string[] = [];
         const finalImages: string[] = [];
-        if (updatedFields.images) {
-          for (let i = 0; i < updatedFields.images.length; i++) {
-            const img = updatedFields.images[i];
-            if (img.startsWith('data:')) {
-              const uploadedPath = await uploadProductImage(userId, id, img, i);
-              finalImages.push(uploadedPath);
-            } else {
-              finalImages.push(img);
-            }
-          }
-        }
 
-        const finalFields = updatedFields.images 
-          ? { ...updatedFields, images: finalImages }
-          : updatedFields;
-
-        // Check for deleted images to remove from Supabase Storage
-        const originalProduct = previousProducts.find(p => p.id === id || toValidUUID(p.id) === toValidUUID(id));
-        if (originalProduct && originalProduct.images && updatedFields.images) {
-          const removedImages = originalProduct.images.filter(
-            (img: string) => isPrivateStoragePath(img) && !finalImages.includes(img)
-          );
-          for (const imgToDelete of removedImages) {
-            try {
-              const headers = await getAuthHeaders();
-              if (headers.Authorization || headers['Authorization']) {
-                await fetchWithRetry('/api/storage', {
-                  method: 'POST',
-                  headers,
-                  body: JSON.stringify({ action: 'delete', path: imgToDelete })
-                });
+        try {
+          if (updatedFields.images) {
+            for (let i = 0; i < updatedFields.images.length; i++) {
+              const img = updatedFields.images[i];
+              if (img.startsWith('data:')) {
+                const uploadedPath = await uploadProductImage(userId, id, img, i);
+                if (uploadedPath && uploadedPath !== img && isPrivateStoragePath(uploadedPath)) {
+                  newlyUploadedPaths.push(uploadedPath);
+                }
+                finalImages.push(uploadedPath);
+              } else {
+                finalImages.push(img);
               }
-            } catch (err) {
-              console.warn('Failed to delete removed image from storage:', imgToDelete, err);
             }
           }
-        }
 
-        const fullUpdatedProduct = originalProduct 
-          ? { ...originalProduct, ...finalFields }
-          : { id, ...finalFields };
+          const finalFields = updatedFields.images 
+            ? { ...updatedFields, images: finalImages }
+            : updatedFields;
 
-        set(state => ({
-          products: state.products.map(p => (p.id === id || toValidUUID(p.id) === toValidUUID(id)) ? (fullUpdatedProduct as Product) : p)
-        }));
+          const originalProduct = previousProducts.find(p => p.id === id || toValidUUID(p.id) === validProdId);
 
-        get().addAuditLog(
-          'Product Updated',
-          `Modified fields on asset ID '${id}'.`,
-          'admin-modifier',
-          updaterName,
-          updaterRole as User['role']
-        );
+          const fullUpdatedProduct = originalProduct 
+            ? { ...originalProduct, ...finalFields }
+            : { id, ...finalFields };
 
-        // Sync updated fields with Supabase
-        const dbRes = await safeSupabaseUpsert('products', fullUpdatedProduct);
-        if (dbRes && !dbRes.success) {
-          set({ products: previousProducts, adminError: `Failed to update product '${fullUpdatedProduct.name || id}': ${dbRes.error}` });
-          return { success: false, error: dbRes.error };
-        }
+          set(state => ({
+            products: state.products.map(p => (p.id === id || toValidUUID(p.id) === validProdId) ? (fullUpdatedProduct as Product) : p)
+          }));
 
-        // Update product_images table
-        if (updatedFields.images) {
-          const validProdId = toValidUUID(id);
-          // Delete old image references in DB
-          await safeSupabaseDelete('product_images', { product_id: validProdId });
+          get().addAuditLog(
+            'Product Updated',
+            `Modified fields on asset ID '${id}'.`,
+            'admin-modifier',
+            updaterName,
+            updaterRole as User['role']
+          );
 
-          // Insert new image references
-          for (let i = 0; i < finalImages.length; i++) {
-            const imgRes = await safeSupabaseInsert('product_images', {
-              productId: validProdId,
-              imageUrl: finalImages[i],
-              displayOrder: i + 1
-            });
-            if (imgRes && !imgRes.success) {
-              console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${id}:`, imgRes.error);
+          // Sync updated fields with Supabase
+          const dbRes = await safeSupabaseUpsert('products', fullUpdatedProduct);
+          if (!dbRes || !dbRes.success) {
+            set({ products: previousProducts, adminError: `Failed to update product '${fullUpdatedProduct.name || id}': ${dbRes?.error}` });
+            for (const path of newlyUploadedPaths) {
+              await deleteStorageFile(path);
+            }
+            return { success: false, error: dbRes?.error || 'Failed to update product record' };
+          }
+
+          // Update product_images table
+          if (updatedFields.images) {
+            // Delete old image references in DB
+            await safeSupabaseDelete('product_images', { product_id: validProdId });
+
+            // Insert new image references
+            for (let i = 0; i < finalImages.length; i++) {
+              const imgRes = await safeSupabaseInsert('product_images', {
+                productId: validProdId,
+                imageUrl: finalImages[i],
+                displayOrder: i + 1
+              });
+              if (!imgRes || !imgRes.success) {
+                console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${id}:`, imgRes?.error);
+                set({ products: previousProducts, adminError: `Failed to save updated image records: ${imgRes?.error}` });
+                for (const path of newlyUploadedPaths) {
+                  await deleteStorageFile(path);
+                }
+                return { success: false, error: imgRes?.error || 'Failed to save updated image records' };
+              }
+            }
+
+            // Check for deleted images to remove from Supabase Storage
+            if (originalProduct && originalProduct.images) {
+              const removedImages = originalProduct.images.filter(
+                (img: string) => isPrivateStoragePath(img) && !finalImages.includes(img)
+              );
+              for (const imgToDelete of removedImages) {
+                await deleteStorageFile(imgToDelete);
+              }
             }
           }
-        }
 
-        // Re-sync from Supabase to resolve signed URLs
-        get().syncFromSupabase();
-        return { success: true };
+          // Re-sync from Supabase to resolve signed URLs
+          await get().syncFromSupabase();
+          return { success: true };
+        } catch (err: any) {
+          set({ products: previousProducts, adminError: `Failed to update product '${id}': ${err?.message || err}` });
+          for (const path of newlyUploadedPaths) {
+            await deleteStorageFile(path);
+          }
+          return { success: false, error: err?.message || 'Failed to update product' };
+        }
       },
 
       deleteProduct: async (id, deleterName, deleterRole) => {
@@ -3747,9 +3871,9 @@ export const useStore = create<StoreState>()(
         // Sync review in Supabase
         const dbRes = await safeSupabaseInsert('reviews', { ...newReview, productId, userId: validUserId });
 
-        if (dbRes && !dbRes.success) {
+        if (!dbRes || !dbRes.success) {
           set({ products: previousProducts });
-          return { success: false, error: dbRes.error || 'Failed to submit review' };
+          return { success: false, error: dbRes?.error || 'Failed to submit review' };
         }
 
         get().addAuditLog(
@@ -3900,13 +4024,17 @@ export const useStore = create<StoreState>()(
 
       subscribeNewsletter: async (email) => {
         const normalizedEmail = (email || '').trim().toLowerCase();
+        if (!normalizedEmail || !normalizedEmail.includes('@')) {
+          return { success: false, message: 'Please provide a valid email address.' };
+        }
+
         const subs = get().subscribers;
-        const exists = subs.find(s => s.email.trim().toLowerCase() === normalizedEmail);
+        const exists = subs.find(s => (s.email || '').trim().toLowerCase() === normalizedEmail);
         
         if (exists) {
           // Always ensure the existing local subscriber is synced to Supabase
           safeSupabaseInsert('newsletter_subscribers', exists);
-          return { success: false, message: 'You are already a valued member of the Gentlemen\'s Circle.' };
+          return { success: false, message: 'This email is already subscribed.' };
         }
 
         const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${Math.floor(Math.random() * 1000000000000).toString().padStart(12, '0')}`;
@@ -3925,9 +4053,17 @@ export const useStore = create<StoreState>()(
         const dbRes = await safeSupabaseInsert('newsletter_subscribers', newSub);
         if (dbRes && !dbRes.success) {
           set({ subscribers: previousSubscribers });
+          const errStr = dbRes.error || '';
+          const isDuplicate = errStr.includes('23505') ||
+            errStr.toLowerCase().includes('duplicate') ||
+            errStr.toLowerCase().includes('already') ||
+            errStr.toLowerCase().includes('unique');
+
           return {
             success: false,
-            message: dbRes.error || "Unable to join the Gentlemen's Circle right now. Please try again."
+            message: isDuplicate
+              ? 'This email is already subscribed.'
+              : (dbRes.error || "Unable to join the Gentlemen's Circle right now. Please try again.")
           };
         }
 
