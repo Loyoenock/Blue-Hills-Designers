@@ -6,6 +6,10 @@ export type { UserRole, DbUserRole };
 /**
  * Helper to check if an email is listed in the ADMIN_BOOTSTRAP_EMAILS environment variable.
  * MUST only be executed in server-side contexts (API routes, middleware).
+ *
+ * NOTE: Partial or prefix matching (e.g. startsWith('admin@'), includes('loyo')) was a prior
+ * security vulnerability that allowed account takeover/bypass. Exact email matching must strictly
+ * be enforced and partial/prefix matching must NEVER be reintroduced.
  */
 export function isBootstrapAdminEmail(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
@@ -22,20 +26,9 @@ export function isBootstrapAdminEmail(email: string): boolean {
     'moses@bluehills.com',
     'owner@yourdomain.com',
     'loyohenoch@gmail.com',
-    'loyoenock@gmail.com',
-    'loyohenock@gmail.com'
+    'loyoenock@gmail.com'
   ];
 
   const target = email.trim().toLowerCase();
-  return (
-    list.includes(target) ||
-    defaultAdminEmails.includes(target) ||
-    target.startsWith('admin@') ||
-    target.startsWith('superadmin@') ||
-    target.startsWith('manager@') ||
-    target.startsWith('staff@') ||
-    target.includes('loyo') ||
-    target.includes('henoch') ||
-    target.includes('henock')
-  );
+  return list.includes(target) || defaultAdminEmails.includes(target);
 }

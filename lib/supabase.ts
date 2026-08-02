@@ -127,14 +127,13 @@ export function getSupabaseAdmin(): SupabaseClient | null {
  * forwarding the request's access token inside the Authorization header.
  * This guarantees operations are run in PostgreSQL under the user's role and sub policies.
  */
-export function getSupabaseForRequest(accessToken: string | null): SupabaseClient {
+export function getSupabaseForRequest(accessToken: string | null): SupabaseClient | null {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Supabase configuration is incomplete. Please ensure both SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured.'
-    );
+    logger.warn('Supabase configuration is incomplete. Skipping request-scoped client initialization.');
+    return null;
   }
 
   const options: any = {
