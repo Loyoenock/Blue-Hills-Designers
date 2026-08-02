@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     if (paymentRecord) {
       // Update payment status
-      await supabase
+      const { error: payUpdErr } = await supabase
         .from('payments')
         .update({
           status: paymentStatus,
@@ -61,15 +61,31 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', paymentRecord.id);
 
+      if (payUpdErr) {
+        logger.error('Failed to update payment record from webhook:', payUpdErr);
+      }
+
       // Update matching order status
+      let orderUpdErr: any = null;
       if (paymentRecord.order_id) {
-        await supabase
+        const { error: err } = await supabase
           .from('orders')
           .update({
             status: orderStatus,
             updated_at: new Date().toISOString()
           })
           .eq('id', paymentRecord.order_id);
+        orderUpdErr = err;
+        if (orderUpdErr) {
+          logger.error('Failed to update order record from webhook:', orderUpdErr);
+        }
+      }
+
+      if (payUpdErr || orderUpdErr) {
+        return NextResponse.json(
+          { error: 'Failed to update payment or order status in database' },
+          { status: 502 }
+        );
       }
 
       // Log webhook action to audit log
@@ -93,13 +109,21 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (orderRecord) {
-        await supabase
+        const { error: orderUpdErr } = await supabase
           .from('orders')
           .update({
             status: orderStatus,
             updated_at: new Date().toISOString()
           })
           .eq('id', orderRecord.id);
+
+        if (orderUpdErr) {
+          logger.error('Failed to update order record from webhook fallback:', orderUpdErr);
+          return NextResponse.json(
+            { error: 'Failed to update order status in database' },
+            { status: 502 }
+          );
+        }
 
         return NextResponse.json({ status: 'success', message: 'Order status updated via tx_ref match' }, { status: 200 });
       }

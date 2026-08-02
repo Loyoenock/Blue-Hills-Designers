@@ -84,7 +84,6 @@ export async function POST(req: NextRequest) {
     const profilePayload = {
       id: newAuthUser.id,
       full_name: cleanName,
-      name: cleanName,
       email: emailTrimmed,
       phone: cleanPhone,
       role: rolePair.db,

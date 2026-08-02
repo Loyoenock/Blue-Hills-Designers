@@ -676,6 +676,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
       };
     }
 
+    // Note: 'orders' and 'payments' DB tables now include 'updated_at' columns for server/webhook updates.
     case 'orders': {
       const existingOrder = state.orders?.find((o: any) => o.id === payload.id || toValidUUID(o.id) === toValidUUID(payload.id));
       const fullOrder = existingOrder ? { ...existingOrder, ...payload } : payload;
