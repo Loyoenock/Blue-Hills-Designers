@@ -72,6 +72,10 @@ function getUpstashRatelimit(limit: number, windowMs: number): Ratelimit | null 
   return ratelimitCache.get(cacheKey)!;
 }
 
+export interface RateLimitOptions {
+  failClosed?: boolean;
+}
+
 /**
  * Distributed atomic rate limiting with fallback.
  * Uses Upstash Redis sliding window when configured, or local in-memory Map for single-instance development.
@@ -79,13 +83,24 @@ function getUpstashRatelimit(limit: number, windowMs: number): Ratelimit | null 
  * @param ip Client IP address or key identifier (e.g. `${ip}:${path}`)
  * @param limit Max requests allowed in the window
  * @param windowMs Time window in milliseconds (default 1 minute)
+ * @param options Additional options, e.g. { failClosed: true }
  */
 export async function checkRateLimit(
   ip: string,
   limit = 60,
-  windowMs = 60000
+  windowMs = 60000,
+  options?: RateLimitOptions | boolean
 ): Promise<RateLimitResult> {
   const ratelimit = getUpstashRatelimit(limit, windowMs);
+
+  const normalizedIp = ip.toLowerCase();
+  const isExplicitFailClosed = typeof options === 'boolean' ? options : options?.failClosed === true;
+  const isFailClosed =
+    isExplicitFailClosed ||
+    normalizedIp.includes('/api/auth') ||
+    normalizedIp.includes('/api/gemini') ||
+    normalizedIp.includes('auth') ||
+    normalizedIp.includes('gemini');
 
   if (ratelimit) {
     try {
@@ -99,16 +114,31 @@ export async function checkRateLimit(
         reset: resetSeconds,
       };
     } catch (err) {
-      logger.error('[RateLimiter] Distributed Redis request failed during rate limit check, falling back to in-memory rate limiting:', err);
+      if (isFailClosed) {
+        logger.error(
+          '[RateLimiter] Distributed Redis request failed during rate limit check on security-sensitive route, failing closed:',
+          err
+        );
+        return {
+          success: false,
+          limit,
+          remaining: 0,
+          reset: Math.max(1, Math.ceil(windowMs / 1000)),
+        };
+      }
+
+      logger.error(
+        '[RateLimiter] Distributed Redis request failed during rate limit check, falling back to in-memory rate limiting:',
+        err
+      );
 
       /*
        * REDIS OUTAGE FALLBACK POLICY:
        * -----------------------------------------------------------------------------------
-       * When Upstash Redis experiences network errors or outages, rate limiting falls back
-       * to process-local in-memory sliding window tracking.
-       * This allows legitimate authentication (/api/auth/login) and API requests to proceed without
-       * causing full outage errors for real users, while still enforcing local rate limit thresholds
-       * against brute-force attempts.
+       * When Upstash Redis experiences network errors or outages, non-sensitive rate limiting
+       * (e.g. products, checkout) falls back to process-local in-memory sliding window tracking.
+       * Security-sensitive routes (/api/auth/*, /api/gemini) fail closed to protect authentication
+       * and AI endpoints against abuse during Redis outages.
        * -----------------------------------------------------------------------------------
        */
     }

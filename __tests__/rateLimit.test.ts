@@ -81,20 +81,30 @@ describe('checkRateLimit', () => {
       expect(res.remaining).toBe(9);
     });
 
-    it('falls back to in-memory rate limiting for auth route when Redis throws network error', async () => {
+    it('fails closed (returns success: false) for auth route when Redis throws network error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Redis Connection Failure'));
 
       const res = await checkRateLimit('test-ip-redis-auth-fallback:/api/auth/login', 10, 60000);
-      expect(res.success).toBe(true);
+      expect(res.success).toBe(false);
+      expect(res.remaining).toBe(0);
       expect(res.limit).toBe(10);
     });
 
-    it('falls back to in-memory rate limiting for gemini route when Redis throws network error', async () => {
+    it('fails closed (returns success: false) for gemini route when Redis throws network error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Redis Timeout'));
 
       const res = await checkRateLimit('test-ip-redis-gemini-fallback:/api/gemini', 10, 60000);
-      expect(res.success).toBe(true);
+      expect(res.success).toBe(false);
+      expect(res.remaining).toBe(0);
       expect(res.limit).toBe(10);
+    });
+
+    it('fails closed when explicit failClosed option is true on Redis error', async () => {
+      mockLimit.mockRejectedValueOnce(new Error('Redis Connection Failure'));
+
+      const res = await checkRateLimit('test-ip-custom-route:/api/custom', 10, 60000, { failClosed: true });
+      expect(res.success).toBe(false);
+      expect(res.remaining).toBe(0);
     });
 
     it('falls back to in-memory rate limiting for checkout route when Redis throws error', async () => {
@@ -105,12 +115,14 @@ describe('checkRateLimit', () => {
       expect(res.limit).toBe(10);
     });
 
-    it('falls back to in-memory rate limiting for db route when Redis throws error', async () => {
+    it('falls back to in-memory rate limiting for products and health routes when Redis throws error', async () => {
       mockLimit.mockRejectedValueOnce(new Error('Network error'));
+      const resProducts = await checkRateLimit('test-ip-redis-products-fallback:/api/products', 10, 60000);
+      expect(resProducts.success).toBe(true);
 
-      const res = await checkRateLimit('test-ip-redis-db-fallback:/api/db', 10, 60000);
-      expect(res.success).toBe(true);
-      expect(res.limit).toBe(10);
+      mockLimit.mockRejectedValueOnce(new Error('Network error'));
+      const resHealth = await checkRateLimit('test-ip-redis-health-fallback:/api/health', 10, 60000);
+      expect(resHealth.success).toBe(true);
     });
   });
 });
