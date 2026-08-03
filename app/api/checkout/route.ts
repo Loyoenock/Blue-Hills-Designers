@@ -399,6 +399,20 @@ export async function POST(req: NextRequest) {
         throw new Error(`Failed to process checkout transaction: ${orderTxErr.message}`);
       }
 
+      // Increment times_used on successful checkout if a coupon was applied
+      if (validatedCoupon && validatedCoupon.code) {
+        try {
+          const couponCode = validatedCoupon.code.trim().toUpperCase();
+          const currentTimesUsed = Number(validatedCoupon.times_used) || 0;
+          await supabase
+            .from('coupons')
+            .update({ times_used: currentTimesUsed + 1 })
+            .eq('code', couponCode);
+        } catch (couponIncErr) {
+          logger.warn('Failed to increment coupon times_used after checkout', { couponIncErr, couponCode: validatedCoupon.code });
+        }
+      }
+
     } catch (dbErr: any) {
       logger.error('Checkout transactional DB failure', dbErr);
 

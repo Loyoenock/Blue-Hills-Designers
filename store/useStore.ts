@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError } from '../lib/utils';
+import { VALID_COUPONS } from '../lib/coupons';
 
 interface StoreState {
   products: Product[];
@@ -1232,7 +1233,7 @@ export const useStore = create<StoreState>()(
       currentUser: null,
       cart: [],
       appliedCoupon: null,
-      coupons: [],
+      coupons: VALID_COUPONS,
       categories: [],
       testimonials: [],
       selectedShippingMethod: 'standard',
@@ -1345,6 +1346,24 @@ export const useStore = create<StoreState>()(
           if (!dbTesti || dbTesti.length === 0) {
             for (const t of INITIAL_TESTIMONIALS) {
               await safeSupabaseUpsert('testimonials', t);
+            }
+          }
+
+          // Check coupons
+          const { data: dbCoupons } = await supabase.from('coupons').select('id').limit(1);
+          if (!dbCoupons || dbCoupons.length === 0) {
+            for (const c of VALID_COUPONS) {
+              await safeSupabaseUpsert('coupons', {
+                id: c.id,
+                code: c.code,
+                discount_type: c.discountType,
+                discount_value: c.discountValue,
+                is_active: c.isActive ?? true,
+                min_subtotal: c.minSubtotal || null,
+                expires_at: c.expiresAt || null,
+                usage_limit: c.usageLimit || null,
+                times_used: c.timesUsed || 0
+              });
             }
           }
         } catch (e) {
@@ -2856,9 +2875,10 @@ export const useStore = create<StoreState>()(
         const sanitizedCode = code.trim().toUpperCase();
         let couponsList = get().coupons || [];
 
-        let coupon = couponsList.find(c => c.code.trim().toUpperCase() === sanitizedCode);
+        let coupon = couponsList.find(c => c.code && c.code.trim().toUpperCase() === sanitizedCode);
 
         if (!coupon) {
+          get().fetchLatestState().catch(() => {});
           return { success: false, message: 'Invalid luxury coupon code.' };
         }
 
