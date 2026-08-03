@@ -94,7 +94,7 @@ interface StoreState {
   updateProductStockQuick: (productId: string, newStock: number, modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // User management actions (Admin)
-  adminAddUser: (userData: Omit<User, 'id'>, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
+  adminAddUser: (userData: Omit<User, 'id'> & { password?: string }, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
   adminUpdateUser: (id: string, updatedFields: Partial<User>, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
   adminDeleteUser: (id: string, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
 

@@ -212,6 +212,7 @@ export default function Admin() {
   const [uRole, setURole] = useState<User['role']>('Customer');
   const [uSpending, setUSpending] = useState(0);
   const [uRewardsPoints, setURewardsPoints] = useState(0);
+  const [uPassword, setUPassword] = useState('');
   const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
@@ -969,6 +970,7 @@ export default function Admin() {
       setURole(user.role);
       setUSpending(user.spending);
       setURewardsPoints(user.rewardsPoints);
+      setUPassword('');
     } else {
       setEditingUser(null);
       setUName('');
@@ -977,6 +979,7 @@ export default function Admin() {
       setURole('Customer');
       setUSpending(0);
       setURewardsPoints(0);
+      setUPassword('');
     }
     setIsUserModalOpen(true);
   };
@@ -1003,7 +1006,8 @@ export default function Admin() {
         phone: uPhone,
         role: uRole,
         spending: Number(uSpending),
-        rewardsPoints: Number(uRewardsPoints)
+        rewardsPoints: Number(uRewardsPoints),
+        password: uPassword || undefined
       }, adminName, adminRole);
     }
 
@@ -2026,6 +2030,22 @@ export default function Admin() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:border-[#20D9A1] outline-none transition-all font-mono"
                   />
                 </div>
+
+                {!editingUser && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                      Temporary Password <span className="normal-case text-white/25">(optional — auto-generated if left blank)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={uPassword}
+                      onChange={(e) => setUPassword(e.target.value)}
+                      placeholder="Leave blank to auto-generate a secure temporary password"
+                      minLength={6}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:border-[#20D9A1] outline-none transition-all font-mono"
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
