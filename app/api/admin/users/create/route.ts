@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
         role: rolePair.display,
         spending: 0,
         rewardsPoints: 0,
-        source: 'db'
+        source: 'db',
+        temporaryPassword: userPassword
       }
     });
 

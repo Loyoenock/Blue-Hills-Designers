@@ -94,9 +94,10 @@ interface StoreState {
   updateProductStockQuick: (productId: string, newStock: number, modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
 
   // User management actions (Admin)
-  adminAddUser: (userData: Omit<User, 'id'> & { password?: string }, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
+  adminAddUser: (userData: Omit<User, 'id'> & { password?: string }, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string; temporaryPassword?: string }>;
   adminUpdateUser: (id: string, updatedFields: Partial<User>, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
   adminDeleteUser: (id: string, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string }>;
+  adminResetUserPassword: (userId: string, password: string | undefined, adminName: string, adminRole: string) => Promise<{ success: boolean; error?: string; temporaryPassword?: string }>;
 
   // Consultation Actions
   bookConsultation: (bookingData: Omit<ConsultationBooking, 'id' | 'status'>) => Promise<{ success: boolean; error?: string }>;
@@ -3803,7 +3804,7 @@ export const useStore = create<StoreState>()(
             adminRole as User['role']
           );
 
-          return { success: true };
+          return { success: true, temporaryPassword: res.user?.temporaryPassword };
         } catch (err: any) {
           const errorMsg = err?.message || 'Failed to create user profile.';
           set({ adminError: `Failed to add user '${userData.name}': ${errorMsg}` });
@@ -3877,6 +3878,48 @@ export const useStore = create<StoreState>()(
           return { success: false, error: dbRes.error };
         }
         return { success: true };
+      },
+
+      adminResetUserPassword: async (userId, password, adminName, adminRole) => {
+        if (!isUUID(userId)) {
+          return {
+            success: false,
+            error: 'This record only exists locally and has no corresponding database entry.'
+          };
+        }
+        try {
+          const headers = await getAuthHeaders();
+          const response = await fetchWithRetry('/api/admin/users/reset-password', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              userId,
+              password
+            })
+          });
+
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || !res.success) {
+            const errorMsg = res.error || 'Failed to reset user password.';
+            set({ adminError: `Failed to reset password: ${errorMsg}` });
+            return { success: false, error: errorMsg };
+          }
+
+          const targetUser = get().users.find(u => u.id === userId);
+          get().addAuditLog(
+            'Password Reset',
+            `Admin reset password for user '${targetUser?.name || userId}'.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+
+          return { success: true, temporaryPassword: res.temporaryPassword };
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Failed to reset user password.';
+          set({ adminError: `Failed to reset password: ${errorMsg}` });
+          return { success: false, error: errorMsg };
+        }
       },
 
       addReview: async (productId, rating, comment, userName, userRole = 'Executive Client') => {

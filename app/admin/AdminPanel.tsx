@@ -9,7 +9,7 @@ import {
   Download, Edit, Eye, Filter, Grid, HelpCircle, Layers, LogOut, 
   Plus, Printer, RefreshCw, Search, ShieldAlert, ShoppingBag, 
   Trash2, TrendingUp, Users, X, FileText, CheckCircle, Upload, Settings,
-  Star, MessageSquare, ChevronDown, ChevronUp, Tag, UserCircle
+  Star, MessageSquare, ChevronDown, ChevronUp, Tag, UserCircle, KeyRound
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getSafeImageSrc } from '../../lib/utils';
@@ -39,7 +39,7 @@ export default function Admin() {
     currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons, categories, testimonials,
     adminError, clearAdminError,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
-    adminAddUser, adminUpdateUser, adminDeleteUser, updateSettings,
+    adminAddUser, adminUpdateUser, adminDeleteUser, adminResetUserPassword, updateSettings,
     deleteReview, updateProductStockQuick, updateBookingStatus,
     addCoupon, updateCoupon, deleteCoupon,
     addCategory, updateCategory, deleteCategory,
@@ -215,6 +215,16 @@ export default function Admin() {
   const [uPassword, setUPassword] = useState('');
   const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // Reset Password & Temp Credential Reveal State
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+  const [userToReset, setUserToReset] = useState<User | null>(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+
+  const [tempPasswordModalOpen, setTempPasswordModalOpen] = useState(false);
+  const [tempPasswordToShow, setTempPasswordToShow] = useState<string | null>(null);
+  const [tempPasswordUserEmail, setTempPasswordUserEmail] = useState<string | null>(null);
 
   // Coupon Management State
   const [couponSearch, setCouponSearch] = useState('');
@@ -989,7 +999,7 @@ export default function Admin() {
     const adminName = currentUser?.name || 'Master Admin';
     const adminRole = currentUser?.role || 'Super Admin';
 
-    let res: { success: boolean; error?: string };
+    let res: { success: boolean; error?: string; temporaryPassword?: string };
     if (editingUser) {
       res = await adminUpdateUser(editingUser.id, {
         name: uName,
@@ -999,6 +1009,11 @@ export default function Admin() {
         spending: Number(uSpending),
         rewardsPoints: Number(uRewardsPoints)
       }, adminName, adminRole);
+      if (!res.success && res.error) {
+        alert(res.error);
+      } else {
+        setIsUserModalOpen(false);
+      }
     } else {
       res = await adminAddUser({
         name: uName,
@@ -1009,12 +1024,51 @@ export default function Admin() {
         rewardsPoints: Number(uRewardsPoints),
         password: uPassword || undefined
       }, adminName, adminRole);
-    }
 
-    if (!res.success && res.error) {
-      alert(res.error);
+      if (!res.success && res.error) {
+        alert(res.error);
+      } else {
+        setIsUserModalOpen(false);
+        if (res.temporaryPassword) {
+          setTempPasswordToShow(res.temporaryPassword);
+          setTempPasswordUserEmail(uEmail);
+          setTempPasswordModalOpen(true);
+        }
+      }
+    }
+  };
+
+  const handleOpenResetPasswordModal = (user: User) => {
+    setUserToReset(user);
+    setResetPasswordInput('');
+    setResetPasswordError(null);
+    setIsResetPasswordModalOpen(true);
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToReset) return;
+    const adminName = currentUser?.name || 'Master Admin';
+    const adminRole = currentUser?.role || 'Super Admin';
+
+    setResetPasswordError(null);
+    const res = await adminResetUserPassword(
+      userToReset.id,
+      resetPasswordInput || undefined,
+      adminName,
+      adminRole
+    );
+
+    if (!res.success) {
+      setResetPasswordError(res.error || 'Failed to reset user password.');
     } else {
-      setIsUserModalOpen(false);
+      setIsResetPasswordModalOpen(false);
+      if (res.temporaryPassword) {
+        setTempPasswordToShow(res.temporaryPassword);
+        setTempPasswordUserEmail(userToReset.email);
+        setTempPasswordModalOpen(true);
+      }
+      setUserToReset(null);
     }
   };
 
@@ -1279,6 +1333,7 @@ export default function Admin() {
                 filteredUsers={filteredUsers}
                 currentUser={currentUser}
                 handleOpenDeleteUserModal={handleOpenDeleteUserModal}
+                handleOpenResetPasswordModal={handleOpenResetPasswordModal}
               />
             )}
 
@@ -2688,6 +2743,130 @@ export default function Admin() {
                   id="confirm-delete-testimonial-btn"
                 >
                   Confirm Delete
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* RESET USER PASSWORD MODAL */}
+      <AnimatePresence>
+        {isResetPasswordModalOpen && userToReset && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsResetPasswordModalOpen(false)}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-md h-fit bg-[#111111] border border-amber-500/30 rounded-2xl z-50 p-6 space-y-5 shadow-2xl"
+              id="reset-password-modal"
+            >
+              <div className="space-y-2 text-center">
+                <KeyRound className="w-10 h-10 text-amber-400 mx-auto" />
+                <h4 className="font-serif text-lg text-white font-bold tracking-tight">Reset User Password</h4>
+                <p className="text-xs text-white/60">
+                  Reset authentication credentials for <span className="text-white font-mono font-semibold">&ldquo;{userToReset.name}&rdquo;</span> ({userToReset.email}).
+                </p>
+              </div>
+
+              {resetPasswordError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-xl font-mono">
+                  {resetPasswordError}
+                </div>
+              )}
+
+              <form onSubmit={handleConfirmResetPassword} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">
+                    New Password <span className="normal-case text-white/25">(optional — auto-generated if left blank)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={resetPasswordInput}
+                    onChange={(e) => setResetPasswordInput(e.target.value)}
+                    placeholder="Leave blank to auto-generate a secure temporary password"
+                    minLength={6}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:border-amber-400 outline-none transition-all font-mono"
+                  />
+                </div>
+
+                <div className="flex gap-3 font-mono pt-2">
+                  <button 
+                    type="button"
+                    onClick={() => setIsResetPasswordModalOpen(false)}
+                    className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all cursor-pointer"
+                  >
+                    Confirm Reset
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* TEMPORARY PASSWORD REVEAL MODAL */}
+      <AnimatePresence>
+        {tempPasswordModalOpen && tempPasswordToShow && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setTempPasswordModalOpen(false);
+                setTempPasswordToShow(null);
+                setTempPasswordUserEmail(null);
+              }}
+              className="fixed inset-0 bg-black z-50 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="fixed inset-0 m-auto w-full max-w-md h-fit bg-[#111111] border border-[#20D9A1]/30 rounded-2xl z-50 p-6 space-y-5 shadow-2xl"
+              id="temp-password-modal"
+            >
+              <div className="space-y-2 text-center">
+                <KeyRound className="w-10 h-10 text-[#20D9A1] mx-auto" />
+                <h4 className="font-serif text-lg text-white font-bold tracking-tight">Temporary Credentials Issued</h4>
+                <p className="text-xs text-white/60">
+                  {tempPasswordUserEmail ? `Credentials generated for ${tempPasswordUserEmail}:` : 'The temporary password below has been assigned:'}
+                </p>
+              </div>
+
+              <div className="bg-black/60 border border-[#20D9A1]/30 rounded-xl p-4 text-center font-mono space-y-2">
+                <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">Temporary Password</span>
+                <p className="text-lg text-[#20D9A1] font-bold tracking-wider select-all break-all">{tempPasswordToShow}</p>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-[11px] text-amber-200/80 leading-relaxed font-mono">
+                ⚠ Share this password with the user directly and ask them to change it after logging in. It will not be shown again.
+              </div>
+
+              <div className="flex justify-end font-mono pt-2">
+                <button 
+                  onClick={() => {
+                    setTempPasswordModalOpen(false);
+                    setTempPasswordToShow(null);
+                    setTempPasswordUserEmail(null);
+                  }}
+                  className="w-full bg-[#20D9A1] hover:bg-[#1bb887] text-black font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all cursor-pointer"
+                >
+                  Acknowledge & Close
                 </button>
               </div>
             </motion.div>

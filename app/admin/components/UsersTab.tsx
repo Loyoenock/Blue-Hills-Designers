@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Plus, Search, Filter, Users, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, Users, Edit, Trash2, KeyRound } from 'lucide-react';
 import { User } from '../../../types';
 import { isUUID } from '../../../lib/utils';
 
@@ -15,6 +15,7 @@ interface UsersTabProps {
   filteredUsers: User[];
   currentUser: User | null;
   handleOpenDeleteUserModal: (user: User) => void;
+  handleOpenResetPasswordModal?: (user: User) => void;
 }
 
 export default function UsersTab({
@@ -27,6 +28,7 @@ export default function UsersTab({
   filteredUsers,
   currentUser,
   handleOpenDeleteUserModal,
+  handleOpenResetPasswordModal,
 }: UsersTabProps) {
   return (
     <motion.div 
@@ -150,6 +152,14 @@ export default function UsersTab({
                   >
                     <Edit className="w-3.5 h-3.5" /> Edit
                   </button>
+                  {currentUser?.id !== u.id && handleOpenResetPasswordModal && (
+                    <button
+                      onClick={() => handleOpenResetPasswordModal(u)}
+                      className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 font-semibold text-xs uppercase font-mono px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" /> Reset Password
+                    </button>
+                  )}
                   {/* Prevent deleting oneself */}
                   {currentUser?.id !== u.id && (
                     <button
