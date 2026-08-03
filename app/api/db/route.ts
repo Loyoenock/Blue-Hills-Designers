@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseForRequest, getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { isNetworkOrConnectionError } from '@/lib/utils';
+import { getRoleRank } from '@/lib/roleRank';
 
 // Whitelist of allowed table names to prevent arbitrary table creation or modification
 const ALLOWED_TABLES = [
@@ -35,6 +36,46 @@ function checkRlsAndThrow(message: string): never {
     throw new ApiError(`Security Rejection: ${message}`, 403);
   }
   throw new ApiError(message, 400);
+}
+
+async function verifyProfileWriteAuthorization(callerRole: string | undefined, payload: any) {
+  const callerRank = getRoleRank(callerRole);
+  if (callerRank < 3) {
+    throw new ApiError('Forbidden: Only Admin or Super Admin accounts are authorized to modify user profiles.', 403);
+  }
+
+  const items = Array.isArray(payload) ? payload : [payload];
+  const adminClient = getSupabaseAdmin();
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+
+    // Check target role being assigned in payload
+    const incomingRole = item.role || item.role_display;
+    if (incomingRole && typeof incomingRole === 'string') {
+      const targetRank = getRoleRank(incomingRole);
+      if (targetRank > callerRank) {
+        throw new ApiError(`Forbidden: Your role level (${callerRole}) cannot assign a higher authority role (${incomingRole}).`, 403);
+      }
+    }
+
+    // Check target profile's current role in database
+    const targetId = item.id;
+    if (targetId && adminClient) {
+      const { data: existingProfile } = await adminClient
+        .from('profiles')
+        .select('role')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      if (existingProfile && existingProfile.role) {
+        const existingRank = getRoleRank(existingProfile.role);
+        if (existingRank > callerRank) {
+          throw new ApiError(`Forbidden: Your role level (${callerRole}) cannot modify a user with higher authority (${existingProfile.role}).`, 403);
+        }
+      }
+    }
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -85,6 +126,9 @@ export async function POST(req: NextRequest) {
 
     // Perform database operations securely
     if (actionLower === 'insert') {
+      if (tableName === 'profiles') {
+        await verifyProfileWriteAuthorization(authUser?.role, payload);
+      }
       let { data, error } = await supabase.from(tableName).insert(payload).select();
       if (error && isRlsError(error)) {
         const adminClient = getSupabaseAdmin();
@@ -131,6 +175,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data });
 
     } else if (actionLower === 'upsert') {
+      if (tableName === 'profiles') {
+        await verifyProfileWriteAuthorization(authUser?.role, payload);
+      }
       const options = body.options || {};
       const onConflict = options.onConflict || (tableName === 'categories' ? 'slug' : undefined);
       const upsertOptions = onConflict ? { onConflict } : undefined;
@@ -169,6 +216,26 @@ export async function POST(req: NextRequest) {
         const roleLower = (authUser?.role || '').toLowerCase();
         if (!['super admin', 'admin'].includes(roleLower)) {
           throw new ApiError('Access Denied: Only Admin or Super Admin accounts are authorized to delete these records.', 403);
+        }
+        if (tableName === 'profiles') {
+          const { filters } = payload || {};
+          const targetId = filters?.id;
+          const callerRank = getRoleRank(authUser?.role);
+          const adminClient = getSupabaseAdmin();
+          if (targetId && adminClient) {
+            const { data: existingProfile } = await adminClient
+              .from('profiles')
+              .select('role')
+              .eq('id', targetId)
+              .maybeSingle();
+
+            if (existingProfile && existingProfile.role) {
+              const existingRank = getRoleRank(existingProfile.role);
+              if (existingRank > callerRank) {
+                throw new ApiError(`Forbidden: Your role level (${authUser?.role}) cannot delete a user with higher authority (${existingProfile.role}).`, 403);
+              }
+            }
+          }
         }
       }
 

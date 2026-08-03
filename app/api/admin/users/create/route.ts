@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireAuth, enforceRateLimit, createErrorResponse, logger, validateFields, ApiError } from '@/lib/apiUtils';
 import { normalizeRole } from '@/lib/adminBootstrap';
+import { getRoleRank } from '@/lib/roleRank';
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,15 +33,6 @@ export async function POST(req: NextRequest) {
 
     // 4. Role Escalation Protection:
     // Rank: Super Admin (4) > Admin (3) > Manager (2) > Staff (1) > Customer (0)
-    const getRoleRank = (r: string): number => {
-      const lower = (r || '').toLowerCase();
-      if (lower === 'super admin' || lower === 'super_admin') return 4;
-      if (lower === 'admin') return 3;
-      if (lower === 'manager') return 2;
-      if (lower === 'staff') return 1;
-      return 0;
-    };
-
     const callerRank = getRoleRank(caller.role);
     const targetRank = getRoleRank(requestedRole);
 

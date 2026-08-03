@@ -240,7 +240,8 @@ CREATE POLICY "Allow users to view own profile or admin view all" ON public.prof
     auth.uid() = id OR public.is_admin_or_staff(auth.uid())
 );
 CREATE POLICY "Allow users to update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Allow full access to profiles for admin" ON public.profiles FOR ALL USING (public.is_admin_or_staff(auth.uid()));
+DROP POLICY IF EXISTS "Allow full access to profiles for admin" ON public.profiles;
+CREATE POLICY "Allow admin-tier write access to profiles" ON public.profiles FOR ALL USING (public.is_admin_or_staff(auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('super admin', 'admin')));
 
 -- PUBLIC PROFILE NAMES VIEW (for public display of review authors without exposing email/phone/spending)
 CREATE OR REPLACE VIEW public.public_profile_names WITH (security_invoker = true) AS
