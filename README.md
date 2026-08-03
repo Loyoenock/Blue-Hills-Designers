@@ -100,23 +100,32 @@ To support multi-instance / horizontally scaled deployments (e.g. Vercel serverl
 
 ## 💾 Database Configuration (Supabase Setup)
 
-To bootstrap your database schema and support features like transactional reviews, profile generation, and real-time carts, follow these steps:
+To bootstrap your database schema or update an existing database safely, follow these guidelines:
 
-1. **Execute DB Schema**:
-   Navigate to your Supabase Project Dashboard and open the **SQL Editor**. Copy and execute the contents of `supabase_schema.sql` located at the project root directory. This creates all essential tables:
-   - `profiles`
-   - `products`
-   - `product_images`
-   - `categories`
-   - `orders`
-   - `order_items`
-   - `reviews`
-   - `wishlists`
-   - `coupons`
-   - `audit_logs`
+### 1. Initial Greenfield Bootstrap (New / Empty Projects Only)
+When setting up a brand-new, empty Supabase project:
+1. Navigate to your Supabase Project Dashboard and open the **SQL Editor**.
+2. Run `supabase_schema.sql` **ONCE** to create the baseline tables (`profiles`, `products`, `product_images`, `categories`, `orders`, `order_items`, `reviews`, `wishlists`, `coupons`, `audit_logs`, etc.), RLS policies, and authentication triggers.
 
-2. **Authentication Triggers**:
-   The schema includes SQL trigger functions to automatically create a corresponding record in `profiles` whenever a new user registers through Supabase Auth.
+> ⚠️ **CRITICAL WARNING FOR OPERATORS**:
+> **NEVER re-run `supabase_schema.sql` on a live or production database!**
+> `supabase_schema.sql` contains `DROP TABLE` statements designed for fresh initializations. Re-running it on a live database will permanently destroy existing data.
+
+### 2. Applying Incremental Migrations (Live & Existing Databases)
+To update existing databases or apply schema updates, execute all additive migration files sequentially in the Supabase SQL Editor:
+1. `supabase_migration_unique_constraints.sql` (Adds case-insensitive unique indexes for coupon codes, newsletter emails, product/category slugs, and check constraints)
+2. `supabase_migration_sizes_colors.sql` (Adds product size and color array columns)
+3. `supabase_migration_newsletter_unique.sql` (Adds newsletter unique subscriber index)
+4. `supabase_migration_orders_payments_updated_at.sql` (Adds `updated_at` timestamps)
+5. `supabase_migration_reviews_guest_support.sql` (Enables guest reviewer details)
+6. `supabase_migration_consultations_client_fields.sql` (Adds consultation client contact fields)
+7. `supabase_migration_checkout_transaction.sql` (Adds atomic stock reservation and checkout PL/pgSQL function)
+8. `supabase_migration_bhd_courier_settings.sql` (Configures courier and app setting defaults)
+
+All `supabase_migration_*.sql` files are **additive-only**, **non-destructive**, and **idempotent** (`IF NOT EXISTS` / safe checks). They can be re-run safely without data loss.
+
+### 3. Authentication Triggers
+The schema includes SQL trigger functions to automatically create a corresponding record in `profiles` whenever a new user registers through Supabase Auth.
 
 ---
 

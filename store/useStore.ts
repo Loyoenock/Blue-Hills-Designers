@@ -35,8 +35,8 @@ interface StoreState {
 
   // Saved Address actions
   fetchSavedAddresses: () => Promise<void>;
-  addSavedAddress: (addressData: { label?: string; country: string; district: string; city: string; address: string; is_default?: boolean }) => Promise<{ success: boolean; error?: string }>;
-  updateSavedAddress: (id: string, updatedFields: Partial<SavedAddress>) => Promise<{ success: boolean; error?: string }>;
+  addSavedAddress: (addrInput: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+  updateSavedAddress: (id: string, updates: any) => Promise<{ success: boolean; error?: string }>;
   deleteSavedAddress: (id: string) => Promise<{ success: boolean; error?: string }>;
   setDefaultAddress: (id: string) => Promise<{ success: boolean; error?: string }>;
 
@@ -927,6 +927,28 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         courier_method_pickup: payload.courierMethods?.pickup !== undefined ? !!payload.courierMethods.pickup : (payload.courier_method_pickup !== undefined ? !!payload.courier_method_pickup : true),
         updated_at: new Date().toISOString()
       };
+    }
+
+        case 'saved_addresses': {
+      const currentUserId = state.currentUser?.id;
+      const rawUserId = payload.userId || payload.user_id;
+      const validUserId = rawUserId && isUUID(rawUserId)
+        ? rawUserId
+        : (currentUserId && isUUID(currentUserId) ? currentUserId : null);
+
+      const out: any = {
+        user_id: validUserId,
+        label: payload.label || 'Home',
+        country: payload.country || 'Uganda',
+        district: payload.district || '',
+        city: payload.city || '',
+        address: payload.address || payload.streetAddress || '',
+        is_default: payload.isDefault !== undefined ? Boolean(payload.isDefault) : (payload.is_default !== undefined ? Boolean(payload.is_default) : false)
+      };
+      if (payload.id && isUUID(payload.id)) {
+        out.id = payload.id;
+      }
+      return out;
     }
 
     default:
@@ -2356,24 +2378,7 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      fetchSavedAddresses: async () => {
-        try {
-          const supabase = getSupabaseClient();
-          const current = get().currentUser;
-          if (!current || !supabase) return;
-          const { data, error } = await supabase
-            .from('saved_addresses')
-            .select('*')
-            .eq('user_id', current.id)
-            .order('is_default', { ascending: false })
-            .order('created_at', { ascending: false });
-          if (!error && data) {
-            set({ savedAddresses: data });
-          }
-        } catch (e) {
-          console.error('Failed to fetch saved addresses:', e);
-        }
-      },
+
 
       loadStylistHistory: async () => {
         try {
@@ -2460,156 +2465,140 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      addSavedAddress: async (addressData) => {
+      fetchSavedAddresses: async () => {
+        const currentUserId = get().currentUser?.id;
+        if (!currentUserId || !isUUID(currentUserId)) {
+          return;
+        }
+        const supabase = getSupabaseClient();
+        if (!supabase) return;
         try {
-          const current = get().currentUser;
-          if (!current) return { success: false, error: 'User not authenticated' };
-          const supabase = getSupabaseClient();
-
-          const existingAddresses = get().savedAddresses || [];
-          const isFirst = existingAddresses.length === 0;
-          const makeDefault = addressData.is_default ?? isFirst;
-
-          const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `addr-${Date.now()}`;
-          const newAddress: SavedAddress = {
-            id: newId,
-            user_id: current.id,
-            label: addressData.label || 'Home',
-            country: addressData.country || 'Uganda',
-            district: addressData.district || '',
-            city: addressData.city || '',
-            address: addressData.address || '',
-            is_default: makeDefault,
-            created_at: new Date().toISOString()
-          };
-
-          let updatedAddresses = existingAddresses;
-          if (makeDefault) {
-            updatedAddresses = updatedAddresses.map(a => ({ ...a, is_default: false }));
+          const { data, error } = await supabase
+            .from('saved_addresses')
+            .select('*')
+            .eq('user_id', currentUserId);
+          if (error) throw error;
+          if (data) {
+            const mapped = data.map((addr: any) => ({
+              id: addr.id,
+              userId: addr.user_id,
+              label: addr.label || 'Home',
+              country: addr.country || 'Uganda',
+              district: addr.district || '',
+              city: addr.city || '',
+              address: addr.address || addr.street_address || '',
+              isDefault: Boolean(addr.is_default),
+              is_default: Boolean(addr.is_default),
+              createdAt: addr.created_at
+            }));
+            set({ savedAddresses: mapped });
           }
-          updatedAddresses = [newAddress, ...updatedAddresses];
-          set({ savedAddresses: updatedAddresses });
-
-          if (supabase) {
-            if (makeDefault) {
-              await supabase
-                .from('saved_addresses')
-                .update({ is_default: false })
-                .eq('user_id', current.id);
-            }
-            const { error } = await supabase.from('saved_addresses').insert({
-              id: newAddress.id,
-              user_id: current.id,
-              label: newAddress.label,
-              country: newAddress.country,
-              district: newAddress.district,
-              city: newAddress.city,
-              address: newAddress.address,
-              is_default: newAddress.is_default
-            });
-            if (error) {
-              console.error('Supabase error inserting saved address:', error);
-            }
-          }
-
-          get().addAuditLog(
-            'Saved Address Added',
-            `Added saved address "${newAddress.label || 'New Address'}" for ${current.name}`,
-            current.id,
-            current.name,
-            current.role
-          );
-
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err?.message || 'Failed to add saved address' };
+        } catch (err) {
+          console.error('Failed to fetch saved addresses:', err);
         }
       },
 
-      updateSavedAddress: async (id, updatedFields) => {
-        try {
-          const current = get().currentUser;
-          if (!current) return { success: false, error: 'User not authenticated' };
-          const supabase = getSupabaseClient();
+      addSavedAddress: async (addrInput: any) => {
+        const currentUserId = get().currentUser?.id;
+        const isAuthUser = currentUserId && isUUID(currentUserId);
+        const id = isUUID(addrInput?.id) ? addrInput.id : crypto.randomUUID();
+        const isDef = addrInput.isDefault ?? addrInput.is_default ?? false;
+        const newAddr = {
+          id,
+          userId: isAuthUser ? currentUserId : undefined,
+          label: addrInput.label || 'Home',
+          country: addrInput.country || 'Uganda',
+          district: addrInput.district || '',
+          city: addrInput.city || '',
+          address: addrInput.address || addrInput.streetAddress || '',
+          isDefault: Boolean(isDef),
+          is_default: Boolean(isDef)
+        };
 
-          const existingAddresses = get().savedAddresses || [];
-          const makeDefault = updatedFields.is_default === true;
+        const prev = get().savedAddresses || [];
+        let updatedList = [...prev];
+        if (newAddr.isDefault) {
+          updatedList = updatedList.map((a: any) => ({ ...a, isDefault: false, is_default: false }));
+        }
+        updatedList.push(newAddr);
+        set({ savedAddresses: updatedList });
 
-          let updatedAddresses = existingAddresses.map(a => {
-            if (a.id === id) {
-              return { ...a, ...updatedFields };
-            }
-            if (makeDefault) {
-              return { ...a, is_default: false };
-            }
-            return a;
-          });
+        if (!isAuthUser) {
+          return { success: true, data: newAddr };
+        }
 
-          set({ savedAddresses: updatedAddresses });
+        const payload = mapToSupabasePayload('saved_addresses', newAddr);
+        const res = await safeSupabaseUpsert('saved_addresses', payload);
+        if (!res.success) {
+          set({ savedAddresses: prev });
+          return { success: false, error: res.error || 'Failed to add address' };
+        }
+        return { success: true, data: newAddr };
+      },
 
-          if (supabase) {
-            if (makeDefault) {
-              await supabase
-                .from('saved_addresses')
-                .update({ is_default: false })
-                .eq('user_id', current.id);
-            }
-            const { error } = await supabase
-              .from('saved_addresses')
-              .update(updatedFields)
-              .eq('id', id);
-            if (error) {
-              console.error('Supabase error updating saved address:', error);
-            }
+      updateSavedAddress: async (id: string, updates: any) => {
+        const currentUserId = get().currentUser?.id;
+        const isAuthUser = currentUserId && isUUID(currentUserId);
+        const prev = get().savedAddresses || [];
+
+        const isDefSetting = updates.isDefault ?? updates.is_default;
+        let updatedList = prev.map((a: any) => {
+          if (a.id === id) {
+            const isDef = isDefSetting !== undefined ? Boolean(isDefSetting) : (a.isDefault ?? a.is_default ?? false);
+            return {
+              ...a,
+              ...updates,
+              isDefault: isDef,
+              is_default: isDef
+            };
           }
+          if (isDefSetting) {
+            return { ...a, isDefault: false, is_default: false };
+          }
+          return a;
+        });
+        set({ savedAddresses: updatedList });
 
+        const targetAddr = updatedList.find((a: any) => a.id === id);
+        if (!isAuthUser || !isUUID(id) || !targetAddr) {
+          return { success: true };
+        }
+
+        const payload = mapToSupabasePayload('saved_addresses', targetAddr);
+        const res = await safeSupabaseUpsert('saved_addresses', payload);
+        if (!res.success) {
+          set({ savedAddresses: prev });
+          return { success: false, error: res.error || 'Failed to update address' };
+        }
+        return { success: true };
+      },
+
+      deleteSavedAddress: async (id: string) => {
+        const currentUserId = get().currentUser?.id;
+        const isAuthUser = currentUserId && isUUID(currentUserId);
+        const prev = get().savedAddresses || [];
+        set({ savedAddresses: prev.filter((a: any) => a.id !== id) });
+
+        if (!isAuthUser || !isUUID(id)) {
+          return { success: true };
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) return { success: true };
+        try {
+          const { error } = await supabase.from('saved_addresses').delete().eq('id', id);
+          if (error) throw error;
           return { success: true };
         } catch (err: any) {
-          return { success: false, error: err?.message || 'Failed to update saved address' };
+          set({ savedAddresses: prev });
+          return { success: false, error: err.message || 'Failed to delete address' };
         }
       },
 
-      deleteSavedAddress: async (id) => {
-        try {
-          const current = get().currentUser;
-          if (!current) return { success: false, error: 'User not authenticated' };
-          const supabase = getSupabaseClient();
-
-          const existingAddresses = get().savedAddresses || [];
-          const target = existingAddresses.find(a => a.id === id);
-          let filtered = existingAddresses.filter(a => a.id !== id);
-
-          if (target?.is_default && filtered.length > 0) {
-            filtered = filtered.map((a, idx) => idx === 0 ? { ...a, is_default: true } : a);
-            if (supabase) {
-              await supabase
-                .from('saved_addresses')
-                .update({ is_default: true })
-                .eq('id', filtered[0].id);
-            }
-          }
-
-          set({ savedAddresses: filtered });
-
-          if (supabase) {
-            const { error } = await supabase
-              .from('saved_addresses')
-              .delete()
-              .eq('id', id);
-            if (error) {
-              console.error('Supabase error deleting saved address:', error);
-            }
-          }
-
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err?.message || 'Failed to delete saved address' };
-        }
+      setDefaultAddress: async (id: string) => {
+        return get().updateSavedAddress(id, { isDefault: true, is_default: true });
       },
 
-      setDefaultAddress: async (id) => {
-        return get().updateSavedAddress(id, { is_default: true });
-      },
 
       updatePassword: async (password) => {
         try {
