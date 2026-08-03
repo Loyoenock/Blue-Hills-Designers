@@ -1125,13 +1125,8 @@ async function safeSupabaseInsert(tableName: string, payload: any): Promise<{ su
     return { success: true };
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-    if (isNetworkOrConnectionError(err)) {
-      console.warn(`Supabase offline fallback: insert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
-      return { success: true };
-    } else {
-      console.error(`Error in safeSupabaseInsert for ${tableName}:`, err);
-      return { success: false, error: errMsg };
-    }
+    console.error(`Error in safeSupabaseInsert for ${tableName}:`, err);
+    return { success: false, error: errMsg };
   }
 }
 
@@ -1170,13 +1165,8 @@ async function safeSupabaseUpsert(tableName: string, payload: any, options?: any
     return { success: true };
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-    if (isNetworkOrConnectionError(err)) {
-      console.warn(`Supabase offline fallback: upsert on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
-      return { success: true };
-    } else {
-      console.error(`Error in safeSupabaseUpsert for ${tableName}:`, err);
-      return { success: false, error: errMsg };
-    }
+    console.error(`Error in safeSupabaseUpsert for ${tableName}:`, err);
+    return { success: false, error: errMsg };
   }
 }
 
@@ -1209,13 +1199,8 @@ async function safeSupabaseDelete(tableName: string, filters: Record<string, any
     return { success: true };
   } catch (err: any) {
     const errMsg = err?.message || (typeof err === 'string' ? err : String(err || ''));
-    if (isNetworkOrConnectionError(err)) {
-      console.warn(`Supabase offline fallback: delete on ${tableName} skipped (unreachable after retries: ${errMsg}).`);
-      return { success: true };
-    } else {
-      console.error(`Error in safeSupabaseDelete for ${tableName}:`, err);
-      return { success: false, error: errMsg };
-    }
+    console.error(`Error in safeSupabaseDelete for ${tableName}:`, err);
+    return { success: false, error: errMsg };
   }
 }
 
