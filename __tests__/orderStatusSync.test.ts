@@ -12,6 +12,7 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('updates pending payment to Paid when order status transitions to Delivered', async () => {
@@ -103,6 +104,9 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
   });
 
   it('rolls back both orders and payments if DB update fails', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'test-anon-key');
+
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
