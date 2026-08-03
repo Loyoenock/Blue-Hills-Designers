@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { logger } from './apiUtils';
+import { logger } from './logger';
 
 const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY is required for AI-powered features'),

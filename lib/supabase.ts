@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { isNetworkOrConnectionError } from './utils';
-import { logger } from './apiUtils';
+import { logger } from './logger';
 import './env';
 
 let supabaseClientInstance: SupabaseClient | null = null;
