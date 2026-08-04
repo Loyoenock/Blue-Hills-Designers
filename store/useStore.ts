@@ -642,22 +642,38 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
       const prodName = fullProd.name || 'Luxury Product';
       const slug = fullProd.slug || (prodName ? prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'product');
 
-      const isDeal = !!fullProd.isDealOfTheDay;
+      const isDeal = payload.isDealOfTheDay !== undefined 
+        ? !!payload.isDealOfTheDay 
+        : (payload.is_deal !== undefined 
+          ? !!payload.is_deal 
+          : !!fullProd.isDealOfTheDay);
+
       const dealDays = fullProd.dealDays !== undefined && fullProd.dealDays !== null ? Number(fullProd.dealDays) : 0;
       const dealHours = fullProd.dealHours !== undefined && fullProd.dealHours !== null ? Number(fullProd.dealHours) : 0;
       const dealMins = fullProd.dealMins !== undefined && fullProd.dealMins !== null ? Number(fullProd.dealMins) : 0;
       const dealSecs = fullProd.dealSecs !== undefined && fullProd.dealSecs !== null ? Number(fullProd.dealSecs) : 0;
 
-      const dealExpiresAt = calculateDealExpiresAt(
+      const rawExpiresAt = payload.dealExpiresAt || payload.deal_expires_at || fullProd.dealExpiresAt || fullProd.deal_expires_at || null;
+      const computedExpiresAt = calculateDealExpiresAt(
         isDeal,
-        fullProd.dealExpiresAt,
+        rawExpiresAt,
         dealDays,
         dealHours,
         dealMins,
         dealSecs
       );
 
-      const isDealActive = isDeal && (dealExpiresAt ? new Date(dealExpiresAt).getTime() > Date.now() : true);
+      const sizes = Array.isArray(payload.sizes)
+        ? payload.sizes
+        : (typeof payload.sizes === 'string'
+          ? payload.sizes.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : (Array.isArray(fullProd.sizes) ? fullProd.sizes : []));
+
+      const colors = Array.isArray(payload.colors)
+        ? payload.colors
+        : (typeof payload.colors === 'string'
+          ? payload.colors.split(',').map((c: string) => c.trim()).filter(Boolean)
+          : (Array.isArray(fullProd.colors) ? fullProd.colors : []));
 
       return {
         id: toValidUUID(fullProd.id),
@@ -666,18 +682,18 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         slug,
         description: fullProd.description || '',
         short_description: fullProd.shortDescription || fullProd.description?.slice(0, 150) || '',
-        sizes: fullProd.sizes || [],
-        colors: fullProd.colors || [],
+        sizes,
+        colors,
         price: fullProd.price !== undefined && fullProd.price !== null ? Number(fullProd.price) : 0,
         discount_percentage: Number(fullProd.discountPercentage) || 0,
         is_featured: !!fullProd.isFeatured,
         is_new: !!fullProd.isNew,
-        is_deal: isDealActive,
+        is_deal: isDeal,
         deal_days: isDeal ? dealDays : null,
         deal_hours: isDeal ? dealHours : null,
         deal_mins: isDeal ? dealMins : null,
         deal_secs: isDeal ? dealSecs : null,
-        deal_expires_at: isDealActive ? dealExpiresAt : null,
+        deal_expires_at: isDeal ? computedExpiresAt : null,
         rating: Number(fullProd.rating) || 0,
         stock: Number(fullProd.stock) || 0,
         status: 'Active'
@@ -1492,12 +1508,16 @@ export const useStore = create<StoreState>()(
             ? productImages
             : (rawImages.length > 0 ? rawImages : [p.slug ? `https://picsum.photos/seed/${p.slug}/600/600` : 'https://picsum.photos/seed/suit/600/600']);
 
-          let parsedSizes = (Array.isArray(p.sizes) && p.sizes.length > 0)
+          let parsedSizes = Array.isArray(p.sizes)
             ? p.sizes
-            : ['M', 'L', 'XL'];
-          let parsedColors = (Array.isArray(p.colors) && p.colors.length > 0)
+            : (typeof p.sizes === 'string'
+              ? p.sizes.split(',').map((s: string) => s.trim()).filter(Boolean)
+              : []);
+          let parsedColors = Array.isArray(p.colors)
             ? p.colors
-            : ['Classic Black'];
+            : (typeof p.colors === 'string'
+              ? p.colors.split(',').map((c: string) => c.trim()).filter(Boolean)
+              : []);
           let dealDays = p.deal_days !== undefined && p.deal_days !== null ? Number(p.deal_days) : 0;
           let dealHours = p.deal_hours !== undefined && p.deal_hours !== null ? Number(p.deal_hours) : 14;
           let dealMins = p.deal_mins !== undefined && p.deal_mins !== null ? Number(p.deal_mins) : 40;
@@ -1516,7 +1536,7 @@ export const useStore = create<StoreState>()(
           }
 
           const rawIsDeal = !!p.is_deal;
-          const rawExpiresAt = p.deal_expires_at;
+          const rawExpiresAt = p.deal_expires_at || p.dealExpiresAt || null;
 
           const dealExpiresAt = calculateDealExpiresAt(
             rawIsDeal,
@@ -1884,12 +1904,16 @@ export const useStore = create<StoreState>()(
           const existingIndex = products.findIndex(p => p.id === prodId || toValidUUID(p.id) === prodId);
           const existing = existingIndex !== -1 ? products[existingIndex] : null;
 
-          let parsedSizes = (Array.isArray(newRow.sizes) && newRow.sizes.length > 0)
+          let parsedSizes = Array.isArray(newRow.sizes)
             ? newRow.sizes
-            : (existing?.sizes || ['M', 'L', 'XL']);
-          let parsedColors = (Array.isArray(newRow.colors) && newRow.colors.length > 0)
+            : (typeof newRow.sizes === 'string'
+              ? newRow.sizes.split(',').map((s: string) => s.trim()).filter(Boolean)
+              : (existing?.sizes || []));
+          let parsedColors = Array.isArray(newRow.colors)
             ? newRow.colors
-            : (existing?.colors || ['Classic Black']);
+            : (typeof newRow.colors === 'string'
+              ? newRow.colors.split(',').map((c: string) => c.trim()).filter(Boolean)
+              : (existing?.colors || []));
           let dealDays = newRow.deal_days !== undefined && newRow.deal_days !== null ? Number(newRow.deal_days) : (existing?.dealDays ?? 0);
           let dealHours = newRow.deal_hours !== undefined && newRow.deal_hours !== null ? Number(newRow.deal_hours) : (existing?.dealHours ?? 14);
           let dealMins = newRow.deal_mins !== undefined && newRow.deal_mins !== null ? Number(newRow.deal_mins) : (existing?.dealMins ?? 40);
@@ -2399,14 +2423,18 @@ export const useStore = create<StoreState>()(
       loadStylistHistory: async () => {
         try {
           const current = get().currentUser;
-          const supabase = getSupabaseClient();
-          if (!current || !supabase) {
+          const activeUserId = current?.id || get().currentUserId;
+          if (!activeUserId || !isUUID(activeUserId)) {
             return { success: false, error: 'User not authenticated' };
+          }
+          const supabase = getSupabaseClient();
+          if (!supabase) {
+            return { success: false, error: 'Supabase client unavailable' };
           }
           const { data, error } = await supabase
             .from('stylist_conversations')
             .select('*')
-            .eq('user_id', current.id)
+            .eq('user_id', activeUserId)
             .order('updated_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -2429,15 +2457,21 @@ export const useStore = create<StoreState>()(
       saveStylistMessage: async (messages: ChatMessage[]) => {
         try {
           const current = get().currentUser;
+          const activeUserId = current?.id || get().currentUserId;
+          if (!activeUserId || !isUUID(activeUserId)) {
+            // Guest or non-UUID user mode: skip DB save without RLS/network error
+            return { success: true };
+          }
+
           const supabase = getSupabaseClient();
-          if (!current || !supabase) {
-            return { success: false, error: 'User not authenticated' };
+          if (!supabase) {
+            return { success: false, error: 'Supabase client unavailable' };
           }
 
           const { data: existing, error: selectErr } = await supabase
             .from('stylist_conversations')
             .select('id')
-            .eq('user_id', current.id)
+            .eq('user_id', activeUserId)
             .order('updated_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -2463,7 +2497,7 @@ export const useStore = create<StoreState>()(
             const { error } = await supabase
               .from('stylist_conversations')
               .insert({
-                user_id: current.id,
+                user_id: activeUserId,
                 messages,
                 updated_at: new Date().toISOString()
               });
