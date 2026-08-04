@@ -87,3 +87,48 @@ export function isNetworkOrConnectionError(err: any): boolean {
     err.name === 'TypeError'
   );
 }
+
+export function getEffectivePrice(product: {
+  price: number;
+  isDealOfTheDay?: boolean;
+  is_deal?: boolean;
+  dealExpiresAt?: string | null;
+  deal_expires_at?: string | null;
+  discountPercentage?: number;
+  discount_percentage?: number;
+} | null | undefined): number {
+  if (!product) return 0;
+  const rawPrice = Number(product.price) || 0;
+  const isDeal = product.isDealOfTheDay !== undefined 
+    ? !!product.isDealOfTheDay 
+    : product.is_deal !== undefined 
+      ? !!product.is_deal 
+      : false;
+
+  if (!isDeal) return rawPrice;
+
+  const rawExpiresAt = product.dealExpiresAt !== undefined 
+    ? product.dealExpiresAt 
+    : product.deal_expires_at !== undefined 
+      ? product.deal_expires_at 
+      : null;
+
+  if (rawExpiresAt) {
+    const expiryTime = new Date(rawExpiresAt).getTime();
+    if (!isNaN(expiryTime) && expiryTime <= Date.now()) {
+      return rawPrice;
+    }
+  }
+
+  const discountPct = Number(
+    product.discountPercentage !== undefined 
+      ? product.discountPercentage 
+      : product.discount_percentage !== undefined 
+        ? product.discount_percentage 
+        : 0
+  );
+
+  if (discountPct <= 0) return rawPrice;
+
+  return Math.floor(rawPrice * (1 - discountPct / 100));
+}

@@ -7,7 +7,7 @@ import {
   ShoppingBag, Trash2, ArrowRight, Shield, Award, MapPin 
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { getSafeImageSrc } from '../../lib/utils';
+import { getSafeImageSrc, getEffectivePrice } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CartClient() {
@@ -39,7 +39,7 @@ export default function CartClient() {
 
   const currency = settings?.currencySymbol || 'Ugx';
   const threshold = settings?.freeShippingThreshold ?? 2000;
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0);
 
   // 1. Coupon calculation
   let couponDiscount = 0;
@@ -145,7 +145,9 @@ export default function CartClient() {
                 </div>
 
                 <div className="space-y-4">
-                  {cart.map((item) => (
+                  {cart.map((item) => {
+                    const unitPrice = getEffectivePrice(item.product);
+                    return (
                     <motion.div 
                       key={item.id}
                       layout
@@ -175,7 +177,14 @@ export default function CartClient() {
                       {/* Price cell */}
                       <div className="col-span-2 text-left md:text-center font-mono text-sm font-semibold text-[#1D2B3F]/85">
                         <span className="md:hidden text-[#657892]/60 font-sans text-xs uppercase block tracking-wider mb-1">Unit Price</span>
-                        {currency} {item.product.price}
+                        {unitPrice < item.product.price ? (
+                          <div className="flex flex-col items-start md:items-center">
+                            <span className="line-through text-xs text-[#657892]/60 font-mono">{currency} {item.product.price}</span>
+                            <span className="text-[#1C4D8D] font-bold font-mono">{currency} {unitPrice}</span>
+                          </div>
+                        ) : (
+                          <>{currency} {unitPrice}</>
+                        )}
                       </div>
 
                       {/* Quantity control cell */}
@@ -202,7 +211,7 @@ export default function CartClient() {
                       <div className="col-span-2 flex justify-between md:justify-end items-center gap-4">
                         <div className="text-right">
                           <span className="md:hidden text-[#657892]/60 font-sans text-xs uppercase block tracking-wider mb-1">Total Price</span>
-                          <span className="font-mono text-base font-bold text-[#1D2B3F]">{currency} {item.product.price * item.quantity}</span>
+                          <span className="font-mono text-base font-bold text-[#1D2B3F]">{currency} {unitPrice * item.quantity}</span>
                         </div>
                         <button 
                           onClick={() => removeFromCart(item.id)}
@@ -214,7 +223,8 @@ export default function CartClient() {
                       </div>
 
                     </motion.div>
-                  ))}
+                  );
+                  })}
                 </div>
 
                 {/* Left panel clear wardrobe button */}

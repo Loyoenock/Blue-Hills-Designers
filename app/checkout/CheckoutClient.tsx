@@ -9,7 +9,7 @@ import {
   MapPin, CheckCircle2, ChevronRight, Truck, Award, Zap, Store
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { getSafeImageSrc } from '../../lib/utils';
+import { getSafeImageSrc, getEffectivePrice } from '../../lib/utils';
 import { getSupabaseClient } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -229,7 +229,7 @@ export default function CheckoutClient() {
     );
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0);
   const threshold = settings?.freeShippingThreshold ?? 2000;
   const currency = settings?.currencySymbol || 'Ugx';
 
@@ -289,7 +289,7 @@ export default function CheckoutClient() {
       const orderItems = cart.map(item => ({
         productId: item.product.id,
         productName: item.product.name,
-        price: item.product.price,
+        price: getEffectivePrice(item.product),
         quantity: item.quantity,
         selectedSize: item.selectedSize || 'M',
         selectedColor: item.selectedColor || 'Default',
@@ -1156,7 +1156,7 @@ export default function CheckoutClient() {
                           <p className="text-[10px] text-[#657892] font-mono mt-0.5">Size: {item.selectedSize} • Qty: {item.quantity}</p>
                         </div>
                         <div className="font-mono text-xs font-semibold text-[#1D2B3F]/85">
-                          {currency} {item.product.price * item.quantity}
+                          {currency} {getEffectivePrice(item.product) * item.quantity}
                         </div>
                       </div>
                     ))}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDealExpiresAt } from '../store/useStore';
+import { calculateDealExpiresAt, useStore } from '../store/useStore';
 
 describe('calculateDealExpiresAt', () => {
   it('returns null when deal is disabled', () => {
@@ -26,5 +26,16 @@ describe('calculateDealExpiresAt', () => {
 
   it('returns null if deal is enabled but duration is 0 and no datetime provided', () => {
     expect(calculateDealExpiresAt(true, null, 0, 0, 0, 0)).toBeNull();
+  });
+
+  it('expireDealLocally updates matching product to isDealOfTheDay: false and dealExpiresAt: null', () => {
+    const state = useStore.getState();
+    const dealProd = state.products.find(p => p.isDealOfTheDay);
+    if (dealProd) {
+      state.expireDealLocally(dealProd.id);
+      const updated = useStore.getState().products.find(p => p.id === dealProd.id);
+      expect(updated?.isDealOfTheDay).toBe(false);
+      expect(updated?.dealExpiresAt).toBeNull();
+    }
   });
 });

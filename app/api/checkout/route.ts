@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import { sendTransactionalEmail } from '@/lib/email';
 import { chargeMobileMoney, chargeCard } from '@/lib/payment';
+import { getEffectivePrice } from '@/lib/utils';
 import crypto from 'crypto';
 
 function escapeHtml(str: string | undefined | null): string {
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
         throw new ApiError(`Apologies, "${product.name}" has insufficient stock. Available stock is ${product.stock} units, while you requested ${totalRequestedQuantity}.`, 400);
       }
 
-      const itemPrice = Number(product.price) || 0;
+      const itemPrice = getEffectivePrice(product);
       const itemCost = itemPrice * item.quantity;
       subtotal += itemCost;
 

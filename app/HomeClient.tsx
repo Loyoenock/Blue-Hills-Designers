@@ -30,7 +30,7 @@ function getTimeLeftFromEnd(endMs: number) {
 export default function HomeClient() {
   const router = useRouter();
   const { 
-    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing, testimonials 
+    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing, testimonials, expireDealLocally 
   } = useStore();
   const currency = settings?.currencySymbol || 'Ugx';
   
@@ -113,7 +113,18 @@ export default function HomeClient() {
     // Deal of the day countdown interval
     const timer = setInterval(() => {
       if (endMsRef.current !== null) {
-        setTimeLeft(getTimeLeftFromEnd(endMsRef.current));
+        const remaining = getTimeLeftFromEnd(endMsRef.current);
+        setTimeLeft(remaining);
+        if (
+          remaining.days === 0 &&
+          remaining.hours === 0 &&
+          remaining.minutes === 0 &&
+          remaining.seconds === 0
+        ) {
+          if (dealProduct?.id) {
+            expireDealLocally(dealProduct.id);
+          }
+        }
       }
     }, 1000);
 
@@ -131,7 +142,7 @@ export default function HomeClient() {
       clearInterval(testimonialsTimer);
       clearTimeout(mountTimer);
     };
-  }, [activeTestimonials.length]);
+  }, [activeTestimonials.length, dealProduct?.id, expireDealLocally]);
 
   if (!mounted) return null;
 

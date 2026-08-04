@@ -8,7 +8,7 @@ import {
   toDisplayRole, toDbRole
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
-import { isNetworkOrConnectionError } from '../lib/utils';
+import { isNetworkOrConnectionError, getEffectivePrice } from '../lib/utils';
 import { VALID_COUPONS } from '../lib/coupons';
 
 interface StoreState {
@@ -118,6 +118,7 @@ interface StoreState {
   fetchLatestState: () => Promise<void>;
   seedIfEmpty: () => Promise<void>;
   applyProductChange: (payload: any) => void;
+  expireDealLocally: (productId: string) => void;
   applyReviewChange: (payload: any) => void;
   applyOrderChange: (payload: any) => void;
   applyProfileChange: (payload: any) => void;
@@ -1980,6 +1981,16 @@ export const useStore = create<StoreState>()(
         }
       },
 
+      expireDealLocally: (productId: string) => {
+        set(state => ({
+          products: state.products.map(p =>
+            p.id === productId || toValidUUID(p.id) === toValidUUID(productId)
+              ? { ...p, isDealOfTheDay: false, dealExpiresAt: null }
+              : p
+          )
+        }));
+      },
+
       applyReviewChange: (payload: any) => {
         const { eventType, new: newRow, old: oldRow } = payload;
         const targetProductId = newRow?.product_id || oldRow?.product_id;
@@ -2944,7 +2955,7 @@ export const useStore = create<StoreState>()(
           }
         }
 
-        const subtotal = get().cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+        const subtotal = get().cart.reduce((sum, item) => sum + (getEffectivePrice(item.product) * item.quantity), 0);
         if (coupon.minSubtotal && subtotal < coupon.minSubtotal) {
           return { success: false, message: `This coupon requires a minimum subtotal of Ugx ${coupon.minSubtotal}.` };
         }
