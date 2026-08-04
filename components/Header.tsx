@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  ShoppingBag, User, Heart, Menu, X, ChevronDown, 
-  Sparkles, ShieldCheck, LogOut, Check, Sliders
+  ShoppingBag, User, Heart, Menu, X, 
+  Sparkles, ShieldCheck
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,14 +17,10 @@ export default function Header() {
   const router = useRouter();
   const cart = useStore((state) => state.cart);
   const currentUser = useStore((state) => state.currentUser);
-  const users = useStore((state) => state.users);
-  const login = useStore((state) => state.login);
-  const logout = useStore((state) => state.logout);
   const wishlist = useStore((state) => state.wishlist);
   const syncFromSupabase = useStore((state) => state.syncFromSupabase);
   const settings = useStore((state) => state.settings);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   // Subscribe to realtime products & reviews changes via shared hook
@@ -68,11 +64,6 @@ export default function Header() {
   }, [currentUser?.mustChangePassword, pathname, router]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const handleQuickLogin = (email: string) => {
-    setRoleSwitcherOpen(false);
-    router.push('/login');
-  };
 
   const navItems = [
     { name: 'Collections', href: '/shop' },
@@ -165,86 +156,6 @@ export default function Header() {
 
         {/* Action icons */}
         <div className="flex items-center space-x-3 md:space-x-5">
-          {/* Quick Role Switcher for preview checking */}
-          <div className="relative">
-            <button
-              onClick={() => setRoleSwitcherOpen(!roleSwitcherOpen)}
-              className="flex items-center gap-1.5 text-xs text-[#F7F5F0]/70 hover:text-[#C6A15B] bg-[#F7F5F0]/5 hover:bg-[#F7F5F0]/10 px-2.5 py-1.5 rounded border border-[#657892]/20 transition-all"
-              title="Switch user roles for preview validation"
-              id="role-switcher-btn"
-              aria-label="Switch user roles for preview validation"
-              aria-expanded={roleSwitcherOpen}
-              aria-haspopup="true"
-            >
-              <Sliders className="w-3.5 h-3.5 text-[#C6A15B]" />
-              <span className="hidden sm:inline font-mono text-[#F7F5F0]">
-                {currentUser ? `${currentUser.name} (${currentUser.role})` : 'Guest Mode'}
-              </span>
-              <ChevronDown className="w-3 h-3 text-[#F7F5F0]/40" />
-            </button>
-
-            <AnimatePresence>
-              {roleSwitcherOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setRoleSwitcherOpen(false)} />
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="absolute right-0 mt-2 w-64 bg-[#1D2B3F] border border-[#657892]/30 rounded-lg shadow-2xl p-2 z-50"
-                  >
-                    <div className="text-[10px] uppercase tracking-widest text-[#F7F5F0]/40 px-3 py-1.5 border-b border-[#657892]/10 mb-1 font-semibold font-mono">
-                      Validation Personas
-                    </div>
-                    {users.filter(u => currentUser && u.id === currentUser.id).map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => handleQuickLogin(u.email)}
-                        className={`w-full flex items-center justify-between text-left px-3 py-2 text-xs rounded transition-colors ${
-                          currentUser?.id === u.id 
-                            ? 'bg-[#1C4D8D]/20 text-[#C6A15B] font-medium' 
-                            : 'hover:bg-[#F7F5F0]/5 text-[#F7F5F0]/80 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex flex-col">
-                          <span className="font-medium">{u.name}</span>
-                          <span className="text-[10px] text-[#F7F5F0]/40 font-mono">{u.role}</span>
-                        </div>
-                        {currentUser?.id === u.id && <Check className="w-4 h-4 text-[#C6A15B]" />}
-                      </button>
-                    ))}
-                    
-                    <button
-                      onClick={() => {
-                        handleQuickLogin('guest_exec@gentlemen.com');
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs rounded hover:bg-[#F7F5F0]/5 text-[#C6A15B] border-t border-[#657892]/10 mt-1 pt-2 flex items-center justify-between"
-                    >
-                      <div className="flex flex-col">
-                        <span>Create Client Account</span>
-                        <span className="text-[10px] text-[#F7F5F0]/40 font-mono">Simulate brand new registration</span>
-                      </div>
-                    </button>
-
-                    {currentUser && (
-                      <button
-                        onClick={async () => {
-                          await logout();
-                          setRoleSwitcherOpen(false);
-                          router.refresh();
-                        }}
-                        className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded border-t border-[#657892]/10 mt-1 transition-colors"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        Return to Anonymous Guest
-                      </button>
-                    )}
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
-
           {/* Wishlist Link */}
           <Link 
             href="/shop?filter=wishlist" 
