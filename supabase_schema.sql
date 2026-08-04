@@ -775,12 +775,17 @@ BEGIN
         END IF;
     END IF;
 
-    -- 6. Increment times_used if a coupon was used
+    -- 6. Increment times_used if a coupon was used — now with an atomic limit check
     IF p_coupon_id IS NOT NULL THEN
         UPDATE public.coupons
         SET times_used = COALESCE(times_used, 0) + 1,
             updated_at = NOW()
-        WHERE id = p_coupon_id;
+        WHERE id = p_coupon_id
+          AND (usage_limit IS NULL OR COALESCE(times_used, 0) < usage_limit);
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Coupon usage limit reached';
+        END IF;
     END IF;
 
     -- 7. Log checkout security audit telemetry

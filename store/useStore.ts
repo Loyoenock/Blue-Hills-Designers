@@ -614,6 +614,63 @@ export const mapDbPaymentStatusToUi = (status: string): 'Paid' | 'Pending' | 'Re
   return 'Pending';
 };
 
+async function releaseOrderStock(order: Order, set: any) {
+  if (!order) return;
+
+  let itemsToRelease: { productId: string; quantity: number }[] = (order.items || []).map(i => ({
+    productId: i.productId,
+    quantity: i.quantity
+  }));
+
+  const supabase = getSupabaseClient();
+
+  if (itemsToRelease.length === 0 && supabase) {
+    const orderUUID = toValidUUID(order.id) || order.id;
+    const { data: dbItems } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderUUID);
+
+    if (dbItems && dbItems.length > 0) {
+      itemsToRelease = dbItems.map((di: any) => ({
+        productId: di.product_id,
+        quantity: di.quantity
+      }));
+    }
+  }
+
+  if (itemsToRelease.length === 0) return;
+
+  set((state: StoreState) => {
+    const updatedProducts = (state.products || []).map(p => {
+      const matchItem = itemsToRelease.find(
+        item => item.productId === p.id || toValidUUID(item.productId) === toValidUUID(p.id)
+      );
+      if (matchItem) {
+        return { ...p, stock: (p.stock || 0) + matchItem.quantity };
+      }
+      return p;
+    });
+    return { products: updatedProducts };
+  });
+
+  if (supabase && typeof (supabase as any).rpc === 'function') {
+    for (const item of itemsToRelease) {
+      if (item.productId && item.quantity > 0) {
+        const prodId = toValidUUID(item.productId) || item.productId;
+        try {
+          await supabase.rpc('release_product_stock', {
+            p_product_id: prodId,
+            p_quantity: item.quantity
+          });
+        } catch (err) {
+          console.error(`Error releasing stock for product ${item.productId}:`, err);
+        }
+      }
+    }
+  }
+}
+
 function mapToSupabasePayload(tableName: string, payload: any): any {
   if (!payload) return payload;
 
@@ -3473,6 +3530,11 @@ export const useStore = create<StoreState>()(
           }
         }
 
+        const isTransitioningToCancelled = status === 'Cancelled' && !!targetOrder && targetOrder.status !== 'Cancelled';
+        if (isTransitioningToCancelled && targetOrder) {
+          await releaseOrderStock(targetOrder, set);
+        }
+
         return { success: true };
       },
 
@@ -3517,6 +3579,8 @@ export const useStore = create<StoreState>()(
           }
         }
 
+        const isTransitioningToCancelled = !!(updatedOrder && nextOrderStatus === 'Cancelled' && targetOrder && targetOrder.status !== 'Cancelled');
+
         // Optimistic state updates
         set(state => ({
           payments: (state.payments || []).map(p => p.id === paymentId ? updatedPayment : p),
@@ -3555,6 +3619,10 @@ export const useStore = create<StoreState>()(
             });
             return { success: false, error: dbOrderRes.error };
           }
+        }
+
+        if (isTransitioningToCancelled && targetOrder) {
+          await releaseOrderStock(targetOrder, set);
         }
 
         return { success: true };

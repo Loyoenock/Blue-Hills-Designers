@@ -205,14 +205,51 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
     expect(mockRpc).toHaveBeenCalledWith('create_checkout_order', expect.any(Object));
   });
 
-  it('documents and asserts that absolute stock update write (.from("products").update({ stock: ... })) is prohibited in route code', () => {
+  it('documents and asserts that absolute stock update write and redundant coupon update writes are prohibited in route code', () => {
     const routeFilePath = path.join(process.cwd(), 'app/api/checkout/route.ts');
     const routeCode = fs.readFileSync(routeFilePath, 'utf8');
 
     // Regression protection: Absolute stock updates must not exist in route code
     expect(routeCode).not.toMatch(/\.from\(['"]products['"]\)\s*\.update\(/i);
+    // Regression protection: Redundant manual coupon times_used updates must not exist in route code
+    expect(routeCode).not.toMatch(/\.from\(['"]coupons['"]\)\s*\.update\(/i);
     // Must execute atomic RPC checkout transaction
     expect(routeCode).toContain('create_checkout_order');
+  });
+
+  it('surfaces 400 coupon limit message when create_checkout_order RPC fails due to atomic coupon usage limit reached', async () => {
+    mockDbData.coupons!['RACE_LIMIT'] = {
+      id: 'coupon-uuid-1',
+      code: 'RACE_LIMIT',
+      is_active: true,
+      discount_type: 'fixed',
+      discount_value: 50,
+      usage_limit: 1,
+      times_used: 0, // Passed initial pre-check
+    };
+    mockDbData.rpcError = { message: 'Coupon usage limit reached' };
+
+    const req = createCheckoutRequest({
+      email: 'buyer@example.com',
+      phone: '+256770000000',
+      paymentMethod: 'Cash on Delivery',
+      shippingAddress: { city: 'Kampala', address: 'Plot 10 Kampala Rd' },
+      cart: [
+        {
+          id: 'cart-1',
+          product: { id: 'prod-suit-1', name: 'Savile Midnight Suit' },
+          quantity: 1,
+        },
+      ],
+      appliedCoupon: { code: 'RACE_LIMIT' },
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain('reached its usage limit');
+    expect(mockRpc).toHaveBeenCalledWith('create_checkout_order', expect.any(Object));
   });
 
   it('rejects checkout with 400 for invalid/inactive coupon code', async () => {

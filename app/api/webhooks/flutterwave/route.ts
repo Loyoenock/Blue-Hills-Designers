@@ -67,7 +67,39 @@ export async function POST(req: NextRequest) {
 
       // Update matching order status
       let orderUpdErr: any = null;
+      let stockReleased = false;
+
       if (paymentRecord.order_id) {
+        if (orderStatus === 'cancelled') {
+          // Check order's current status before releasing stock
+          const { data: currentOrder } = await supabase
+            .from('orders')
+            .select('id, status')
+            .eq('id', paymentRecord.order_id)
+            .single();
+
+          const isAlreadyCancelled = currentOrder?.status?.toLowerCase() === 'cancelled';
+
+          if (!isAlreadyCancelled) {
+            const { data: items } = await supabase
+              .from('order_items')
+              .select('product_id, quantity')
+              .eq('order_id', paymentRecord.order_id);
+
+            if (items && items.length > 0) {
+              for (const item of items) {
+                if (item.product_id && item.quantity > 0 && typeof (supabase as any).rpc === 'function') {
+                  await supabase.rpc('release_product_stock', {
+                    p_product_id: item.product_id,
+                    p_quantity: item.quantity
+                  });
+                }
+              }
+              stockReleased = true;
+            }
+          }
+        }
+
         const { error: err } = await supabase
           .from('orders')
           .update({
@@ -89,11 +121,15 @@ export async function POST(req: NextRequest) {
       }
 
       // Log webhook action to audit log
+      const auditDetails = stockReleased
+        ? `Flutterwave webhook updated Payment ${paymentRecord.id} to '${paymentStatus}', Order ${paymentRecord.order_id} to '${orderStatus}', and released reserved stock.`
+        : `Flutterwave webhook updated Payment ${paymentRecord.id} to '${paymentStatus}' and Order ${paymentRecord.order_id} to '${orderStatus}'.`;
+
       await supabase
         .from('audit_logs')
         .insert({
           action: 'Webhook Payment Update',
-          details: `Flutterwave webhook updated Payment ${paymentRecord.id} to '${paymentStatus}' and Order ${paymentRecord.order_id} to '${orderStatus}'.`,
+          details: auditDetails,
           ip_address: req.headers.get('x-forwarded-for') || 'flutterwave-webhook'
         });
 
@@ -109,6 +145,27 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (orderRecord) {
+        let stockReleased = false;
+
+        if (orderStatus === 'cancelled' && orderRecord.status?.toLowerCase() !== 'cancelled') {
+          const { data: items } = await supabase
+            .from('order_items')
+            .select('product_id, quantity')
+            .eq('order_id', orderRecord.id);
+
+          if (items && items.length > 0) {
+            for (const item of items) {
+              if (item.product_id && item.quantity > 0 && typeof (supabase as any).rpc === 'function') {
+                await supabase.rpc('release_product_stock', {
+                  p_product_id: item.product_id,
+                  p_quantity: item.quantity
+                });
+              }
+            }
+            stockReleased = true;
+          }
+        }
+
         const { error: orderUpdErr } = await supabase
           .from('orders')
           .update({
@@ -123,6 +180,16 @@ export async function POST(req: NextRequest) {
             { error: 'Failed to update order status in database' },
             { status: 502 }
           );
+        }
+
+        if (stockReleased) {
+          await supabase
+            .from('audit_logs')
+            .insert({
+              action: 'Webhook Stock Release',
+              details: `Released reserved stock for order ${orderRecord.id} upon Flutterwave payment cancellation/failure.`,
+              ip_address: req.headers.get('x-forwarded-for') || 'flutterwave-webhook'
+            });
         }
 
         return NextResponse.json({ status: 'success', message: 'Order status updated via tx_ref match' }, { status: 200 });

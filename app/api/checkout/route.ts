@@ -399,21 +399,10 @@ export async function POST(req: NextRequest) {
         if (orderTxErr.message?.includes('Insufficient stock')) {
           throw new ApiError('Apologies, one or more items in your cart became out of stock during checkout. Please review your cart.', 400);
         }
-        throw new Error(`Failed to process checkout transaction: ${orderTxErr.message}`);
-      }
-
-      // Increment times_used on successful checkout if a coupon was applied
-      if (validatedCoupon && validatedCoupon.code) {
-        try {
-          const couponCode = validatedCoupon.code.trim().toUpperCase();
-          const currentTimesUsed = Number(validatedCoupon.times_used) || 0;
-          await supabase
-            .from('coupons')
-            .update({ times_used: currentTimesUsed + 1 })
-            .eq('code', couponCode);
-        } catch (couponIncErr) {
-          logger.warn('Failed to increment coupon times_used after checkout', { couponIncErr, couponCode: validatedCoupon.code });
+        if (orderTxErr.message?.includes('Coupon usage limit reached')) {
+          throw new ApiError('This coupon has just reached its usage limit. Please remove it and try again.', 400);
         }
+        throw new Error(`Failed to process checkout transaction: ${orderTxErr.message}`);
       }
 
     } catch (dbErr: any) {
