@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 502 });
     }
 
     const flwRef = String(data.flw_ref || data.id || data.tx_ref || '');

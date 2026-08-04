@@ -203,4 +203,87 @@ describe('Flutterwave Webhook Route', () => {
     expect(res.status).toBe(502);
     expect(json.error).toBe('Failed to update order status in database');
   });
+
+  it('returns 502 when payment update succeeds but order update fails', async () => {
+    const mockPaymentRecord = {
+      id: 'pay-123',
+      order_id: 'ord-456',
+      transaction_id: 'FLW-TXN-1003',
+      status: 'pending',
+    };
+
+    const paymentUpdateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    const orderUpdateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: { message: 'Order table update lock failure' } }),
+    });
+
+    const mockSupabaseAdmin = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'payments') {
+          return {
+            select: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: mockPaymentRecord, error: null }),
+              }),
+            }),
+            update: paymentUpdateMock,
+          };
+        }
+        if (table === 'orders') {
+          return {
+            update: orderUpdateMock,
+          };
+        }
+        return {};
+      }),
+    };
+
+    vi.spyOn(supabaseLib, 'getSupabaseAdmin').mockReturnValue(mockSupabaseAdmin as any);
+
+    const req = new NextRequest('http://localhost:3000/api/webhooks/flutterwave', {
+      method: 'POST',
+      body: JSON.stringify({
+        event: 'charge.completed',
+        data: {
+          tx_ref: 'FLW-TXN-1003',
+          flw_ref: 'FLW-1003',
+          status: 'successful',
+        },
+      }),
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.error).toBe('Failed to update payment or order status in database');
+  });
+
+  it('returns 401 when invalid signature in live mode', async () => {
+    process.env.PAYMENT_TEST_MODE = 'false';
+    process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH = 'correct-secret-hash';
+
+    const req = new NextRequest('http://localhost:3000/api/webhooks/flutterwave', {
+      method: 'POST',
+      headers: {
+        'verif-hash': 'wrong-signature-hash',
+      },
+      body: JSON.stringify({
+        event: 'charge.completed',
+        data: {
+          tx_ref: 'FLW-TXN-1004',
+          status: 'successful',
+        },
+      }),
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toBe('Unauthorized webhook signature');
+  });
 });
