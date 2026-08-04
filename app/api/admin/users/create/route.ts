@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       role: rolePair.db,
       lifetime_spending: 0,
       reward_points: 0,
+      must_change_password: true,
       updated_at: new Date().toISOString()
     };
 

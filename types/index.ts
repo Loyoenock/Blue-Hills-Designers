@@ -83,6 +83,7 @@ export interface User {
   city?: string;
   address?: string;
   source?: 'local-demo' | 'db' | string;
+  mustChangePassword?: boolean;
 }
 
 export interface Coupon {

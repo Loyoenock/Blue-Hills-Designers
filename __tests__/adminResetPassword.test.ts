@@ -41,6 +41,9 @@ describe('Admin Reset Password API Route', () => {
                   error: null
                 })
               })
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null })
             })
           };
         }
@@ -90,6 +93,9 @@ describe('Admin Reset Password API Route', () => {
                   error: null
                 })
               })
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null })
             })
           };
         }

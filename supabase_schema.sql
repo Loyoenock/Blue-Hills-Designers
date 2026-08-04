@@ -52,6 +52,7 @@ CREATE TABLE public.profiles (
     reward_points INTEGER DEFAULT 0 NOT NULL,
     lifetime_spending NUMERIC DEFAULT 0 NOT NULL,
     is_active BOOLEAN DEFAULT true NOT NULL,
+    must_change_password BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -125,6 +126,8 @@ CREATE TABLE public.order_items (
     order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
     variant_id UUID, -- Placeholder for size/color combinations
+    selected_size TEXT,
+    selected_color TEXT,
     quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
     price NUMERIC NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -704,18 +707,22 @@ BEGIN
     );
 
     -- 2. Insert individual ordered items
-    FOR item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id UUID, quantity INT, price NUMERIC)
+    FOR item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id UUID, quantity INT, price NUMERIC, selected_size TEXT, selected_color TEXT)
     LOOP
         INSERT INTO public.order_items (
             order_id,
             product_id,
             quantity,
-            price
+            price,
+            selected_size,
+            selected_color
         ) VALUES (
             p_order_id,
             item.product_id,
             item.quantity,
-            item.price
+            item.price,
+            item.selected_size,
+            item.selected_color
         );
     END LOOP;
 

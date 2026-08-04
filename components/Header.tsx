@@ -61,6 +61,12 @@ export default function Header() {
     };
   }, [syncFromSupabase]);
 
+  useEffect(() => {
+    if (currentUser?.mustChangePassword && pathname !== '/set-new-password') {
+      router.push('/set-new-password');
+    }
+  }, [currentUser?.mustChangePassword, pathname, router]);
+
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleQuickLogin = (email: string) => {

@@ -72,6 +72,16 @@ export async function POST(req: NextRequest) {
       throw new ApiError(updateError?.message || 'Failed to update user password.', 400);
     }
 
+    // Set must_change_password: true on target profile
+    const { error: profileUpdateErr } = await supabaseAdmin
+      .from('profiles')
+      .update({ must_change_password: true })
+      .eq('id', cleanUserId);
+
+    if (profileUpdateErr) {
+      logger.warn('Failed to flag must_change_password on profile', { error: profileUpdateErr.message });
+    }
+
     return NextResponse.json({
       success: true,
       temporaryPassword: finalPassword

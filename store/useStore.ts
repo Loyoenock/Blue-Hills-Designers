@@ -708,7 +708,7 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
     }
 
     case 'profiles': {
-      return {
+      const profileOut: any = {
         id: toValidUUID(payload.id),
         full_name: payload.name || payload.fullName || payload.full_name || 'Gentleman Customer',
         email: payload.email,
@@ -718,6 +718,12 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         lifetime_spending: Number(payload.spending) || Number(payload.lifetimeSpending) || Number(payload.lifetime_spending) || 0,
         is_active: true
       };
+      if (payload.must_change_password !== undefined) {
+        profileOut.must_change_password = Boolean(payload.must_change_password);
+      } else if (payload.mustChangePassword !== undefined) {
+        profileOut.must_change_password = Boolean(payload.mustChangePassword);
+      }
+      return profileOut;
     }
 
     // Note: 'orders' and 'payments' DB tables now include 'updated_at' columns for server/webhook updates.
@@ -757,6 +763,8 @@ function mapToSupabasePayload(tableName: string, payload: any): any {
         order_id: orderId,
         product_id: toValidUUID(prodId),
         variant_id: null,
+        selected_size: payload.selectedSize || payload.selected_size || null,
+        selected_color: payload.selectedColor || payload.selected_color || null,
         quantity: Number(payload.quantity) || 1,
         price: Number(payload.price) || 0
       };
@@ -1616,8 +1624,8 @@ export const useStore = create<StoreState>()(
               productName: prod?.name || 'Luxury Item',
               price: item.price,
               quantity: item.quantity,
-              selectedSize: 'M',
-              selectedColor: 'Default',
+              selectedSize: item.selected_size || item.selectedSize || 'M',
+              selectedColor: item.selected_color || item.selectedColor || 'Default',
               image: prod?.images[0] || 'https://picsum.photos/seed/suit/600/600'
             };
           }) : [];
@@ -1807,7 +1815,8 @@ export const useStore = create<StoreState>()(
               country: meta.country || undefined,
               district: meta.district || undefined,
               city: meta.city || undefined,
-              address: meta.address || undefined
+              address: meta.address || undefined,
+              mustChangePassword: !!p?.must_change_password
             };
             set({ currentUser: userObj, currentUserId: targetUserId });
 
@@ -2153,7 +2162,8 @@ export const useStore = create<StoreState>()(
             phone: resUser.phone,
             role: capitalizeRole(resUser.role) as User['role'],
             spending: 0,
-            rewardsPoints: 0
+            rewardsPoints: 0,
+            mustChangePassword: !!resUser.mustChangePassword
           };
 
           if (supabase) {
@@ -2172,7 +2182,8 @@ export const useStore = create<StoreState>()(
                   country: profile.country || undefined,
                   district: profile.district || undefined,
                   city: profile.city || undefined,
-                  address: profile.address || undefined
+                  address: profile.address || undefined,
+                  mustChangePassword: profile.must_change_password !== undefined ? !!profile.must_change_password : user.mustChangePassword
                 };
               }
             } catch (dbErr) {
@@ -4190,8 +4201,9 @@ export const useStore = create<StoreState>()(
               user_id: activeUserId,
               product_id: validProductId
             });
-            if (dbRes && !dbRes.success) {
-              console.warn(`Failed to sync wishlist removal for product ${productId}:`, dbRes.error);
+            if (!dbRes || !dbRes.success) {
+              console.warn(`Failed to sync wishlist removal for product ${productId}:`, dbRes?.error);
+              set({ wishlist });
             } else {
               get().addAuditLog(
                 'Wishlist Item Removed',
@@ -4206,8 +4218,9 @@ export const useStore = create<StoreState>()(
               userId: activeUserId,
               productId: validProductId
             });
-            if (dbRes && !dbRes.success) {
-              console.warn(`Failed to sync wishlist addition for product ${productId}:`, dbRes.error);
+            if (!dbRes || !dbRes.success) {
+              console.warn(`Failed to sync wishlist addition for product ${productId}:`, dbRes?.error);
+              set({ wishlist });
             } else {
               get().addAuditLog(
                 'Wishlist Item Added',

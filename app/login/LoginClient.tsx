@@ -30,7 +30,11 @@ export default function LoginClient() {
     const timer = setTimeout(() => {
       setMounted(true);
       if (currentUser) {
-        router.push('/account');
+        if (currentUser.mustChangePassword) {
+          router.push('/set-new-password');
+        } else {
+          router.push('/account');
+        }
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -57,9 +61,16 @@ export default function LoginClient() {
         const res = await login(email, password);
         if (res.success) {
           setSuccess(true);
-          setTimeout(() => {
-            router.push('/account');
-          }, 1500);
+          const activeUser = useStore.getState().currentUser;
+          if (activeUser?.mustChangePassword) {
+            setTimeout(() => {
+              router.push('/set-new-password');
+            }, 1000);
+          } else {
+            setTimeout(() => {
+              router.push('/account');
+            }, 1500);
+          }
         } else {
           setErrorMsg(res.error || 'Login authorized credentials mismatch.');
         }

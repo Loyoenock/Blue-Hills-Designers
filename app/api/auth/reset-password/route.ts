@@ -47,6 +47,11 @@ export async function POST(req: NextRequest) {
       throw new ApiError(updateError.message, 400);
     }
 
+    // Clear must_change_password flag
+    try {
+      await supabase.from('profiles').update({ must_change_password: false }).eq('id', user.id);
+    } catch (_) {}
+
     logger.info('Password updated successfully via API', { userId: user.id });
     return NextResponse.json({ success: true });
   } catch (err: any) {

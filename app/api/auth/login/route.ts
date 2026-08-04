@@ -99,6 +99,19 @@ export async function POST(req: NextRequest) {
         : 'Super Admin';
     }
 
+    // Check must_change_password flag from profile
+    let mustChangePassword = false;
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('must_change_password')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile) {
+        mustChangePassword = !!profile.must_change_password;
+      }
+    } catch (_) {}
+
     const response = NextResponse.json({
       success: true,
       user: {
@@ -106,7 +119,8 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.user_metadata?.name || user.user_metadata?.full_name || emailTrimmed.split('@')[0].toUpperCase(),
         phone: user.user_metadata?.phone || '',
-        role: userRole
+        role: userRole,
+        mustChangePassword
       },
       session: {
         access_token: session.access_token,

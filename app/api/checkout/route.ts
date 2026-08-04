@@ -376,7 +376,9 @@ export async function POST(req: NextRequest) {
         p_items: validatedCartItems.map(item => ({
           product_id: item.product.id,
           quantity: item.quantity,
-          price: item.price
+          price: item.price,
+          selected_size: item.selectedSize || null,
+          selected_color: item.selectedColor || null
         })),
         p_shipping: {
           country: shippingAddress.country || 'Uganda',
