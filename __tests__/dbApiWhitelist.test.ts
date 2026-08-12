@@ -10,20 +10,23 @@ vi.mock('@/lib/rateLimit', () => ({
   }),
 }));
 
-vi.mock('@/lib/supabase', () => ({
-  getSupabaseForRequest: vi.fn().mockReturnValue({
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnValue({
-        select: vi.fn().mockResolvedValue({ data: [], error: null }),
-      }),
-      upsert: vi.fn().mockReturnValue({
-        select: vi.fn().mockResolvedValue({ data: [], error: null }),
-      }),
-      delete: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
+const createDefaultSupabaseClient = () => ({
+  from: vi.fn().mockReturnValue({
+    insert: vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }),
+    upsert: vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }),
+    delete: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
     }),
   }),
+});
+
+vi.mock('@/lib/supabase', () => ({
+  getSupabaseForRequest: vi.fn(),
+  getSupabaseAdmin: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@/lib/apiUtils', async (importOriginal) => {
@@ -35,8 +38,11 @@ vi.mock('@/lib/apiUtils', async (importOriginal) => {
 });
 
 describe('DB API Whitelist and Security Safeguards', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { getSupabaseForRequest, getSupabaseAdmin } = await import('@/lib/supabase');
+    vi.mocked(getSupabaseForRequest).mockReturnValue(createDefaultSupabaseClient() as any);
+    vi.mocked(getSupabaseAdmin).mockReturnValue(null);
   });
 
   describe('Action Whitelist Enforcement', () => {
@@ -110,6 +116,83 @@ describe('DB API Whitelist and Security Safeguards', () => {
 
       expect(res.status).toBe(403);
       expect(data.error).toContain('Access Denied: Table "pg_catalog" is not authorized');
+    });
+
+    it('allows upsert on saved_addresses for an authenticated user', async () => {
+      const { authenticate } = await import('@/lib/apiUtils');
+      const { getSupabaseForRequest } = await import('@/lib/supabase');
+      
+      const mockUpsertSelect = vi.fn().mockResolvedValue({ data: [{ id: 'addr-1', label: 'Home' }], error: null });
+      const mockUpsert = vi.fn().mockReturnValue({ select: mockUpsertSelect });
+      const mockFrom = vi.fn().mockReturnValue({ upsert: mockUpsert });
+
+      vi.mocked(getSupabaseForRequest).mockReturnValue({ from: mockFrom } as any);
+      vi.mocked(authenticate).mockResolvedValueOnce({ id: 'customer-uuid-123', role: 'Customer' } as any);
+
+      const req = new NextRequest('http://localhost:3000/api/db', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-customer-token'
+        },
+        body: JSON.stringify({
+          action: 'upsert',
+          tableName: 'saved_addresses',
+          payload: {
+            user_id: 'customer-uuid-123',
+            label: 'Home',
+            country: 'Uganda',
+            district: 'Kampala',
+            city: 'Kampala',
+            address: '123 Main St'
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
+      expect(mockFrom).toHaveBeenCalledWith('saved_addresses');
+      expect(mockUpsert).toHaveBeenCalled();
+      expect(data.data).toEqual([{ id: 'addr-1', label: 'Home' }]);
+    });
+
+    it('rejects saved_addresses upsert for unauthenticated callers per RLS/admin fallback', async () => {
+      const { authenticate } = await import('@/lib/apiUtils');
+      const { getSupabaseForRequest, getSupabaseAdmin } = await import('@/lib/supabase');
+
+      const rlsError = { message: 'new row violates row-level security policy' };
+      const mockUpsertSelect = vi.fn().mockResolvedValue({ data: null, error: rlsError });
+      const mockUpsert = vi.fn().mockReturnValue({ select: mockUpsertSelect });
+      const mockFrom = vi.fn().mockReturnValue({ upsert: mockUpsert });
+
+      vi.mocked(getSupabaseForRequest).mockReturnValue({ from: mockFrom } as any);
+      vi.mocked(authenticate).mockResolvedValueOnce(null as any);
+
+      const req = new NextRequest('http://localhost:3000/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsert',
+          tableName: 'saved_addresses',
+          payload: {
+            user_id: 'customer-uuid-123',
+            label: 'Home',
+            country: 'Uganda',
+            district: 'Kampala',
+            city: 'Kampala',
+            address: '123 Main St'
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(data.error).toContain('Security Rejection');
     });
   });
 

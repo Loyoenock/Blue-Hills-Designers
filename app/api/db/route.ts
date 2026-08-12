@@ -21,7 +21,8 @@ const ALLOWED_TABLES = [
   'newsletter_subscribers',
   'coupons',
   'testimonials',
-  'app_settings'
+  'app_settings',
+  'saved_addresses'
 ];
 
 function isRlsError(err: any): boolean {
