@@ -194,6 +194,73 @@ describe('DB API Whitelist and Security Safeguards', () => {
       expect(res.status).toBe(403);
       expect(data.error).toContain('Security Rejection');
     });
+
+    it('rejects profile upsert self-escalation role change for customer caller with 403 status', async () => {
+      const { authenticate } = await import('@/lib/apiUtils');
+      const { getSupabaseForRequest } = await import('@/lib/supabase');
+
+      const mockFrom = vi.fn();
+      vi.mocked(getSupabaseForRequest).mockReturnValue({ from: mockFrom } as any);
+      vi.mocked(authenticate).mockResolvedValueOnce({ id: 'customer-uuid-123', role: 'Customer' } as any);
+
+      const req = new NextRequest('http://localhost:3000/api/db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-customer-token'
+        },
+        body: JSON.stringify({
+          action: 'upsert',
+          tableName: 'profiles',
+          payload: {
+            id: 'customer-uuid-123',
+            role: 'super admin'
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(data.error).toContain('Only Admin or Super Admin accounts are authorized to modify user profiles');
+    });
+
+    it('rejects profile upsert when RLS WITH CHECK policy rejects role or status mutation', async () => {
+      const { authenticate } = await import('@/lib/apiUtils');
+      const { getSupabaseForRequest, getSupabaseAdmin } = await import('@/lib/supabase');
+
+      const rlsError = { message: 'new row violates row-level security policy for table "profiles"' };
+      const mockUpsertSelect = vi.fn().mockResolvedValue({ data: null, error: rlsError });
+      const mockUpsert = vi.fn().mockReturnValue({ select: mockUpsertSelect });
+      const mockFrom = vi.fn().mockReturnValue({ upsert: mockUpsert });
+
+      vi.mocked(getSupabaseForRequest).mockReturnValue({ from: mockFrom } as any);
+      vi.mocked(getSupabaseAdmin).mockReturnValue(null);
+      vi.mocked(authenticate).mockResolvedValueOnce({ id: 'admin-uuid-123', role: 'Admin' } as any);
+
+      const req = new NextRequest('http://localhost:3000/api/db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-admin-token'
+        },
+        body: JSON.stringify({
+          action: 'upsert',
+          tableName: 'profiles',
+          payload: {
+            id: 'target-uuid-456',
+            role: 'customer'
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(data.error).toContain('Security Rejection');
+    });
   });
 
   describe('Delete Unbounded Filter Safeguards', () => {

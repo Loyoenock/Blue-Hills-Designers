@@ -240,12 +240,30 @@ CREATE POLICY "Allow public read-access to categories" ON public.categories FOR 
 CREATE POLICY "Allow administrative changes to categories" ON public.categories FOR ALL USING (public.is_admin_or_staff(auth.uid()));
 
 -- 3.2 PROFILES
+-- Prevent privilege escalation: Users can only update their own profile (auth.uid() = id)
+-- and cannot modify their role, account status (is_active), or loyalty metrics (reward_points,
+-- lifetime_spending) unless they hold administrative/staff privileges. Self-service updates
+-- are strictly restricted to personal contact details (full_name, phone, email).
 DROP POLICY IF EXISTS "Allow public read-access to profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Allow users to view own profile or admin view all" ON public.profiles;
 CREATE POLICY "Allow users to view own profile or admin view all" ON public.profiles FOR SELECT USING (
     auth.uid() = id OR public.is_admin_or_staff(auth.uid())
 );
-CREATE POLICY "Allow users to update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.profiles;
+CREATE POLICY "Allow users to update their own profile" ON public.profiles
+    FOR UPDATE USING (auth.uid() = id)
+    WITH CHECK (
+        auth.uid() = id
+        AND (
+            (
+                role = (SELECT p.role FROM public.profiles p WHERE p.id = auth.uid())
+                AND is_active = (SELECT p.is_active FROM public.profiles p WHERE p.id = auth.uid())
+                AND reward_points = (SELECT p.reward_points FROM public.profiles p WHERE p.id = auth.uid())
+                AND lifetime_spending = (SELECT p.lifetime_spending FROM public.profiles p WHERE p.id = auth.uid())
+            )
+            OR public.is_admin_or_staff(auth.uid())
+        )
+    );
 DROP POLICY IF EXISTS "Allow full access to profiles for admin" ON public.profiles;
 CREATE POLICY "Allow admin-tier write access to profiles" ON public.profiles FOR ALL USING (public.is_admin_or_staff(auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('super admin', 'admin')));
 

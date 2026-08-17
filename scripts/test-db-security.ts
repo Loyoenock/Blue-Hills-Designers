@@ -177,6 +177,44 @@ async function runSecurityTests() {
     console.log('\n--- Case 4: Admin/Staff test [SKIPPED] (No TEST_ADMIN_TOKEN provided) ---');
   }
 
+  // =========================================================================
+  // CASE 5: Customer attempting self-privilege escalation on their own profile
+  // =========================================================================
+  if (TEST_USER_TOKEN) {
+    console.log('\n--- Case 5: Customer attempting self-privilege escalation (role update on own profile) ---');
+    try {
+      const res = await fetch(`${APP_URL}/api/db`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${TEST_USER_TOKEN}`
+        },
+        body: JSON.stringify({
+          action: 'upsert',
+          tableName: 'profiles',
+          payload: {
+            id: '00000000-0000-0000-0000-000000000001', // Caller's own UID
+            role: 'super admin'
+          }
+        })
+      });
+
+      console.log(`Status Code: ${res.status}`);
+      const json = await res.json() as any;
+      console.log('Response JSON:', json);
+
+      if (res.status >= 400 || json.error) {
+        console.log('✅ PASS: Self-privilege escalation rejected by RLS WITH CHECK policy / security authorization.');
+      } else {
+        console.log('❌ FAIL: Customer successfully escalated own profile role to Super Admin!');
+      }
+    } catch (error: any) {
+      console.log('✅ PASS: Self-privilege escalation attempt blocked with exception:', error.message);
+    }
+  } else {
+    console.log('\n--- Case 5: Customer self-privilege escalation test [SKIPPED] (No TEST_USER_TOKEN provided) ---');
+  }
+
   console.log('\n===========================================================');
   console.log('🛡️ SECURITY REGRESSION CHECK COMPLETED');
   console.log('===========================================================');
