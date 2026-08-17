@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import LoginClient from './LoginClient';
 
 export default function LoginClientWrapper() {
@@ -21,5 +21,13 @@ export default function LoginClientWrapper() {
     );
   }
 
-  return <LoginClient />;
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#F7F5F0] flex flex-col items-center justify-center space-y-4 font-sans">
+        <div className="w-8 h-8 border-2 border-[#1C4D8D] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <LoginClient />
+    </Suspense>
+  );
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   ShieldCheck, HelpCircle, ArrowRight, Check, AlertTriangle, Key
 } from 'lucide-react';
@@ -12,6 +12,12 @@ import { motion } from 'motion/react';
 
 export default function LoginClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get('redirect');
+  const targetDestination = (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//'))
+    ? redirectParam
+    : '/account';
+
   const login = useStore((state) => state.login);
   const forgotPassword = useStore((state) => state.forgotPassword);
   const currentUser = useStore((state) => state.currentUser);
@@ -33,12 +39,12 @@ export default function LoginClient() {
         if (currentUser.mustChangePassword) {
           router.push('/set-new-password');
         } else {
-          router.push('/account');
+          router.push(targetDestination);
         }
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [currentUser, router]);
+  }, [currentUser, router, targetDestination]);
 
   if (!mounted) return null;
 
@@ -68,7 +74,7 @@ export default function LoginClient() {
             }, 1000);
           } else {
             setTimeout(() => {
-              router.push('/account');
+              router.push(targetDestination);
             }, 1500);
           }
         } else {

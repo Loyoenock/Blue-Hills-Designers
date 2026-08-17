@@ -79,6 +79,38 @@ async function verifyProfileWriteAuthorization(callerRole: string | undefined, p
   }
 }
 
+async function verifyCustomerOrderCancellation(authUser: { id: string; role?: string } | null, payload: any) {
+  const roleLower = (authUser?.role || '').toLowerCase();
+  if (['super admin', 'admin', 'manager', 'staff'].includes(roleLower)) return; // staff path unchanged
+
+  if (!authUser) {
+    throw new ApiError('Authentication required to update an order.', 401);
+  }
+
+  const items = Array.isArray(payload) ? payload : [payload];
+  const adminClient = getSupabaseAdmin();
+  for (const item of items) {
+    if (!item?.id) throw new ApiError('Order id is required.', 400);
+    const itemStatus = (item.status || '').toLowerCase();
+    if (itemStatus !== 'cancelled') {
+      throw new ApiError('Forbidden: customers may only cancel an order, not set other statuses.', 403);
+    }
+    if (!adminClient) throw new ApiError('Supabase admin client could not be initialized.', 500);
+    const { data: existing } = await adminClient
+      .from('orders')
+      .select('id, user_id, status')
+      .eq('id', item.id)
+      .maybeSingle();
+    if (!existing || existing.user_id !== authUser.id) {
+      throw new ApiError('Forbidden: you may only cancel your own orders.', 403);
+    }
+    const existingStatus = (existing.status || '').toLowerCase();
+    if (!['pending', 'processing'].includes(existingStatus)) {
+      throw new ApiError(`Forbidden: an order that is already '${existing.status}' cannot be cancelled here.`, 403);
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate Limiting Check (Max 600 DB requests per minute per IP to protect server resources while allowing fast client sync)
@@ -178,6 +210,9 @@ export async function POST(req: NextRequest) {
     } else if (actionLower === 'upsert') {
       if (tableName === 'profiles') {
         await verifyProfileWriteAuthorization(authUser?.role, payload);
+      }
+      if (tableName === 'orders') {
+        await verifyCustomerOrderCancellation(authUser, payload);
       }
       const options = body.options || {};
       const onConflict = options.onConflict || (tableName === 'categories' ? 'slug' : undefined);

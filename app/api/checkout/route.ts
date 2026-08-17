@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate, requireAuth } from '@/lib/apiUtils';
 import { sendTransactionalEmail } from '@/lib/email';
 import { chargeMobileMoney, chargeCard } from '@/lib/payment';
 import { getEffectivePrice } from '@/lib/utils';
@@ -76,9 +76,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. User Authentication Verification (via Bearer token in request header)
-    const authUser = await authenticate(req);
-    const authenticatedUserId = authUser?.id || null;
-    const userRole = authUser?.role || 'Customer';
+    const authUser = await requireAuth(req);
+    const authenticatedUserId = authUser.id;
+    const userRole = authUser.role;
 
     logger.info('Checkout request received', {
       email,

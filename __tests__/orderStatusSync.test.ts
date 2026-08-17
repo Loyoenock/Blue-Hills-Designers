@@ -23,6 +23,8 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
           orderNumber: 'BHD-1001',
           customerName: 'Alice',
           customerEmail: 'alice@example.com',
+          customerPhone: '+256700000001',
+          shippingAddress: { country: 'Uganda', district: 'Kampala', city: 'Kampala', address: 'Plot 1' },
           items: [],
           amount: 150000,
           date: '2026-08-01',
@@ -35,6 +37,7 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
           id: '223e4567-e89b-12d3-a456-426614174000',
           orderId: '123e4567-e89b-12d3-a456-426614174000',
           customerName: 'Alice',
+          customerEmail: 'alice@example.com',
           amount: 150000,
           status: 'Pending',
           paymentMethod: 'Cash on Delivery',
@@ -67,6 +70,8 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
           orderNumber: 'BHD-1002',
           customerName: 'Bob',
           customerEmail: 'bob@example.com',
+          customerPhone: '+256700000002',
+          shippingAddress: { country: 'Uganda', district: 'Kampala', city: 'Kampala', address: 'Plot 2' },
           items: [],
           amount: 200000,
           date: '2026-08-01',
@@ -79,6 +84,7 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
           id: '223e4567-e89b-12d3-a456-426614174001',
           orderId: '123e4567-e89b-12d3-a456-426614174001',
           customerName: 'Bob',
+          customerEmail: 'bob@example.com',
           amount: 200000,
           status: 'Pending',
           paymentMethod: 'Mobile Money',
@@ -118,20 +124,23 @@ describe('updateOrderStatus - Payment Consistency & Rollback', () => {
       orderNumber: 'BHD-1004',
       customerName: 'Dave',
       customerEmail: 'dave@example.com',
+      customerPhone: '+256700000003',
+      shippingAddress: { country: 'Uganda', district: 'Kampala', city: 'Kampala', address: 'Plot 3' },
       items: [],
       amount: 400000,
       date: '2026-08-01',
       status: 'Pending' as const,
-      paymentMethod: 'Mobile Money'
+      paymentMethod: 'Mobile Money' as const
     };
 
     const initialPayment = {
       id: '223e4567-e89b-12d3-a456-426614174003',
       orderId: '123e4567-e89b-12d3-a456-426614174003',
       customerName: 'Dave',
+      customerEmail: 'dave@example.com',
       amount: 400000,
       status: 'Pending' as const,
-      paymentMethod: 'Mobile Money',
+      paymentMethod: 'Mobile Money' as const,
       transactionId: 'TXN-MM-1004',
       date: '2026-08-01'
     };

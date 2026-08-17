@@ -71,4 +71,10 @@ test.describe('E2E Auth Flows', () => {
     // Verify credentials saved banner
     await expect(page.locator('text=Credentials Saved!')).toBeVisible({ timeout: 10000 });
   });
+
+  test('Checkout protection: navigating to /checkout while logged out redirects to /login?redirect=%2Fcheckout', async ({ page }) => {
+    await page.goto('/checkout');
+    await expect(page).toHaveURL(/\/login\?redirect=(%2Fcheckout|\/checkout)/);
+    await expect(page.locator('#login-credentials-form')).toBeVisible({ timeout: 10000 });
+  });
 });

@@ -33,10 +33,11 @@ describe('Stock Restoration on Order Cancellation', () => {
           category: 'Suits',
           description: 'Tailored luxury suit',
           images: ['https://example.com/suit.jpg'],
-          featured: true,
+          sizes: ['48R', '50R', '52R'],
+          colors: ['Navy'],
+          isFeatured: true,
           rating: 5,
-          reviewsCount: 10,
-          createdAt: new Date().toISOString(),
+          reviews: [],
         }
       ],
       orders: [
@@ -74,6 +75,7 @@ describe('Stock Restoration on Order Cancellation', () => {
           id: PAY_ID,
           orderId: ORD_ID,
           customerName: 'John Doe',
+          customerEmail: 'john@example.com',
           amount: 5000,
           paymentMethod: 'Mobile Money',
           status: 'Pending',

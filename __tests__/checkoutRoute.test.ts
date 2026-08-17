@@ -35,6 +35,23 @@ const mockRpc = vi.fn().mockImplementation((fnName: string, params: any) => {
 
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: vi.fn().mockImplementation(() => ({
+    auth: {
+      getUser: vi.fn().mockImplementation((token: string) => {
+        if (!token || token === 'invalid-token') {
+          return Promise.resolve({ data: { user: null }, error: { message: 'Invalid token' } });
+        }
+        return Promise.resolve({
+          data: {
+            user: {
+              id: '123e4567-e89b-42d3-a456-426614174000',
+              email: 'buyer@example.com',
+              user_metadata: { role: 'Customer' },
+            },
+          },
+          error: null,
+        });
+      }),
+    },
     rpc: (fnName: string, params: any) => mockRpc(fnName, params),
     from: (table: string) => {
       const chain = {
@@ -116,15 +133,45 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
     };
   });
 
-  function createCheckoutRequest(body: any): NextRequest {
+  function createCheckoutRequest(body: any, token: string | null = 'valid-jwt-token'): NextRequest {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     return new NextRequest('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(body),
     });
   }
+
+  it('rejects unauthenticated checkout with 401 when no token is provided and performs no payment charges or order writes', async () => {
+    const req = createCheckoutRequest({
+      email: 'buyer@example.com',
+      phone: '+256770000000',
+      paymentMethod: 'Mobile Money',
+      paymentDetails: { momoProvider: 'MTN', momoNumber: '+256770000000' },
+      shippingAddress: { city: 'Kampala', address: 'Plot 10 Kampala Rd' },
+      cart: [
+        {
+          id: 'cart-1',
+          product: { id: 'prod-suit-1', name: 'Savile Midnight Suit' },
+          quantity: 1,
+        },
+      ],
+    }, null); // null token -> no auth header or cookie
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(data.error).toMatch(/Authentication token is missing, invalid, or expired/i);
+    expect(mockChargeMobileMoney).not.toHaveBeenCalled();
+    expect(mockChargeCard).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
 
   it('rejects checkout with 400 if product stock is insufficient', async () => {
     const req = createCheckoutRequest({

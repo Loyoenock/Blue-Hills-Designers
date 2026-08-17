@@ -17,11 +17,16 @@ export default function AccountClient() {
   const { 
     currentUser, orders, updateProfile, updateAddress, updatePassword, logout, login, users,
     wishlist, toggleWishlist, products, addToCart,
-    savedAddresses, addSavedAddress, updateSavedAddress, deleteSavedAddress, setDefaultAddress
+    savedAddresses, addSavedAddress, updateSavedAddress, deleteSavedAddress, setDefaultAddress,
+    cancelOrder
   } = useStore();
   
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'wishlist' | 'profile' | 'addresses' | 'password'>('dashboard');
+
+  // Order cancellation state
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   // Edit Profile form inputs
   const [profileName, setProfileName] = useState('');
@@ -328,14 +333,58 @@ export default function AccountClient() {
                             </div>
                             <div className="space-y-1">
                               <span className="text-[10px] font-mono text-[#657892] block">STATUS</span>
-                              <span className={`text-[10px] font-mono uppercase font-bold px-3 py-1 rounded-full ${
-                                o.status === 'Delivered' ? 'bg-green-600/10 text-green-700 border border-green-600/20' :
-                                o.status === 'Processing' ? 'bg-blue-600/10 text-blue-700 border border-blue-600/20' :
-                                o.status === 'Cancelled' ? 'bg-red-600/10 text-red-700 border border-red-600/20' :
-                                'bg-yellow-600/10 text-yellow-700 border border-yellow-600/20'
-                              }`}>
-                                {o.status}
-                              </span>
+                              <div className="flex flex-col items-start gap-1.5">
+                                <span className={`text-[10px] font-mono uppercase font-bold px-3 py-1 rounded-full ${
+                                  o.status === 'Delivered' ? 'bg-green-600/10 text-green-700 border border-green-600/20' :
+                                  o.status === 'Processing' ? 'bg-blue-600/10 text-blue-700 border border-blue-600/20' :
+                                  o.status === 'Cancelled' ? 'bg-red-600/10 text-red-700 border border-red-600/20' :
+                                  'bg-yellow-600/10 text-yellow-700 border border-yellow-600/20'
+                                }`}>
+                                  {o.status}
+                                </span>
+                                {(o.status === 'Pending' || o.status === 'Processing') && (
+                                  <div className="pt-1">
+                                    {cancellingOrderId === o.id ? (
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            setCancelError(null);
+                                            const res = await cancelOrder(o.id);
+                                            setCancellingOrderId(null);
+                                            if (!res.success && res.error) {
+                                              setCancelError(res.error);
+                                            }
+                                          }}
+                                          className="bg-red-600 text-white hover:bg-red-700 px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider font-mono cursor-pointer transition-colors"
+                                        >
+                                          Confirm
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setCancellingOrderId(null);
+                                          }}
+                                          className="bg-gray-200 text-gray-700 hover:bg-gray-300 px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider font-mono cursor-pointer transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCancelError(null);
+                                          setCancellingOrderId(o.id);
+                                        }}
+                                        className="text-[10px] font-mono font-bold uppercase tracking-wider text-red-600 hover:text-red-700 border border-red-600/30 hover:bg-red-600/10 px-2.5 py-1 rounded transition-all cursor-pointer"
+                                      >
+                                        Cancel Order
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
 

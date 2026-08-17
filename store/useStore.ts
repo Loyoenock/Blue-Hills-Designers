@@ -83,6 +83,7 @@ interface StoreState {
   // Checkout / Order actions
   placeOrder: (orderData: Omit<Order, 'id' | 'date'> & { id?: string; date?: string; paymentId?: string; paymentStatus?: Payment['status']; paymentTransactionId?: string; }, skipDbSync?: boolean) => Order;
   updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
+  cancelOrder: (orderId: string) => Promise<{ success: boolean; error?: string }>;
   updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
   updateSettings: (newSettings: Partial<AppSettings>, updaterName: string, updaterRole: string) => Promise<{ success: boolean; error?: string }>;
 
@@ -3536,6 +3537,21 @@ export const useStore = create<StoreState>()(
         }
 
         return { success: true };
+      },
+
+      cancelOrder: async (orderId: string) => {
+        const currentUser = get().currentUser;
+        const order = (get().orders || []).find(o => o.id === orderId || o.orderNumber === orderId);
+        if (!currentUser || !order) {
+          return { success: false, error: 'Order not found.' };
+        }
+        if (order.customerEmail.toLowerCase() !== currentUser.email.toLowerCase()) {
+          return { success: false, error: 'You can only cancel your own orders.' };
+        }
+        if (order.status !== 'Pending' && order.status !== 'Processing') {
+          return { success: false, error: `This order can no longer be cancelled (status: ${order.status}).` };
+        }
+        return get().updateOrderStatus(order.id, 'Cancelled', currentUser.name || 'Customer', 'Customer');
       },
 
       updatePaymentStatus: async (paymentId, status, modifierName, modifierRole) => {

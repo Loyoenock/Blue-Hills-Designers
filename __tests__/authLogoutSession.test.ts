@@ -41,7 +41,7 @@ describe('Logout and Session Cleanup in Store', () => {
       currentUserId: 'usr-123',
       wishlist: ['prod-1'],
       savedAddresses: [
-        { id: 'addr-1', userId: 'usr-123', name: 'Home', isDefault: true, country: 'Uganda', district: 'Kampala', city: 'Kampala', address: 'Main St', createdAt: '2026-01-01' }
+        { id: 'addr-1', user_id: 'usr-123', label: 'Home', is_default: true, country: 'Uganda', district: 'Kampala', city: 'Kampala', address: 'Main St', created_at: '2026-01-01' }
       ]
     });
 

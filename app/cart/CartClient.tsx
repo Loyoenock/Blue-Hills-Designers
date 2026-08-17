@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function CartClient() {
   const cart = useStore((state) => state.cart);
+  const currentUser = useStore((state) => state.currentUser);
   const updateCartQty = useStore((state) => state.updateCartQty);
   const removeFromCart = useStore((state) => state.removeFromCart);
   const clearCart = useStore((state) => state.clearCart);
@@ -401,11 +402,11 @@ export default function CartClient() {
                   {/* Checkout CTA */}
                   <div className="space-y-2">
                     <Link 
-                      href="/checkout"
+                      href={currentUser ? '/checkout' : '/login?redirect=/checkout'}
                       className="w-full bg-[#1C4D8D] hover:bg-[#1C4D8D]/90 text-[#F7F5F0] py-4 rounded-lg font-semibold uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 shadow-md font-sans"
                       id="proceed-checkout-btn"
                     >
-                      <span>Proceed to Checkout</span>
+                      <span>{currentUser ? 'Proceed to Checkout' : 'Log In to Checkout'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                     <div className="text-[10px] text-center text-[#657892]/50 font-mono">
