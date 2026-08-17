@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('E2E Admin Console Navigation', () => {
+  test.beforeEach(() => {
+    test.skip(Boolean(process.env.CI), 'Requires live Supabase instance and seeded Admin credentials in CI environment');
+  });
+
   test('logs in as admin and navigates between Products, Orders, and Settings tabs', async ({ page }) => {
     // 1. Log in with admin credentials
     await page.goto('/login');

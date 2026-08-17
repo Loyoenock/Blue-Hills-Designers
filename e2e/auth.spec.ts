@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('E2E Auth Flows', () => {
+  test.beforeEach(() => {
+    test.skip(Boolean(process.env.CI), 'Requires live Supabase instance and seeded credentials in CI environment');
+  });
+
   test('Login happy path: signs in with authorized executive credentials', async ({ page }) => {
     await page.goto('/login');
     await expect(page).toHaveURL(/\/login/);

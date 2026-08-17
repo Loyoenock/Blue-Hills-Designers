@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Customer Order Self-Service Cancellation', () => {
+  test.beforeEach(() => {
+    test.skip(Boolean(process.env.CI), 'Requires live Supabase instance and seeded Customer account in CI environment');
+  });
+
   test('customer can view order history and cancel a pending or processing order', async ({ page }) => {
     // Navigate to login
     await page.goto('/login');

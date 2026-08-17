@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('E2E Checkout Flow', () => {
+  test.beforeEach(() => {
+    test.skip(Boolean(process.env.CI), 'Requires live Supabase instance and seeded inventory in CI environment');
+  });
+
   test('adds product to cart, navigates to checkout, completes address & payment forms, and receives confirmation', async ({ page }) => {
     // 1. Visit the shop page
     await page.goto('/shop');
