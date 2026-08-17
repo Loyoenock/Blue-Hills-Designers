@@ -120,8 +120,10 @@ export default function AccountClient() {
   }
 
   // Filter orders belonging to current logged in user
-  const clientOrders = orders.filter(
-    o => o.customerEmail.toLowerCase() === currentUser.email.toLowerCase()
+  const clientOrders = orders.filter(o =>
+    o.userId
+      ? o.userId === currentUser.id
+      : o.customerEmail.toLowerCase() === currentUser.email.toLowerCase()
   );
 
   const handleProfileUpdateSubmit = (e: React.FormEvent) => {

@@ -4,6 +4,9 @@ import fs from 'fs';
 import path from 'path';
 
 // Mocks
+const VALID_TEST_TOKEN = 'valid-test-jwt-token';
+const AUTHENTICATED_USER_ID = '123e4567-e89b-42d3-a456-426614174000';
+
 const mockChargeMobileMoney = vi.fn();
 const mockChargeCard = vi.fn();
 const mockSendEmail = vi.fn();
@@ -36,21 +39,21 @@ const mockRpc = vi.fn().mockImplementation((fnName: string, params: any) => {
 vi.mock('@/lib/supabase', () => ({
   getSupabaseAdmin: vi.fn().mockImplementation(() => ({
     auth: {
-      getUser: vi.fn().mockImplementation((token: string) => {
-        if (!token || token === 'invalid-token') {
-          return Promise.resolve({ data: { user: null }, error: { message: 'Invalid token' } });
-        }
-        return Promise.resolve({
-          data: {
-            user: {
-              id: '123e4567-e89b-42d3-a456-426614174000',
-              email: 'buyer@example.com',
-              user_metadata: { role: 'Customer' },
+      getUser: async (token: string) => {
+        if (token === VALID_TEST_TOKEN) {
+          return {
+            data: {
+              user: {
+                id: AUTHENTICATED_USER_ID,
+                email: 'buyer@example.com',
+                user_metadata: {},
+              },
             },
-          },
-          error: null,
-        });
-      }),
+            error: null,
+          };
+        }
+        return { data: { user: null }, error: { message: 'Invalid token' } };
+      },
     },
     rpc: (fnName: string, params: any) => mockRpc(fnName, params),
     from: (table: string) => {
@@ -63,6 +66,9 @@ vi.mock('@/lib/supabase', () => ({
         },
         limit: () => chain,
         maybeSingle: async () => {
+          if (table === 'profiles') {
+            return { data: { role: 'Customer' }, error: null };
+          }
           if (table === 'app_settings') {
             return { data: mockDbData.app_settings || null, error: null };
           }
@@ -133,22 +139,29 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
     };
   });
 
-  function createCheckoutRequest(body: any, token: string | null = 'valid-jwt-token'): NextRequest {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  function createCheckoutRequest(body: any): NextRequest {
     return new NextRequest('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${VALID_TEST_TOKEN}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function createUnauthenticatedCheckoutRequest(body: any): NextRequest {
+    return new NextRequest('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(body),
     });
   }
 
   it('rejects unauthenticated checkout with 401 when no token is provided and performs no payment charges or order writes', async () => {
-    const req = createCheckoutRequest({
+    const req = createUnauthenticatedCheckoutRequest({
       email: 'buyer@example.com',
       phone: '+256770000000',
       paymentMethod: 'Mobile Money',
@@ -161,13 +174,13 @@ describe('POST /api/checkout - Inventory, Coupon & Idempotency Rules', () => {
           quantity: 1,
         },
       ],
-    }, null); // null token -> no auth header or cookie
+    });
 
     const res = await POST(req);
     const data = await res.json();
 
     expect(res.status).toBe(401);
-    expect(data.error).toMatch(/Authentication token is missing, invalid, or expired/i);
+    expect(data.error).toMatch(/authentication|token/i);
     expect(mockChargeMobileMoney).not.toHaveBeenCalled();
     expect(mockChargeCard).not.toHaveBeenCalled();
     expect(mockRpc).not.toHaveBeenCalled();

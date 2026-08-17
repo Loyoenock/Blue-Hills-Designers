@@ -359,6 +359,7 @@ export default function CheckoutClient() {
       const localOrder = {
         id: resData.orderUUID || resData.orderNumber,
         orderNumber: resData.orderNumber,
+        userId: currentUser?.id,
         customerName: payload.customerName,
         customerEmail: email,
         customerPhone: phone,

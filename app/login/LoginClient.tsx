@@ -13,9 +13,9 @@ import { motion } from 'motion/react';
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectParam = searchParams.get('redirect');
-  const targetDestination = (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//'))
-    ? redirectParam
+  const rawRedirect = searchParams.get('redirect');
+  const postLoginDestination = rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
+    ? rawRedirect
     : '/account';
 
   const login = useStore((state) => state.login);
@@ -39,12 +39,12 @@ export default function LoginClient() {
         if (currentUser.mustChangePassword) {
           router.push('/set-new-password');
         } else {
-          router.push(targetDestination);
+          router.push(postLoginDestination);
         }
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [currentUser, router, targetDestination]);
+  }, [currentUser, router, postLoginDestination]);
 
   if (!mounted) return null;
 
@@ -74,7 +74,7 @@ export default function LoginClient() {
             }, 1000);
           } else {
             setTimeout(() => {
-              router.push(targetDestination);
+              router.push(postLoginDestination);
             }, 1500);
           }
         } else {

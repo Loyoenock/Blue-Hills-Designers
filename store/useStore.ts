@@ -1712,6 +1712,7 @@ export const useStore = create<StoreState>()(
           return {
             id: o.id,
             orderNumber: o.order_number || o.id,
+            userId: o.user_id || undefined,
             customerName: profile?.full_name || 'Gentleman Customer',
             customerEmail: profile?.email || '',
             customerPhone: profile?.phone || '',

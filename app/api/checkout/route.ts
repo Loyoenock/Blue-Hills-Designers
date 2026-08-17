@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate, requireAuth } from '@/lib/apiUtils';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, requireAuth } from '@/lib/apiUtils';
 import { sendTransactionalEmail } from '@/lib/email';
 import { chargeMobileMoney, chargeCard } from '@/lib/payment';
 import { getEffectivePrice } from '@/lib/utils';
