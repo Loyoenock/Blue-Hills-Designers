@@ -3,6 +3,8 @@ import { useStore } from '../store/useStore';
 
 describe('cancelOrder - Store logic and stock release', () => {
   beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,

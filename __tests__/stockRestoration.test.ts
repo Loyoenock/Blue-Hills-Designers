@@ -15,6 +15,8 @@ describe('Stock Restoration on Order Cancellation', () => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
     process.env.PAYMENT_TEST_MODE = 'true';
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
 
     // Mock global fetch for safeSupabaseUpsert calls to /api/db
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
