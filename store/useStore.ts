@@ -674,6 +674,9 @@ async function releaseOrderStock(order: Order, set: any) {
 
 function mapToSupabasePayload(tableName: string, payload: any): any {
   if (!payload) return payload;
+  if (Array.isArray(payload)) {
+    return payload.map(item => mapToSupabasePayload(tableName, item)).filter(Boolean);
+  }
 
   const getTimestamp = (val: any) => {
     if (!val) return new Date().toISOString();
@@ -1190,7 +1193,7 @@ async function safeSupabaseInsert(tableName: string, payload: any): Promise<{ su
 
   try {
     const mappedPayload = mapToSupabasePayload(tableName, payload);
-    if (mappedPayload === null) {
+    if (mappedPayload === null || (Array.isArray(mappedPayload) && mappedPayload.length === 0)) {
       return { success: true };
     }
     const headers = await getAuthHeaders();
@@ -3677,18 +3680,22 @@ export const useStore = create<StoreState>()(
         const finalImages: string[] = [];
 
         try {
-          if (productData.images) {
-            for (let i = 0; i < productData.images.length; i++) {
-              const img = productData.images[i];
-              if (img.startsWith('data:')) {
-                const uploadedPath = await uploadProductImage(userId, productId, img, i);
-                if (uploadedPath && uploadedPath !== img && isPrivateStoragePath(uploadedPath)) {
-                  newlyUploadedPaths.push(uploadedPath);
+          if (productData.images && productData.images.length > 0) {
+            const uploadResults = await Promise.all(
+              productData.images.map(async (img, i) => {
+                if (img.startsWith('data:')) {
+                  const uploadedPath = await uploadProductImage(userId, productId, img, i);
+                  return { original: img, uploaded: uploadedPath, index: i };
                 }
-                finalImages.push(uploadedPath);
-              } else {
-                finalImages.push(img);
+                return { original: img, uploaded: img, index: i };
+              })
+            );
+
+            for (const res of uploadResults) {
+              if (res.uploaded && res.uploaded !== res.original && isPrivateStoragePath(res.uploaded)) {
+                newlyUploadedPaths.push(res.uploaded);
               }
+              finalImages.push(res.uploaded);
             }
           }
 
@@ -3727,26 +3734,28 @@ export const useStore = create<StoreState>()(
           if (finalImages && finalImages.length > 0) {
             await safeSupabaseDelete('product_images', { product_id: validProdId });
 
-            for (let i = 0; i < finalImages.length; i++) {
-              const imgRes = await safeSupabaseInsert('product_images', {
-                productId: validProdId,
-                imageUrl: finalImages[i],
-                displayOrder: i + 1
-              });
-              if (!imgRes || !imgRes.success) {
-                console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${productId}:`, imgRes?.error);
-                set({ products: previousProducts, adminError: `Failed to save product image record: ${imgRes?.error || 'Insert failed'}` });
-                for (const path of newlyUploadedPaths) {
-                  await deleteStorageFile(path);
-                }
-                await safeSupabaseDelete('products', { id: validProdId });
-                return { success: false, error: imgRes?.error || 'Failed to save product image record' };
+            const imageRows = finalImages.map((imgUrl, i) => ({
+              productId: validProdId,
+              imageUrl: imgUrl,
+              displayOrder: i + 1
+            }));
+
+            const imgRes = await safeSupabaseInsert('product_images', imageRows);
+            if (!imgRes || !imgRes.success) {
+              console.warn(`Failed to insert product_images for product ${productId}:`, imgRes?.error);
+              set({ products: previousProducts, adminError: `Failed to save product image record: ${imgRes?.error || 'Insert failed'}` });
+              for (const path of newlyUploadedPaths) {
+                await deleteStorageFile(path);
               }
+              await safeSupabaseDelete('products', { id: validProdId });
+              return { success: false, error: imgRes?.error || 'Failed to save product image record' };
             }
           }
 
-          // Re-sync from Supabase to resolve signed URLs
-          await get().syncFromSupabase();
+          // Re-sync from Supabase in the background (non-blocking) to reconcile signed URLs / server state
+          get().syncFromSupabase().catch(syncErr => {
+            console.warn('Background syncFromSupabase after addProduct encountered an error:', syncErr);
+          });
           return { success: true };
         } catch (err: any) {
           set({ products: previousProducts, adminError: `Failed to add product '${productData.name}': ${err?.message || err}` });
@@ -3766,18 +3775,22 @@ export const useStore = create<StoreState>()(
         const finalImages: string[] = [];
 
         try {
-          if (updatedFields.images) {
-            for (let i = 0; i < updatedFields.images.length; i++) {
-              const img = updatedFields.images[i];
-              if (img.startsWith('data:')) {
-                const uploadedPath = await uploadProductImage(userId, id, img, i);
-                if (uploadedPath && uploadedPath !== img && isPrivateStoragePath(uploadedPath)) {
-                  newlyUploadedPaths.push(uploadedPath);
+          if (updatedFields.images && updatedFields.images.length > 0) {
+            const uploadResults = await Promise.all(
+              updatedFields.images.map(async (img, i) => {
+                if (img.startsWith('data:')) {
+                  const uploadedPath = await uploadProductImage(userId, id, img, i);
+                  return { original: img, uploaded: uploadedPath, index: i };
                 }
-                finalImages.push(uploadedPath);
-              } else {
-                finalImages.push(img);
+                return { original: img, uploaded: img, index: i };
+              })
+            );
+
+            for (const res of uploadResults) {
+              if (res.uploaded && res.uploaded !== res.original && isPrivateStoragePath(res.uploaded)) {
+                newlyUploadedPaths.push(res.uploaded);
               }
+              finalImages.push(res.uploaded);
             }
           }
 
@@ -3818,15 +3831,16 @@ export const useStore = create<StoreState>()(
             // Delete old image references in DB
             await safeSupabaseDelete('product_images', { product_id: validProdId });
 
-            // Insert new image references
-            for (let i = 0; i < finalImages.length; i++) {
-              const imgRes = await safeSupabaseInsert('product_images', {
+            if (finalImages && finalImages.length > 0) {
+              const imageRows = finalImages.map((imgUrl, i) => ({
                 productId: validProdId,
-                imageUrl: finalImages[i],
+                imageUrl: imgUrl,
                 displayOrder: i + 1
-              });
+              }));
+
+              const imgRes = await safeSupabaseInsert('product_images', imageRows);
               if (!imgRes || !imgRes.success) {
-                console.warn(`Failed to insert product_image (${i + 1}/${finalImages.length}) for product ${id}:`, imgRes?.error);
+                console.warn(`Failed to insert product_images for product ${id}:`, imgRes?.error);
                 set({ products: previousProducts, adminError: `Failed to save updated image records: ${imgRes?.error}` });
                 for (const path of newlyUploadedPaths) {
                   await deleteStorageFile(path);
@@ -3835,19 +3849,23 @@ export const useStore = create<StoreState>()(
               }
             }
 
-            // Check for deleted images to remove from Supabase Storage
+            // Check for deleted images to remove from Supabase Storage in parallel background task
             if (originalProduct && originalProduct.images) {
               const removedImages = originalProduct.images.filter(
                 (img: string) => isPrivateStoragePath(img) && !finalImages.includes(img)
               );
-              for (const imgToDelete of removedImages) {
-                await deleteStorageFile(imgToDelete);
+              if (removedImages.length > 0) {
+                Promise.all(removedImages.map(imgToDelete => deleteStorageFile(imgToDelete))).catch(err => {
+                  console.warn('Background cleanup of removed product images failed:', err);
+                });
               }
             }
           }
 
-          // Re-sync from Supabase to resolve signed URLs
-          await get().syncFromSupabase();
+          // Re-sync from Supabase in the background (non-blocking) to reconcile signed URLs / server state
+          get().syncFromSupabase().catch(syncErr => {
+            console.warn('Background syncFromSupabase after updateProduct encountered an error:', syncErr);
+          });
           return { success: true };
         } catch (err: any) {
           set({ products: previousProducts, adminError: `Failed to update product '${id}': ${err?.message || err}` });

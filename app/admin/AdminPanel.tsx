@@ -316,6 +316,7 @@ export default function Admin() {
 
   // Form states for ADD / EDIT Product
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [imageSourceMode, setImageSourceMode] = useState<'url' | 'upload'>('url');
   const [isDragging, setIsDragging] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -877,77 +878,82 @@ export default function Admin() {
   // Save product (create or update)
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSavingProduct(true);
     const operatorName = currentUser?.name || 'Master Admin';
     const operatorRole = currentUser?.role || 'Super Admin';
     
-    const finalSizes = pSizesInput.split(',').map(s => s.trim()).filter(s => s !== '');
-    const finalColors = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
+    try {
+      const finalSizes = pSizesInput.split(',').map(s => s.trim()).filter(s => s !== '');
+      const finalColors = pColorsInput.split(',').map(c => c.trim()).filter(c => c !== '');
 
-    let calculatedDealExpiresAt: string | null = null;
-    let computedIsDeal = pIsDeal;
+      let calculatedDealExpiresAt: string | null = null;
+      let computedIsDeal = pIsDeal;
 
-    if (pIsDeal) {
-      if (pDealExpiresAt && pDealExpiresAt.trim() !== '' && !isNaN(new Date(pDealExpiresAt).getTime())) {
-        calculatedDealExpiresAt = new Date(pDealExpiresAt).toISOString();
-      } else {
-        const days = Number(pSecretDays) || 0;
-        const hours = Number(pSecretHours) || 0;
-        const mins = Number(pSecretMins) || 0;
-        const secs = Number(pSecretSecs) || 0;
-        const durationMs = (((days * 24 + hours) * 60 + mins) * 60 + secs) * 1000;
-        if (durationMs > 0) {
-          calculatedDealExpiresAt = new Date(Date.now() + durationMs).toISOString();
+      if (pIsDeal) {
+        if (pDealExpiresAt && pDealExpiresAt.trim() !== '' && !isNaN(new Date(pDealExpiresAt).getTime())) {
+          calculatedDealExpiresAt = new Date(pDealExpiresAt).toISOString();
         } else {
-          computedIsDeal = false;
+          const days = Number(pSecretDays) || 0;
+          const hours = Number(pSecretHours) || 0;
+          const mins = Number(pSecretMins) || 0;
+          const secs = Number(pSecretSecs) || 0;
+          const durationMs = (((days * 24 + hours) * 60 + mins) * 60 + secs) * 1000;
+          if (durationMs > 0) {
+            calculatedDealExpiresAt = new Date(Date.now() + durationMs).toISOString();
+          } else {
+            computedIsDeal = false;
+          }
         }
       }
-    }
 
-    const dealPayload = {
-      isDealOfTheDay: computedIsDeal,
-      discountPercentage: computedIsDeal ? Number(pDiscountPercentage) : 0,
-      dealDays: computedIsDeal ? Number(pSecretDays) : undefined,
-      dealHours: computedIsDeal ? Number(pSecretHours) : undefined,
-      dealMins: computedIsDeal ? Number(pSecretMins) : undefined,
-      dealSecs: computedIsDeal ? Number(pSecretSecs) : undefined,
-      dealExpiresAt: computedIsDeal ? calculatedDealExpiresAt : null
-    };
+      const dealPayload = {
+        isDealOfTheDay: computedIsDeal,
+        discountPercentage: computedIsDeal ? Number(pDiscountPercentage) : 0,
+        dealDays: computedIsDeal ? Number(pSecretDays) : undefined,
+        dealHours: computedIsDeal ? Number(pSecretHours) : undefined,
+        dealMins: computedIsDeal ? Number(pSecretMins) : undefined,
+        dealSecs: computedIsDeal ? Number(pSecretSecs) : undefined,
+        dealExpiresAt: computedIsDeal ? calculatedDealExpiresAt : null
+      };
 
-    let res;
-    if (editingProduct) {
-      res = await updateProduct(editingProduct.id, {
-        name: pName,
-        description: pDesc,
-        category: pCategory as any,
-        price: Number(pPrice),
-        stock: Number(pStock),
-        sizes: finalSizes,
-        colors: finalColors,
-        images: pImages,
-        isNew: pIsNew,
-        isFeatured: pIsFeatured,
-        ...dealPayload
-      }, operatorName, operatorRole);
-    } else {
-      res = await addProduct({
-        name: pName,
-        description: pDesc,
-        category: pCategory as any,
-        price: Number(pPrice),
-        stock: Number(pStock),
-        sizes: finalSizes,
-        colors: finalColors,
-        images: pImages,
-        isNew: pIsNew,
-        isFeatured: pIsFeatured,
-        ...dealPayload
-      }, operatorName, operatorRole);
+      let res;
+      if (editingProduct) {
+        res = await updateProduct(editingProduct.id, {
+          name: pName,
+          description: pDesc,
+          category: pCategory as any,
+          price: Number(pPrice),
+          stock: Number(pStock),
+          sizes: finalSizes,
+          colors: finalColors,
+          images: pImages,
+          isNew: pIsNew,
+          isFeatured: pIsFeatured,
+          ...dealPayload
+        }, operatorName, operatorRole);
+      } else {
+        res = await addProduct({
+          name: pName,
+          description: pDesc,
+          category: pCategory as any,
+          price: Number(pPrice),
+          stock: Number(pStock),
+          sizes: finalSizes,
+          colors: finalColors,
+          images: pImages,
+          isNew: pIsNew,
+          isFeatured: pIsFeatured,
+          ...dealPayload
+        }, operatorName, operatorRole);
+      }
+      if (res && !res.success) {
+        if (res.error) alert(res.error);
+        return;
+      }
+      setIsProductModalOpen(false);
+    } finally {
+      setIsSavingProduct(false);
     }
-    if (res && !res.success) {
-      if (res.error) alert(res.error);
-      return;
-    }
-    setIsProductModalOpen(false);
   };
 
   // Handle open delete safety confirmation
@@ -1464,7 +1470,9 @@ export default function Admin() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsProductModalOpen(false)}
+              onClick={() => {
+                if (!isSavingProduct) setIsProductModalOpen(false);
+              }}
               className="fixed inset-0 bg-black z-50"
             />
             <motion.div 
@@ -1478,7 +1486,14 @@ export default function Admin() {
                 <h3 className="font-serif text-lg text-white font-bold">
                   {editingProduct ? 'Edit Sartorial Apparel Details' : 'Register New Showroom Apparel'}
                 </h3>
-                <button onClick={() => setIsProductModalOpen(false)} className="text-white/60 hover:text-white p-1">
+                <button 
+                  type="button"
+                  disabled={isSavingProduct}
+                  onClick={() => {
+                    if (!isSavingProduct) setIsProductModalOpen(false);
+                  }} 
+                  className="text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed p-1"
+                >
                   ✕
                 </button>
               </div>
@@ -1892,16 +1907,25 @@ export default function Admin() {
                 <div className="pt-4 flex justify-end gap-3">
                   <button 
                     type="button" 
+                    disabled={isSavingProduct}
                     onClick={() => setIsProductModalOpen(false)}
-                    className="bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded text-xs uppercase font-semibold"
+                    className="bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded text-xs uppercase font-semibold cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="bg-[#20D9A1] text-black px-5 py-2.5 rounded text-xs uppercase font-extrabold"
+                    disabled={isSavingProduct}
+                    className="bg-[#20D9A1] hover:bg-[#1bb887] disabled:opacity-50 disabled:cursor-not-allowed text-black px-5 py-2.5 rounded text-xs uppercase font-extrabold cursor-pointer flex items-center gap-2"
                   >
-                    Authorize Mutation
+                    {isSavingProduct ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Authorizing Mutation...</span>
+                      </>
+                    ) : (
+                      'Authorize Mutation'
+                    )}
                   </button>
                 </div>
               </form>
@@ -2047,7 +2071,9 @@ export default function Admin() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsUserModalOpen(false)}
+              onClick={() => {
+                if (!isSavingUser) setIsUserModalOpen(false);
+              }}
               className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
             />
             <motion.div 
@@ -2061,7 +2087,14 @@ export default function Admin() {
                 <h3 className="font-serif text-lg text-white font-bold">
                   {editingUser ? 'Amend Client Profile Key' : 'Create Boutique Profile Key'}
                 </h3>
-                <button onClick={() => setIsUserModalOpen(false)} className="text-white/60 hover:text-white p-1">
+                <button 
+                  type="button"
+                  disabled={isSavingUser}
+                  onClick={() => {
+                    if (!isSavingUser) setIsUserModalOpen(false);
+                  }} 
+                  className="text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed p-1"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -2166,17 +2199,25 @@ export default function Admin() {
                 <div className="pt-4 flex justify-end gap-3 border-t border-white/5 font-mono">
                   <button 
                     type="button" 
+                    disabled={isSavingUser}
                     onClick={() => setIsUserModalOpen(false)}
-                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2.5 rounded-xl text-xs uppercase font-semibold cursor-pointer"
+                    className="bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 text-white px-4 py-2.5 rounded-xl text-xs uppercase font-semibold cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
                     disabled={isSavingUser}
-                    className="bg-[#20D9A1] hover:bg-[#1bb887] disabled:opacity-50 disabled:cursor-not-allowed text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer"
+                    className="bg-[#20D9A1] hover:bg-[#1bb887] disabled:opacity-50 disabled:cursor-not-allowed text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer flex items-center gap-2"
                   >
-                    {isSavingUser ? 'Authorizing...' : 'Authorize Profile'}
+                    {isSavingUser ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Authorizing Profile...</span>
+                      </>
+                    ) : (
+                      'Authorize Profile'
+                    )}
                   </button>
                 </div>
               </form>
