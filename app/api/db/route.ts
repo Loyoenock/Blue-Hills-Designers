@@ -256,6 +256,9 @@ export async function POST(req: NextRequest) {
         if (tableName === 'profiles') {
           const { filters } = payload || {};
           const targetId = filters?.id;
+          if (targetId && authUser?.id && targetId === authUser.id) {
+            throw new ApiError('Forbidden: You cannot delete your own account.', 403);
+          }
           const callerRank = getRoleRank(authUser?.role);
           const adminClient = getSupabaseAdmin();
           if (targetId && adminClient) {
@@ -270,6 +273,13 @@ export async function POST(req: NextRequest) {
               if (existingRank > callerRank) {
                 throw new ApiError(`Forbidden: Your role level (${authUser?.role}) cannot delete a user with higher authority (${existingProfile.role}).`, 403);
               }
+            }
+
+            // Also delete from auth.users so orphaned auth records are not left behind
+            try {
+              await adminClient.auth.admin.deleteUser(targetId);
+            } catch (authErr: any) {
+              logger.warn('Failed to delete auth user during db/route delete', { targetId, error: authErr?.message });
             }
           }
         }

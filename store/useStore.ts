@@ -4028,20 +4028,35 @@ export const useStore = create<StoreState>()(
           users: state.users.filter(u => u.id !== id)
         }));
 
-        get().addAuditLog(
-          'User Deletion',
-          `Admin removed user profile '${userToDelete?.name || id}' from authorized registers.`,
-          'admin-modifier',
-          adminName,
-          adminRole as User['role']
-        );
+        try {
+          const headers = await getAuthHeaders();
+          const response = await fetchWithRetry('/api/admin/users/delete', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ userId: id })
+          });
 
-        const dbRes = await safeSupabaseDelete('profiles', { id });
-        if (dbRes && !dbRes.success) {
-          set({ users: previousUsers, adminError: `Failed to delete user '${userToDelete?.name || id}': ${dbRes.error}` });
-          return { success: false, error: dbRes.error };
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || !res.success) {
+            const errorMsg = res.error || 'Failed to delete user account.';
+            set({ users: previousUsers, adminError: `Failed to delete user '${userToDelete?.name || id}': ${errorMsg}` });
+            return { success: false, error: errorMsg };
+          }
+
+          get().addAuditLog(
+            'User Deletion',
+            `Admin removed user profile '${userToDelete?.name || id}' from authorized registers.`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+
+          return { success: true };
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Failed to delete user account.';
+          set({ users: previousUsers, adminError: `Failed to delete user '${userToDelete?.name || id}': ${errorMsg}` });
+          return { success: false, error: errorMsg };
         }
-        return { success: true };
       },
 
       adminResetUserPassword: async (userId, password, adminName, adminRole) => {
