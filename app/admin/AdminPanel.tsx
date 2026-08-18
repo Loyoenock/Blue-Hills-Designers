@@ -213,6 +213,8 @@ export default function Admin() {
   const [uSpending, setUSpending] = useState(0);
   const [uRewardsPoints, setURewardsPoints] = useState(0);
   const [uPassword, setUPassword] = useState('');
+  const [userFormError, setUserFormError] = useState<string | null>(null);
+  const [isSavingUser, setIsSavingUser] = useState(false);
   const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
@@ -941,7 +943,10 @@ export default function Admin() {
         ...dealPayload
       }, operatorName, operatorRole);
     }
-    if (res && !res.success) return;
+    if (res && !res.success) {
+      if (res.error) alert(res.error);
+      return;
+    }
     setIsProductModalOpen(false);
   };
 
@@ -972,6 +977,7 @@ export default function Admin() {
       alert("Security alert: Your role level does not authorize user mutations.");
       return;
     }
+    setUserFormError(null);
     if (user) {
       setEditingUser(user);
       setUName(user.name);
@@ -996,45 +1002,55 @@ export default function Admin() {
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUserFormError(null);
+    setIsSavingUser(true);
     const adminName = currentUser?.name || 'Master Admin';
     const adminRole = currentUser?.role || 'Super Admin';
 
-    let res: { success: boolean; error?: string; temporaryPassword?: string };
-    if (editingUser) {
-      res = await adminUpdateUser(editingUser.id, {
-        name: uName,
-        email: uEmail,
-        phone: uPhone,
-        role: uRole,
-        spending: Number(uSpending),
-        rewardsPoints: Number(uRewardsPoints)
-      }, adminName, adminRole);
-      if (!res.success && res.error) {
-        alert(res.error);
+    try {
+      let res: { success: boolean; error?: string; temporaryPassword?: string };
+      if (editingUser) {
+        res = await adminUpdateUser(editingUser.id, {
+          name: uName,
+          email: uEmail,
+          phone: uPhone,
+          role: uRole,
+          spending: Number(uSpending),
+          rewardsPoints: Number(uRewardsPoints)
+        }, adminName, adminRole);
+        if (!res.success) {
+          const errMsg = res.error || 'Failed to authorize profile update';
+          setUserFormError(errMsg);
+          alert(errMsg);
+        } else {
+          setIsUserModalOpen(false);
+        }
       } else {
-        setIsUserModalOpen(false);
-      }
-    } else {
-      res = await adminAddUser({
-        name: uName,
-        email: uEmail,
-        phone: uPhone,
-        role: uRole,
-        spending: Number(uSpending),
-        rewardsPoints: Number(uRewardsPoints),
-        password: uPassword || undefined
-      }, adminName, adminRole);
+        res = await adminAddUser({
+          name: uName,
+          email: uEmail,
+          phone: uPhone,
+          role: uRole,
+          spending: Number(uSpending),
+          rewardsPoints: Number(uRewardsPoints),
+          password: uPassword || undefined
+        }, adminName, adminRole);
 
-      if (!res.success && res.error) {
-        alert(res.error);
-      } else {
-        setIsUserModalOpen(false);
-        if (res.temporaryPassword) {
-          setTempPasswordToShow(res.temporaryPassword);
-          setTempPasswordUserEmail(uEmail);
-          setTempPasswordModalOpen(true);
+        if (!res.success) {
+          const errMsg = res.error || 'Failed to create boutique profile';
+          setUserFormError(errMsg);
+          alert(errMsg);
+        } else {
+          setIsUserModalOpen(false);
+          if (res.temporaryPassword) {
+            setTempPasswordToShow(res.temporaryPassword);
+            setTempPasswordUserEmail(uEmail);
+            setTempPasswordModalOpen(true);
+          }
         }
       }
+    } finally {
+      setIsSavingUser(false);
     }
   };
 
@@ -2051,6 +2067,12 @@ export default function Admin() {
               </div>
 
               <form onSubmit={handleSaveUser} className="space-y-4">
+                {userFormError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-mono">
+                    {userFormError}
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-white/40 uppercase font-mono tracking-widest block font-bold">Full Name</label>
                   <input
@@ -2151,9 +2173,10 @@ export default function Admin() {
                   </button>
                   <button 
                     type="submit"
-                    className="bg-[#20D9A1] hover:bg-[#1bb887] text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer"
+                    disabled={isSavingUser}
+                    className="bg-[#20D9A1] hover:bg-[#1bb887] disabled:opacity-50 disabled:cursor-not-allowed text-black px-5 py-2.5 rounded-xl text-xs uppercase font-extrabold cursor-pointer"
                   >
-                    Authorize Profile
+                    {isSavingUser ? 'Authorizing...' : 'Authorize Profile'}
                   </button>
                 </div>
               </form>
