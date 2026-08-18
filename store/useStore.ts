@@ -122,6 +122,7 @@ interface StoreState {
   expireDealLocally: (productId: string) => void;
   applyReviewChange: (payload: any) => void;
   applyOrderChange: (payload: any) => void;
+  applyPaymentChange: (payload: any) => void;
   applyProfileChange: (payload: any) => void;
   isSyncing: boolean;
 }
@@ -607,7 +608,7 @@ export const mapUiPaymentStatusToDb = (status: string): string => {
 
 export const mapDbPaymentStatusToUi = (status: string): 'Paid' | 'Pending' | 'Refunded' | 'Failed' | 'Cancelled' => {
   const s = status?.toLowerCase() || '';
-  if (s === 'success' || s === 'paid' || s === 'completed') return 'Paid';
+  if (s === 'success' || s === 'successful' || s === 'paid' || s === 'completed') return 'Paid';
   if (s === 'pending') return 'Pending';
   if (s === 'refunded') return 'Refunded';
   if (s === 'failed') return 'Failed';
@@ -2132,12 +2133,15 @@ export const useStore = create<StoreState>()(
             return 'Pending';
           })();
 
+          const matchedUser = get().users?.find(u => u.id === newRow.user_id);
+
           const updatedOrder: Order = {
             id: orderId,
             orderNumber: newRow.order_number || existing?.orderNumber || newRow.id,
-            customerName: existing?.customerName || 'Gentleman Customer',
-            customerEmail: existing?.customerEmail || '',
-            customerPhone: existing?.customerPhone || '',
+            userId: newRow.user_id || existing?.userId || undefined,
+            customerName: matchedUser?.name || existing?.customerName || newRow.customer_name || 'Gentleman Customer',
+            customerEmail: matchedUser?.email || existing?.customerEmail || newRow.customer_email || '',
+            customerPhone: matchedUser?.phone || existing?.customerPhone || newRow.customer_phone || '',
             amount: newRow.amount !== undefined ? Number(newRow.amount) : (existing?.amount || 0),
             status: formattedStatus as Order['status'],
             date: newRow.created_at || existing?.date || new Date().toISOString(),
@@ -2153,6 +2157,55 @@ export const useStore = create<StoreState>()(
             set({ orders: newOrders });
           } else {
             set({ orders: [updatedOrder, ...orders] });
+          }
+        }
+      },
+
+      applyPaymentChange: (payload: any) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        const payments = get().payments || [];
+
+        if (eventType === 'DELETE') {
+          const deletedId = oldRow?.id || newRow?.id;
+          if (deletedId) {
+            set({ payments: payments.filter(p => p.id !== deletedId && p.transactionId !== deletedId) });
+          }
+          return;
+        }
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          if (!newRow) return;
+          const paymentId = newRow.id;
+          const existingIndex = payments.findIndex(
+            p => p.id === paymentId || 
+                 (newRow.transaction_id && p.transactionId === newRow.transaction_id) || 
+                 (newRow.order_id && p.orderId === newRow.order_id)
+          );
+          const existing = existingIndex !== -1 ? payments[existingIndex] : null;
+
+          const matchedOrder = (get().orders || []).find(
+            o => o.id === newRow.order_id || toValidUUID(o.id) === newRow.order_id || o.orderNumber === newRow.order_id
+          );
+          const matchedUser = (get().users || []).find(u => u.id === newRow.user_id);
+
+          const updatedPayment: Payment = {
+            id: paymentId,
+            orderId: newRow.order_id || existing?.orderId || matchedOrder?.id || '',
+            customerName: matchedUser?.name || matchedOrder?.customerName || existing?.customerName || newRow.customer_name || 'Gentleman Customer',
+            customerEmail: matchedUser?.email || matchedOrder?.customerEmail || existing?.customerEmail || newRow.customer_email || '',
+            amount: newRow.amount !== undefined && newRow.amount !== null ? Number(newRow.amount) : (existing?.amount || matchedOrder?.amount || 0),
+            paymentMethod: (newRow.provider || existing?.paymentMethod || matchedOrder?.paymentMethod || 'Mobile Money') as Payment['paymentMethod'],
+            status: mapDbPaymentStatusToUi(newRow.status),
+            transactionId: newRow.transaction_id || existing?.transactionId || newRow.id,
+            date: newRow.created_at ? newRow.created_at.split('T')[0] : (existing?.date || new Date().toISOString().split('T')[0])
+          };
+
+          if (existingIndex !== -1) {
+            const newPayments = [...payments];
+            newPayments[existingIndex] = updatedPayment;
+            set({ payments: newPayments });
+          } else {
+            set({ payments: [updatedPayment, ...payments] });
           }
         }
       },

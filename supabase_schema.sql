@@ -317,7 +317,16 @@ CREATE POLICY "Allow administrative full access to images" ON public.product_ima
 -- 3.6 ORDERS
 CREATE POLICY "Allow users to view their own orders" ON public.orders FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Allow users to create their own orders" ON public.orders FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Allow users to update their own orders" ON public.orders FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Allow users to update their own orders" ON public.orders
+    FOR UPDATE
+    USING (
+        auth.uid() = user_id
+        AND lower(status) IN ('pending', 'processing')
+    )
+    WITH CHECK (
+        auth.uid() = user_id
+        AND lower(status) = 'cancelled'
+    );
 CREATE POLICY "Allow administrative access to orders" ON public.orders FOR ALL USING (public.is_admin_or_staff(auth.uid()));
 
 -- 3.7 ORDER ITEMS

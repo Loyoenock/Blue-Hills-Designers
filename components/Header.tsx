@@ -23,8 +23,8 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Subscribe to realtime products & reviews changes via shared hook
-  useRealtimeSync({ products: true, reviews: true });
+  // Subscribe to realtime products, reviews, orders & payments changes via shared hook
+  useRealtimeSync({ products: true, reviews: true, orders: true, payments: true });
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -33,6 +33,22 @@ export default function Header() {
     
     // Initial sync from the database
     syncFromSupabase();
+
+    // Track last sync time for debounced visibility-change refetch (e.g. 15s debounce)
+    let lastSyncTime = Date.now();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        // Fallback catch-up: only refetch if at least 15 seconds have elapsed since last sync
+        if (now - lastSyncTime >= 15000) {
+          lastSyncTime = now;
+          syncFromSupabase();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const supabase = getSupabaseClient();
     let authSubscription: any = null;
@@ -44,6 +60,7 @@ export default function Header() {
         if (event === 'SIGNED_OUT') {
           useStore.setState({ currentUser: null, currentUserId: null, wishlist: [], savedAddresses: [] });
         }
+        lastSyncTime = Date.now();
         syncFromSupabase();
       });
       authSubscription = authSub;
@@ -51,6 +68,7 @@ export default function Header() {
 
     return () => {
       clearTimeout(t);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (authSubscription) {
         authSubscription.unsubscribe();
       }

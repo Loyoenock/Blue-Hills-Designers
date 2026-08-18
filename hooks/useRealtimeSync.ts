@@ -9,6 +9,7 @@ export interface RealtimeSyncOptions {
   products?: boolean;
   reviews?: boolean;
   orders?: boolean;
+  payments?: boolean;
   profiles?: boolean;
 }
 
@@ -16,9 +17,10 @@ export function useRealtimeSync(options: RealtimeSyncOptions = {}) {
   const applyProductChange = useStore((state) => state.applyProductChange);
   const applyReviewChange = useStore((state) => state.applyReviewChange);
   const applyOrderChange = useStore((state) => state.applyOrderChange);
+  const applyPaymentChange = useStore((state) => state.applyPaymentChange);
   const applyProfileChange = useStore((state) => state.applyProfileChange);
 
-  const { products, reviews, orders, profiles } = options;
+  const { products, reviews, orders, payments, profiles } = options;
 
   const activeCleanupRef = useRef<Array<() => void>>([]);
 
@@ -127,22 +129,33 @@ export function useRealtimeSync(options: RealtimeSyncOptions = {}) {
 
     if (orders) {
       setupSubscription(
-        'admin-orders-changes',
+        'orders-changes',
         'orders',
         'Orders',
-        'Admin Realtime order change received:',
-        'Admin Realtime order channel status:',
+        'Realtime order change received:',
+        'Realtime orders channel status:',
         applyOrderChange
+      );
+    }
+
+    if (payments) {
+      setupSubscription(
+        'payments-changes',
+        'payments',
+        'Payments',
+        'Realtime payment change received:',
+        'Realtime payments channel status:',
+        applyPaymentChange
       );
     }
 
     if (profiles) {
       setupSubscription(
-        'admin-profiles-changes',
+        'profiles-changes',
         'profiles',
         'Profiles',
-        'Admin Realtime profile change received:',
-        'Admin Realtime profile channel status:',
+        'Realtime profile change received:',
+        'Realtime profiles channel status:',
         applyProfileChange
       );
     }
@@ -155,10 +168,12 @@ export function useRealtimeSync(options: RealtimeSyncOptions = {}) {
     products,
     reviews,
     orders,
+    payments,
     profiles,
     applyProductChange,
     applyReviewChange,
     applyOrderChange,
+    applyPaymentChange,
     applyProfileChange,
   ]);
 }
