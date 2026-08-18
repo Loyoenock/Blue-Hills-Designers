@@ -101,9 +101,13 @@ export function getSupabaseAdmin(): SupabaseClient | null {
 
   if (!supabaseAdminInstance) {
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
+      // Admin operations (e.g. auth.admin.deleteUser, bypassing RLS) strictly require the service_role key.
+      // The fallback to the anonymous key was removed because running admin operations with the anon key
+      // fails silently or results in unprivileged/ineffective calls.
+      logger.error('getSupabaseAdmin: SUPABASE_SERVICE_ROLE_KEY or SUPABASE_URL is missing. Admin operations must never run with the anonymous key.');
       return null;
     }
 

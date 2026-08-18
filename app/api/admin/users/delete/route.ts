@@ -59,9 +59,11 @@ export async function POST(req: NextRequest) {
       targetEmail: targetProfile?.email
     });
 
-    // 6. Delete user from auth.users (Supabase Auth)
-    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetId);
+    // 6. Explicitly hard-delete user from auth.users (Supabase Auth)
+    // shouldSoftDelete is explicitly set to false to completely purge the auth record and credentials.
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetId, false);
 
+    let authUserExisted = true;
     if (authDeleteError) {
       const isNotFound =
         authDeleteError.message?.toLowerCase().includes('not found') ||
@@ -69,17 +71,47 @@ export async function POST(req: NextRequest) {
         (authDeleteError as any).code === 'user_not_found';
 
       if (isNotFound) {
-        logger.warn('Auth user was not found during deletion (already removed or orphaned). Proceeding with profile cleanup.', {
+        authUserExisted = false;
+        logger.warn('Auth user was not found during hard deletion (already removed or orphaned). Proceeding with profile cleanup.', {
           targetUserId: targetId,
           error: authDeleteError.message
         });
       } else {
-        logger.error('Failed to delete auth user via Supabase admin', authDeleteError);
+        logger.error('Failed to hard-delete auth user via Supabase admin', authDeleteError);
         throw new ApiError(authDeleteError.message || 'Failed to delete user authentication record.', 400);
+      }
+    } else {
+      logger.info('Auth user record hard-deleted successfully', {
+        targetUserId: targetId,
+        targetEmail: targetProfile?.email
+      });
+    }
+
+    // 7. Secondary identity/orphan cleanup for target email if present.
+    // Note: The Supabase JS Admin API does not expose an independent deleteIdentity endpoint;
+    // querying remaining auth user records for the same email and hard-deleting guarantees no stale identities remain.
+    if (targetProfile?.email) {
+      try {
+        const normalizedEmail = targetProfile.email.trim().toLowerCase();
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        const lingeringAuthUsers = listData?.users?.filter(u => u.email?.trim().toLowerCase() === normalizedEmail) || [];
+        
+        for (const lingering of lingeringAuthUsers) {
+          logger.warn('Found lingering auth record for deleted user email. Hard-deleting...', {
+            lingeringUserId: lingering.id,
+            email: normalizedEmail
+          });
+          await supabaseAdmin.auth.admin.deleteUser(lingering.id, false);
+        }
+      } catch (cleanupErr: any) {
+        logger.warn('Secondary auth identity cleanup encountered a non-fatal issue:', {
+          targetEmail: targetProfile.email,
+          error: cleanupErr?.message || String(cleanupErr)
+        });
       }
     }
 
-    // 7. Explicit profile delete safety step (in case foreign key cascade did not fire or row was orphaned)
+    // 8. Explicit profile delete safety step (in case foreign key cascade did not fire or row was orphaned)
     const { error: profileDeleteError } = await supabaseAdmin
       .from('profiles')
       .delete()
@@ -92,7 +124,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    logger.info('User account deleted successfully from auth and database', { targetUserId: targetId });
+    logger.info('User account deletion process completed successfully', {
+      targetUserId: targetId,
+      targetEmail: targetProfile?.email,
+      authUserExisted,
+      profileCleaned: !profileDeleteError
+    });
 
     return NextResponse.json({
       success: true,

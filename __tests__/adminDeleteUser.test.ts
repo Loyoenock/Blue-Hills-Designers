@@ -29,10 +29,11 @@ describe('Admin User Deletion API Route & Store Integration', () => {
       const mockSupabaseAdmin = {
         auth: {
           admin: {
-            deleteUser: vi.fn().mockImplementation((id: string) => {
+            deleteUser: vi.fn().mockImplementation((id: string, shouldSoftDelete?: boolean) => {
               deletedAuthUserId = id;
               return Promise.resolve({ error: null });
             }),
+            listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
           },
         },
         from: vi.fn().mockImplementation((table: string) => {
@@ -73,6 +74,7 @@ describe('Admin User Deletion API Route & Store Integration', () => {
       expect(res.status).toBe(200);
       expect(json.success).toBe(true);
       expect(deletedAuthUserId).toBe('target-customer-uuid');
+      expect(mockSupabaseAdmin.auth.admin.deleteUser).toHaveBeenCalledWith('target-customer-uuid', false);
       expect(deletedProfileId).toBe('target-customer-uuid');
     });
 
@@ -87,6 +89,7 @@ describe('Admin User Deletion API Route & Store Integration', () => {
             deleteUser: vi.fn().mockResolvedValue({
               error: { message: 'User not found', status: 404 }
             }),
+            listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
           },
         },
         from: vi.fn().mockImplementation((table: string) => {
@@ -126,6 +129,7 @@ describe('Admin User Deletion API Route & Store Integration', () => {
 
       expect(res.status).toBe(200);
       expect(json.success).toBe(true);
+      expect(mockSupabaseAdmin.auth.admin.deleteUser).toHaveBeenCalledWith('target-orphan-uuid', false);
       expect(deletedProfileId).toBe('target-orphan-uuid');
     });
 

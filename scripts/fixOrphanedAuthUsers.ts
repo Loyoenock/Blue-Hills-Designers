@@ -116,7 +116,8 @@ export async function fixOrphanedAuthUsers(options: { dryRun?: boolean } = {}): 
 
   for (const orphan of orphanedUsers) {
     try {
-      const { error: delError } = await supabase.auth.admin.deleteUser(orphan.id);
+      // shouldSoftDelete: false forces a hard delete to remove auth identities and allow immediate re-registration
+      const { error: delError } = await supabase.auth.admin.deleteUser(orphan.id, false);
       if (delError) {
         console.error(`[ORPHAN CLEANUP] Failed to delete orphan auth user ${orphan.id} (${orphan.email}):`, delError.message);
         errors.push({ id: orphan.id, email: orphan.email, error: delError.message });

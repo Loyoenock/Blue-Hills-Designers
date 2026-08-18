@@ -124,8 +124,10 @@ To update existing databases or apply schema updates, execute all additive migra
 
 All `supabase_migration_*.sql` files are **additive-only**, **non-destructive**, and **idempotent** (`IF NOT EXISTS` / safe checks). They can be re-run safely without data loss.
 
-### 3. Authentication Triggers
-The schema includes SQL trigger functions to automatically create a corresponding record in `profiles` whenever a new user registers through Supabase Auth.
+### 3. Authentication & User Lifecycle Management
+- **Automatic Profile Creation**: The schema includes SQL trigger functions to automatically create a corresponding record in `public.profiles` whenever a new user registers through Supabase Auth.
+- **Admin User Deletion (Hard Delete)**: When an administrator deletes a user via `/api/admin/users/delete`, the system invokes `deleteUser(targetId, false)` to enforce a hard delete of the `auth.users` identity record and cleans any lingering auth identities, ensuring the email can be immediately reused for fresh signups.
+- **Resilient Registration Recovery**: The `/api/auth/register` route automatically detects and recovers from soft-deleted or orphaned `auth.users` records (e.g., auth records without corresponding `public.profiles` rows) by hard-deleting the orphan and retrying registration, while safeguarding active accounts.
 
 ---
 

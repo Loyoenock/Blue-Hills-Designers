@@ -5,6 +5,28 @@ import { isNetworkOrConnectionError } from '@/lib/utils';
 import { isBootstrapAdminEmail, normalizeRole } from '@/lib/adminBootstrap';
 import crypto from 'crypto';
 
+async function findAuthUserByEmail(supabaseAdmin: any, email: string) {
+  const targetEmail = email.toLowerCase().trim();
+  let page = 1;
+  const perPage = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error || !data?.users) {
+      break;
+    }
+    const match = data.users.find((u: any) => u.email?.toLowerCase().trim() === targetEmail);
+    if (match) return match;
+    if (data.users.length < perPage) {
+      hasMore = false;
+    } else {
+      page++;
+    }
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Rate limiting check (max 10 registration requests per minute per IP)
@@ -67,10 +89,10 @@ export async function POST(req: NextRequest) {
         const isNetworkOrAuthError = isNetworkOrConnectionError(error);
 
         if (errorMessage.toLowerCase().includes('already registered') || errorMessage.toLowerCase().includes('already been registered')) {
+          // Special path for bootstrap super admin re-registration (updates password)
           if (isBootstrapAdminEmail(emailTrimmed) && supabaseAdmin) {
             try {
-              const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
-              const existingUser = listData?.users?.find((u) => u.email?.toLowerCase() === emailTrimmed);
+              const existingUser = await findAuthUserByEmail(supabaseAdmin, emailTrimmed);
               if (existingUser) {
                 const { data: updatedData } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
                   password,
@@ -91,8 +113,85 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          // Resilience check for soft-deleted or orphaned auth.users records (e.g. after admin delete)
+          if (!authUser && supabaseAdmin) {
+            try {
+              const existingAuthUser = await findAuthUserByEmail(supabaseAdmin, emailTrimmed);
+              if (existingAuthUser) {
+                // Check if the user has an active profile in public.profiles
+                const { data: profileById } = await supabaseAdmin
+                  .from('profiles')
+                  .select('id, email')
+                  .eq('id', existingAuthUser.id)
+                  .maybeSingle();
+
+                let hasActiveProfile = !!profileById;
+                if (!hasActiveProfile) {
+                  const { data: profileByEmail } = await supabaseAdmin
+                    .from('profiles')
+                    .select('id, email')
+                    .ilike('email', emailTrimmed)
+                    .maybeSingle();
+                  hasActiveProfile = !!profileByEmail;
+                }
+
+                const isSoftDeleted = Boolean((existingAuthUser as any).deleted_at);
+                const isOrphaned = !hasActiveProfile;
+
+                if (isSoftDeleted || isOrphaned) {
+                  logger.info('Detected soft-deleted or orphaned auth record during registration. Hard-deleting and retrying registration...', {
+                    email: emailTrimmed,
+                    orphanedAuthId: existingAuthUser.id,
+                    isSoftDeleted,
+                    isOrphaned
+                  });
+
+                  const { error: hardDeleteErr } = await supabaseAdmin.auth.admin.deleteUser(existingAuthUser.id, false);
+
+                  if (hardDeleteErr) {
+                    logger.warn('Failed to hard-delete orphaned auth user during registration recovery:', {
+                      error: hardDeleteErr.message,
+                      orphanedAuthId: existingAuthUser.id
+                    });
+                  } else {
+                    // Retry registration once with fresh hard-deleted state
+                    const { data: retryData, error: retryError } = await supabaseAdmin.auth.admin.createUser({
+                      email: emailTrimmed,
+                      password,
+                      email_confirm: true,
+                      user_metadata: {
+                        name: cleanName,
+                        full_name: cleanName,
+                        phone: cleanPhone,
+                        role: rolePair.display
+                      }
+                    });
+
+                    if (!retryError && retryData?.user) {
+                      authUser = retryData.user;
+                      logger.info('Successfully registered user after purging orphaned auth record', {
+                        userId: authUser.id,
+                        email: emailTrimmed
+                      });
+                    } else if (retryError) {
+                      logger.warn('Retry createUser failed after purging orphaned auth record:', {
+                        error: retryError.message,
+                        email: emailTrimmed
+                      });
+                    }
+                  }
+                }
+              }
+            } catch (recoveryErr: any) {
+              logger.warn('Error during orphaned auth record recovery on registration:', {
+                error: recoveryErr?.message || String(recoveryErr),
+                email: emailTrimmed
+              });
+            }
+          }
+
           if (!authUser) {
-            logger.warn('Registration attempt with existing email:', { email: emailTrimmed });
+            logger.warn('Registration attempt with existing active email:', { email: emailTrimmed });
             throw new ApiError('An account with this email address has already been registered. Please sign in instead.', 400);
           }
         } else if (isNetworkOrAuthError) {
