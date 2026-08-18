@@ -19,8 +19,6 @@ jobs:
       PAYMENT_TEST_MODE: 'true'
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || '' }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM || 'orders@resend.dev' }}
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL || '' }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN || '' }}
       FLUTTERWAVE_SECRET_KEY: ${{ secrets.FLUTTERWAVE_SECRET_KEY || '' }}
       FLUTTERWAVE_PUBLIC_KEY: ${{ secrets.FLUTTERWAVE_PUBLIC_KEY || '' }}
       NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || '' }}
@@ -60,8 +58,6 @@ jobs:
       PAYMENT_TEST_MODE: 'true'
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || '' }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM || 'orders@resend.dev' }}
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL || '' }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN || '' }}
       FLUTTERWAVE_SECRET_KEY: ${{ secrets.FLUTTERWAVE_SECRET_KEY || '' }}
       FLUTTERWAVE_PUBLIC_KEY: ${{ secrets.FLUTTERWAVE_PUBLIC_KEY || '' }}
       NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || '' }}

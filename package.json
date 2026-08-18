@@ -13,8 +13,6 @@
   "dependencies": {
     "@google/genai": "latest",
     "@supabase/supabase-js": "^2.47.10",
-    "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.0",
     "clsx": "^2.1.1",
     "flutterwave-node-v3": "^1.4.1",
     "lucide-react": "^0.468.0",

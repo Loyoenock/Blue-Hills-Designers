@@ -1,7 +1,3 @@
-import { Redis } from '@upstash/redis';
-import { Ratelimit } from '@upstash/ratelimit';
-import { logger } from './apiUtils';
-
 export interface RateLimitResult {
   success: boolean;
   limit: number;
@@ -14,10 +10,13 @@ interface RateLimitRecord {
   resetTime: number;
 }
 
-const rateLimitMap = new Map<string, RateLimitRecord>();
-let hasWarnedInMemoryFallback = false;
+export interface RateLimitOptions {
+  failClosed?: boolean;
+}
 
-// Clean up expired rate limit entries periodically to prevent memory leaks in local fallback mode
+const rateLimitMap = new Map<string, RateLimitRecord>();
+
+// Clean up expired rate limit entries periodically to prevent memory leaks in process-local in-memory mode
 if (typeof global !== 'undefined') {
   const intervalId = (global as any).__rateLimitCleanupInterval;
   if (intervalId) {
@@ -33,56 +32,14 @@ if (typeof global !== 'undefined') {
   }, 5 * 60 * 1000);
 }
 
-let redisClient: Redis | null = null;
-const ratelimitCache = new Map<string, Ratelimit>();
-
-function getUpstashRatelimit(limit: number, windowMs: number): Ratelimit | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!url || !token) {
-    if (!hasWarnedInMemoryFallback) {
-      logger.warn(
-        '[RateLimiter] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not configured. Falling back to local in-memory rate limiting. WARNING: In-memory rate limiting is isolated per process and NOT safe for multi-instance production deployments.'
-      );
-      hasWarnedInMemoryFallback = true;
-    }
-    return null;
-  }
-
-  if (!redisClient) {
-    redisClient = new Redis({
-      url,
-      token,
-    });
-  }
-
-  const cacheKey = `${limit}:${windowMs}`;
-  if (!ratelimitCache.has(cacheKey)) {
-    const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-    const limiter = new Ratelimit({
-      redis: redisClient,
-      limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
-      analytics: false,
-      prefix: '@upstash/ratelimit',
-    });
-    ratelimitCache.set(cacheKey, limiter);
-  }
-
-  return ratelimitCache.get(cacheKey)!;
-}
-
-export interface RateLimitOptions {
-  failClosed?: boolean;
-}
-
 /**
- * Distributed atomic rate limiting with fallback.
- * Uses Upstash Redis sliding window when configured, or local in-memory Map for single-instance development.
+ * Process-local in-memory sliding window rate limiting.
+ * Tracks request counts per key within a given time window.
+ * Suitable for single-instance or low-traffic deployments.
  *
  * @param ip Client IP address or key identifier (e.g. `${ip}:${path}`)
- * @param limit Max requests allowed in the window
- * @param windowMs Time window in milliseconds (default 1 minute)
+ * @param limit Max requests allowed in the window (default: 60)
+ * @param windowMs Time window in milliseconds (default: 60000)
  * @param options Additional options, e.g. { failClosed: true }
  */
 export async function checkRateLimit(
@@ -91,8 +48,6 @@ export async function checkRateLimit(
   windowMs = 60000,
   options?: RateLimitOptions | boolean
 ): Promise<RateLimitResult> {
-  const ratelimit = getUpstashRatelimit(limit, windowMs);
-
   const normalizedIp = ip.toLowerCase();
   const isExplicitFailClosed = typeof options === 'boolean' ? options : options?.failClosed === true;
   const isFailClosed =
@@ -102,71 +57,45 @@ export async function checkRateLimit(
     normalizedIp.includes('auth') ||
     normalizedIp.includes('gemini');
 
-  if (ratelimit) {
-    try {
-      const res = await ratelimit.limit(ip);
-      const now = Date.now();
-      const resetSeconds = Math.max(1, Math.ceil((res.reset - now) / 1000));
-      return {
-        success: res.success,
-        limit: res.limit,
-        remaining: res.remaining,
-        reset: resetSeconds,
+  try {
+    const now = Date.now();
+    const key = `${ip}`;
+
+    let record = rateLimitMap.get(key);
+
+    if (!record || now > record.resetTime) {
+      record = {
+        count: 0,
+        resetTime: now + windowMs,
       };
-    } catch (err) {
-      if (isFailClosed) {
-        logger.error(
-          '[RateLimiter] Distributed Redis request failed during rate limit check on security-sensitive route, failing closed:',
-          err
-        );
-        return {
-          success: false,
-          limit,
-          remaining: 0,
-          reset: Math.max(1, Math.ceil(windowMs / 1000)),
-        };
-      }
-
-      logger.error(
-        '[RateLimiter] Distributed Redis request failed during rate limit check, falling back to in-memory rate limiting:',
-        err
-      );
-
-      /*
-       * REDIS OUTAGE FALLBACK POLICY:
-       * -----------------------------------------------------------------------------------
-       * When Upstash Redis experiences network errors or outages, non-sensitive rate limiting
-       * (e.g. products, checkout) falls back to process-local in-memory sliding window tracking.
-       * Security-sensitive routes (/api/auth/*, /api/gemini) fail closed to protect authentication
-       * and AI endpoints against abuse during Redis outages.
-       * -----------------------------------------------------------------------------------
-       */
     }
-  }
 
-  // Local in-memory fallback (for single-instance dev environments)
-  const now = Date.now();
-  const key = `${ip}`;
+    record.count += 1;
+    rateLimitMap.set(key, record);
 
-  let record = rateLimitMap.get(key);
+    const remaining = Math.max(0, limit - record.count);
+    const resetSeconds = Math.max(1, Math.ceil((record.resetTime - now) / 1000));
 
-  if (!record || now > record.resetTime) {
-    record = {
-      count: 0,
-      resetTime: now + windowMs,
+    return {
+      success: record.count <= limit,
+      limit,
+      remaining,
+      reset: resetSeconds,
+    };
+  } catch (_err) {
+    if (isFailClosed) {
+      return {
+        success: false,
+        limit,
+        remaining: 0,
+        reset: Math.max(1, Math.ceil(windowMs / 1000)),
+      };
+    }
+    return {
+      success: true,
+      limit,
+      remaining: 1,
+      reset: Math.max(1, Math.ceil(windowMs / 1000)),
     };
   }
-
-  record.count += 1;
-  rateLimitMap.set(key, record);
-
-  const remaining = Math.max(0, limit - record.count);
-  const resetSeconds = Math.max(1, Math.ceil((record.resetTime - now) / 1000));
-
-  return {
-    success: record.count <= limit,
-    limit,
-    remaining,
-    reset: resetSeconds,
-  };
 }

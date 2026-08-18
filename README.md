@@ -61,20 +61,12 @@ Order confirmation emails are dispatched server-side using **Resend**.
 
 ---
 
-## 🛡️ Distributed Rate Limiting (Upstash Redis Setup)
+## 🛡️ Rate Limiting
 
-To support multi-instance / horizontally scaled deployments (e.g. Vercel serverless functions or multiple Cloud Run container replicas):
-
-1. **Configure Upstash Redis**:
-   - Create a Redis database on [Upstash Redis](https://upstash.com).
-   - Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in your server environment variables.
-2. **Atomic Sliding Window**:
-   - Uses `@upstash/ratelimit` for atomic sliding-window rate limiting across all instance replicas.
-3. **Outage Resilience & Failure Strategy**:
-   - **Fail Closed**: For security-critical routes (`/api/auth/*`) and high-cost routes (`/api/gemini`), network failures contacting Redis will deny the request to prevent brute-force attacks and key exhaustion.
-   - **Fail Open**: For general public routes (`/api/health`, `/api/db`, `/api/storage`, `/api/checkout`), Redis network hiccups allow requests to preserve core user experience and application availability.
-4. **Local Fallback Mode**:
-   - When Upstash Redis environment variables are absent (e.g. local development), the system automatically falls back to an in-memory sliding window limiter and logs a warning.
+Rate limiting is implemented using a process-local in-memory sliding window, isolated per running instance:
+- **In-Memory Sliding Window**: Tracks request counts and remaining quota per client IP/endpoint without external database dependencies.
+- **Fail-Closed Security**: Security-critical routes (`/api/auth/*`) and high-cost routes (`/api/gemini`) enforce strict rate limiting to prevent brute-force attacks and resource exhaustion.
+- **Multi-Instance Deployments**: For large-scale multi-instance production deployments requiring shared state across replicas, a distributed solution can be reintroduced if needed.
 
 ---
 
