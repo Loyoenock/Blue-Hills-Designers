@@ -233,7 +233,29 @@ BEGIN
     WHERE id = user_uuid AND role IN ('super admin', 'admin', 'manager', 'staff')
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Helper checking if user holds admin-tier authority (Super Admin or Admin)
+CREATE OR REPLACE FUNCTION public.is_admin_tier(user_uuid UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = user_uuid AND role IN ('super admin', 'admin')
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Helper returning locked fields for the calling authenticated user to prevent RLS recursion
+CREATE OR REPLACE FUNCTION public.get_own_profile_locked_fields()
+RETURNS TABLE(role TEXT, is_active BOOLEAN, reward_points INTEGER, lifetime_spending NUMERIC) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT p.role, p.is_active, p.reward_points, p.lifetime_spending
+  FROM public.profiles p
+  WHERE p.id = auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 3.1 CATEGORIES
 CREATE POLICY "Allow public read-access to categories" ON public.categories FOR SELECT USING (true);
@@ -244,6 +266,7 @@ CREATE POLICY "Allow administrative changes to categories" ON public.categories 
 -- and cannot modify their role, account status (is_active), or loyalty metrics (reward_points,
 -- lifetime_spending) unless they hold administrative/staff privileges. Self-service updates
 -- are strictly restricted to personal contact details (full_name, phone, email).
+-- Uses SECURITY DEFINER helpers to eliminate RLS self-referential recursion.
 DROP POLICY IF EXISTS "Allow public read-access to profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Allow users to view own profile or admin view all" ON public.profiles;
 CREATE POLICY "Allow users to view own profile or admin view all" ON public.profiles FOR SELECT USING (
@@ -256,16 +279,19 @@ CREATE POLICY "Allow users to update their own profile" ON public.profiles
         auth.uid() = id
         AND (
             (
-                role = (SELECT p.role FROM public.profiles p WHERE p.id = auth.uid())
-                AND is_active = (SELECT p.is_active FROM public.profiles p WHERE p.id = auth.uid())
-                AND reward_points = (SELECT p.reward_points FROM public.profiles p WHERE p.id = auth.uid())
-                AND lifetime_spending = (SELECT p.lifetime_spending FROM public.profiles p WHERE p.id = auth.uid())
+                role, is_active, reward_points, lifetime_spending
+            ) = (
+                SELECT role, is_active, reward_points, lifetime_spending
+                FROM public.get_own_profile_locked_fields()
             )
             OR public.is_admin_or_staff(auth.uid())
         )
     );
 DROP POLICY IF EXISTS "Allow full access to profiles for admin" ON public.profiles;
-CREATE POLICY "Allow admin-tier write access to profiles" ON public.profiles FOR ALL USING (public.is_admin_or_staff(auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role IN ('super admin', 'admin')));
+DROP POLICY IF EXISTS "Allow admin-tier write access to profiles" ON public.profiles;
+CREATE POLICY "Allow admin-tier write access to profiles" ON public.profiles
+    FOR ALL USING (public.is_admin_or_staff(auth.uid()))
+    WITH CHECK (public.is_admin_tier(auth.uid()));
 
 -- PUBLIC PROFILE NAMES VIEW (for public display of review authors without exposing email/phone/spending)
 CREATE OR REPLACE VIEW public.public_profile_names WITH (security_invoker = true) AS
