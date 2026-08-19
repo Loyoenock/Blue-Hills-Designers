@@ -10,7 +10,6 @@ import {
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError, getEffectivePrice } from '../lib/utils';
 import { toDbOrderStatus, toUiOrderStatus } from '../lib/orderStatus';
-import { VALID_COUPONS } from '../lib/coupons';
 
 interface StoreState {
   products: Product[];
@@ -176,343 +175,10 @@ interface StoreState {
   isSyncing: boolean;
 }
 
-export const INITIAL_CATEGORIES: Category[] = [
-  { name: 'Suits', slug: 'suits', description: 'Bespoke & Ready-to-wear tailored suits' },
-  { name: 'Shirts', slug: 'shirts', description: 'Egyptian cotton custom tailored shirts' },
-  { name: 'Shoes', slug: 'shoes', description: 'Italian handcrafted leather footwear' },
-  { name: 'Accessories', slug: 'accessories', description: 'Silk ties, cufflinks, and leather belts' }
-];
-
-const INITIAL_PRODUCTS: Product[] = [
-  {
-    id: 'prod-monaco-navy',
-    name: 'Monaco Navy Ready-to-Wear Suit',
-    description: 'An elegant, high-quality ready-made suit made of fine wool blend imported from Turkey. It features classic lapels, standard pockets, and a clean professional fit. Ideal for daily office wear and business meetings.',
-    category: 'Suits',
-    price: 1250,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuC6IMogg257U3uh1MtNS7HPgjGVwT2a6GeLfzTMCVYFuVskYnj6fDlCuYrlv0FdF1-KuhJO8Cw3C64A3_YnDyPvjWjzReX0_GkIXvhjxTYwDxTjonhszpsfhfENG3m8weu8uEZgfMISqEkEEKLF_JY4_-LrOBxk5gazOV-8oMMyEBLNXNlKdsbazYKsmNH-82Bugaouk2vagQ0xnRQILrQ2OOs2sztjrnLQpJCXRwPBrkdDitTrLUDXyw'],
-    sizes: ['48R', '50R', '52R', '54R', '56R'],
-    colors: ['Midnight Navy', 'Charcoal'],
-    stock: 14,
-    rating: 4.9,
-    isFeatured: true,
-    reviews: [
-      { id: 'rev-1', userName: 'Amama Mbabazi', userRole: 'Senior Diplomat', rating: 5, comment: 'Impeccable quality. The shoulders sit flawlessly, and the fabric breathes exceptionally well in our climate. The personal styling service at Lubowa was outstanding.', date: '2026-05-12' },
-      { id: 'rev-2', userName: 'Patrick Kaboyo', userRole: 'Corporate VP', rating: 5, comment: 'I wore this to our annual shareholder meeting and received endless compliments. Real boardroom power.', date: '2026-06-01' }
-    ]
-  },
-  {
-    id: 'prod-savile-pinstripe',
-    name: 'Savile Midnight Pinstripe Suit',
-    description: 'A smart business suit with clean pinstripe patterns, imported from Turkey. Made from fine wool fabric, it features a double-breasted button design and comfortable ready-to-wear sleeves. Perfect for corporate managers and business leaders.',
-    category: 'Suits',
-    price: 1450,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuAi8UecRS-XnyrMnJeZL1BQVfI-k0R_gJR1LOmjQdttfkYhoplY3uVFZbanSoR2yMSezA5cR3e61-ad015ej7NHi3pxyGxrkLADT7Q_LZ1GutmVRTp4mDhq-j2uiwCqyCvXNPehFnXRH-LxmBTxPsLco-fna_xAO86vswBmBY2C-2KyB_lA85jIzmULF-qrB23JFySnGOOTlEGa9x7PfP1HLr3OUhu-yYHF7BQNYYBXL3_XdDjAitK2gg'],
-    sizes: ['48R', '50R', '52R', '54R'],
-    colors: ['Midnight Black with White Pinstripes', 'Obsidian Gray'],
-    stock: 8,
-    rating: 5.0,
-    isNew: true,
-    reviews: [
-      { id: 'rev-3', userName: 'Charles Mugisha', userRole: 'Investment Banker', rating: 5, comment: 'The quality matches Savile Row. Outstanding service. This suit asserts authority.', date: '2026-06-15' }
-    ]
-  },
-  {
-    id: 'prod-herringbone-shirts',
-    name: 'Crisp Poplin Herringbone Shirt Set',
-    description: 'A pack of two high-quality business shirts imported from the UK, made of premium cotton fabric. One comes in plain white and the other in a light blue herringbone pattern. Both feature structured collars and standard French cuffs.',
-    category: 'Shirts',
-    price: 220,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuChMtp4jLNpzg9FCNudNK17V5dgPQ7gdqkInztWABOY1s9Wo0WquLDnHGVLaFpcTJ4l9h6f7O76xtk__qJO_Ydu6Yi8rjMn_p2JvvfRREDwwJDPBy83dd3IQCntFWraFkYmJ3LGWRlxwD6c1rBnh-lIF619KM6eoScw650fwNxZT1n7azvn0SlmFjNVIFyK5tBpwfFwh1WTbVRuvsh2okhFkLe5EGxiuvMmY0nIuf3ePWzFrNsg5MqpzA'],
-    sizes: ['39', '40', '41', '42', '43'],
-    colors: ['Classic Duo (White & Blue)', 'Pure White Pair'],
-    stock: 25,
-    rating: 4.8,
-    isFeatured: true,
-    reviews: []
-  },
-  {
-    id: 'prod-presidential-poplin',
-    name: 'Presidential Poplin White Shirt',
-    description: 'A premium business-casual cotton shirt imported from Egypt. It is made of thick, wrinkle-free cotton that stays fresh all day. Designed with a classic Kent collar and simple button cuffs.',
-    category: 'Shirts',
-    price: 190,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuBMd6RQeA5FpvP486t2rqeCGXNCX0DP8ADnV8Wv-Ro25LLV5QqM0CBpL__iMTSCOnjqAMx78kno7N5QimxtsNkPR7XNVB64KXrDghBuBropddAROs95oIwiwlJOYoKxBLuWUFVkm6iPpqiKg-2mMFim1J4Bpn55duxvopahw4fK27UKjzQ8mP5P9PRDwrXMcXS3gI1ilE2ECCaI6YFmYFAPrarRhk1Yhkh8Cr4EulhA5zui4_ueB8n3ZA'],
-    sizes: ['39', '40', '41', '42', '43', '44'],
-    colors: ['Pristine White'],
-    stock: 30,
-    rating: 4.9,
-    reviews: [
-      { id: 'rev-4', userName: 'Hon. Andrew Mukasa', userRole: 'Cabinet Minister', rating: 5, comment: 'A shirt that never loses its structure. Truly fits the African heat without looking wrinkled.', date: '2026-05-20' }
-    ]
-  },
-  {
-    id: 'prod-cognac-oxfords',
-    name: 'Imperial Cognac Wholecut Oxfords',
-    description: 'Sleek corporate shoes made of premium leather imported from Turkey. They feature a comfortable cushioned lining and strong, durable leather soles. Ideal for combining with any of our business suits.',
-    category: 'Shoes',
-    price: 480,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuBJyBXI8NaRR-Ck9F2JIpri68oWsCpNA7Ie-oMwo57RWPijvkzyQJtObOPa0rGqyJX9b2iSarTYZ0B-ZUf5YMtgLQLVIFHtgXW-hXS8HqXtoVijqL3nTsOuMFOmp8oazTtu0fjyeKdouINqfmtXIPlV_BiBb50VRTLlLwy-kRcaqVwlXhGkWDIIi3Z_0V7dZlsIQyDe7Swp-FIz1670sbanWFsYnbJPpp_gKYtjtWNCKOGLCw9haspdWA'],
-    sizes: ['41', '42', '43', '44', '45'],
-    colors: ['Cognac Brown'],
-    stock: 12,
-    rating: 5.0,
-    isFeatured: true,
-    reviews: [
-      { id: 'rev-5', userName: 'Dr. David Ssewankambo', userRole: 'Executive Chairman', rating: 5, comment: 'Exquisite wholecut shoes. The leather is premium, the shape is extremely modern but timeless. Ideal pairing for any dark blue suit.', date: '2026-06-18' }
-    ]
-  },
-  {
-    id: 'prod-obsidian-monks',
-    name: 'Obsidian Double Monk Straps',
-    description: 'An elegant statement of style and comfort. Imported from Turkey and crafted with robust full-grain black calfskin, styled with clean, polished gunmetal silver side buckles. Lined with natural leather for breathability, with a durable, slip-resistant sole. Sharp, elegant, and versatile enough for corporate suits or premium professional attire.',
-    category: 'Shoes',
-    price: 520,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuCIiTPJM1DbZp8-SLivCY52EQivclcR97HSMXMjMwh84rbAAsKFIWN-0vlt7f3HPA69D9rNiiHCsvWtsA3_YL-yWytM8km9A3VkonGzdRDctMTsnrA6DHERdam6i317MJRJaj7msB1c3NDKLH6xaKg_CNdlAqzqPVnZsy2Vwl55v-F8B4DSp8MisXE5LDmQzAT4AbcJI6cX1XEmNW3EsP32FdJp75A6KBWXdkRcwEBHBumOpTxMiqx7kw'],
-    sizes: ['41', '42', '43', '44'],
-    colors: ['Obsidian Black'],
-    stock: 9,
-    rating: 4.7,
-    reviews: []
-  },
-  {
-    id: 'prod-emerald-silk',
-    name: 'Emerald Jacquard Silk Tie Set',
-    description: 'A touch of luxury for your corporate outfits. Imported from China, this set includes a premium jacquard silk tie and a matching pocket square. Designed to give a neat, professional knot that looks crisp all day.',
-    category: 'Accessories',
-    price: 150,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuD3GGmGC1lq3ebCU1W9mOX-CfsyMwa4SWAdF9TyTo1wg7-ga-zvcf_MDn5JW_wtISyBjg2HNciG8q-CCdHS96i2TIsWXLlFbJDRpyNsOVqrcftwcWSFDQKUyp1N6J5g21PI941CMbXy5XaX2bncnqHxnDRk1QnC9Doz53_m_8W99oeomA9E9yp8Sz40LQVf9o_x1ayUjuzCDH6sxZrKUsxdw4tpyjR1Z5guKYUyAkqbvsKk9IWfUaMlDw'],
-    sizes: ['One Size'],
-    colors: ['Emerald Green'],
-    stock: 40,
-    rating: 4.9,
-    isNew: true,
-    reviews: []
-  },
-  {
-    id: 'prod-camel-overcoat',
-    name: 'Lubowa Camel Hair Executive Overcoat',
-    description: 'A premium ready-made double-breasted overcoat imported from the UK. Made from soft and warm camel hair, it features wide lapels, deep pockets, and a smooth inner lining. Perfect for cool evenings or international travels.',
-    category: 'Suits',
-    price: 1850,
-    discountPercentage: 20, // Discounted to $1480
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuAcO6MS2VWCWZQBnf0cCMZL-YE38o5bhKL5ARNtF7FUxluxGX49GTihEM53aMOry1-nrD7_al2QIuZdb5_xF6hQRMstrxCnP-qzBssHxrRwdhL5HifQg8IxmSoV7U8D7J4nt-im0L7SallxeSH7C4SLlSgqRzuCXUTQFP_l-fUJaV_toItNqWxlBNDXSStF7IlJbvPQcgV073TakLGegDBEMXdblzvIN15XyfiXmti8g4JrQWTDojzvCw'],
-    sizes: ['48R', '50R', '52R', '54R'],
-    colors: ['Classic Camel'],
-    stock: 5,
-    rating: 5.0,
-    isDealOfTheDay: true,
-    dealDays: 0,
-    dealHours: 14,
-    dealMins: 40,
-    dealSecs: 17,
-    dealExpiresAt: new Date(Date.now() + (((0 * 24 + 14) * 60 + 40) * 60 + 17) * 1000).toISOString(),
-    reviews: [
-      { id: 'rev-6', userName: 'Kassim Sempijja', userRole: 'Oil & Gas Director', rating: 5, comment: 'Breathtaking quality. The weight is fantastic, and the camel hair texture is incredibly soft. Well worth the investment.', date: '2026-06-20' }
-    ]
-  },
-  {
-    id: 'prod-calfskin-tote',
-    name: 'Obsidian Calfskin Travel Tote',
-    description: 'Meticulously engineered from thick, pebbled full-grain calfskin leather. It houses a padded 16" laptop sleeve, separate dynamic document dividers, a custom gold-gilded pen rail, and a secure zippered internal pocket. Complete with a luxurious suede inner lining and robust brass hardware.',
-    category: 'Accessories',
-    price: 750,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuBLr-rNoyiFmO6nXoy3EnvQuFw3o76S1sq2P2pnwxu-JM_nXQqH8FqJ0TAalP6sutbr-8uO9JKrZQxDJqeRMi3DDuLaAo46dAJlEYWPYPJ7xTFIk8oqHZHR8F54fV6I5MpSSk3th7gaJgdzZT0MIJSKd1pZcv80cgHNIRqL1xEVBvlHvvM0Xu5fnCO8b2nHJ3egCPWpPHCaI1TwxrXlUW6R6sZTLzGprEmZy4t3MEFxcqzl5k3oSGyFjw'],
-    sizes: ['One Size'],
-    colors: ['Obsidian Black'],
-    stock: 6,
-    rating: 4.8,
-    reviews: []
-  },
-  {
-    id: 'prod-charcoal-blazer',
-    name: 'Charcoal Structured Wool Blazer',
-    description: 'A masterpiece of soft, deconstructed ready-to-wear styling. Imported from Turkey, crafted from a mid-weight wool-cashmere fabric, offering a comfortable, natural shoulder line. Styled with custom mother-of-pearl buttons, an elegant double-vented back, and dynamic patch pockets.',
-    category: 'Suits',
-    price: 850,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuAM1sxMc2tnXe5GtRulON-grniBCQw0AyzhEtySEs5LoH5p-pYIxqeYmZWDVZNkWiSnDZV7KWvRDq3zKhLK5OGIHR5GGHOlg0Tpn3jUJnBRjQFUGa0ufs_p_SgYkrlfHnkBuISuW8RZxe9BjgtSongMhEYViTl1Ko54EbA7F4yHCBkm2kFdD693RXN9ILEDJG5e1u7ec8VW_FJHuz3DLMSwQK-nZxgoFjjaewWqmkKAH-lPPnuTYMtjIQ'],
-    sizes: ['48R', '50R', '52R', '54R', '56R'],
-    colors: ['Charcoal Gray'],
-    stock: 11,
-    rating: 4.9,
-    reviews: []
-  },
-  {
-    id: 'prod-calfskin-loafers',
-    name: 'Prestige Calfskin Penny Loafers',
-    description: 'The epitome of refined ease. Hand-crafted from premium selection supple calfskin leather. They mold dynamically to your foot and feature a classic apron toe, leather stacked heel, and full leather lining. Masterful craftsmanship with high comfort.',
-    category: 'Shoes',
-    price: 420,
-    images: ['https://lh3.googleusercontent.com/aida-public/AB6AXuBcZwWFnXB-gm1gviBsGoJzMvO4BPS5l0tu_DeRfhI-yL1HiyAA97ZHqrPb4_TJLjxXhlb8wKv8NT_DWHKf7LDm7wb8CqE05i4z3OJuRLNLMJcp6qhg91orjlOvH6VJZySeg56Y5e-qXw0YlKCDTnJvfXHFW9vWR9xF70Qp7M51fjyQN2_CdjpGtUy4hjmAIcuuTINy3KYoTK6v3Bb4G27Wlv5Uf5K3lKy3J6vZbL_e1WU2l5EweCnoUg'],
-    sizes: ['41', '42', '43', '44', '45'],
-    colors: ['Muted Walnut', 'Obsidian Black'],
-    stock: 10,
-    rating: 4.8,
-    reviews: []
-  }
-];
-
-const INITIAL_USERS: User[] = [
-  {
-    id: 'usr-super-admin',
-    name: 'Super Admin',
-    email: 'admin@bluehillsdesigners.com',
-    phone: '+256 700 000000',
-    role: 'Super Admin',
-    spending: 0,
-    rewardsPoints: 0,
-    source: 'local-demo'
-  },
-  {
-    id: 'usr-1',
-    name: 'Amama Mbabazi',
-    email: 'amama@diplomats.gov',
-    phone: '+256 772 123456',
-    role: 'Customer',
-    spending: 2700,
-    rewardsPoints: 270,
-    source: 'local-demo'
-  },
-  {
-    id: 'usr-admin',
-    name: 'Robert Mugabe Mukasa',
-    email: 'admin@bluehills.com',
-    phone: '+256 701 987654',
-    role: 'Super Admin',
-    spending: 0,
-    rewardsPoints: 0,
-    source: 'local-demo'
-  },
-  {
-    id: 'usr-manager',
-    name: 'Nalule Patricia',
-    email: 'patricia@bluehills.com',
-    phone: '+256 703 456789',
-    role: 'Manager',
-    spending: 0,
-    rewardsPoints: 0,
-    source: 'local-demo'
-  },
-  {
-    id: 'usr-staff',
-    name: 'Ochola Moses',
-    email: 'moses@bluehills.com',
-    phone: '+256 752 321654',
-    role: 'Staff',
-    spending: 0,
-    rewardsPoints: 0,
-    source: 'local-demo'
-  }
-];
-
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: toValidUUID('ORD-9841'),
-    orderNumber: 'ORD-9841',
-    customerName: 'Amama Mbabazi',
-    customerEmail: 'amama@diplomats.gov',
-    customerPhone: '+256 772 123456',
-    amount: 1400,
-    status: 'Delivered',
-    date: '2026-05-12',
-    items: [
-      {
-        productId: 'prod-monaco-navy',
-        productName: 'Monaco Navy Tailored Suit',
-        price: 1250,
-        quantity: 1,
-        selectedSize: '52R',
-        selectedColor: 'Midnight Navy',
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC6IMogg257U3uh1MtNS7HPgjGVwT2a6GeLfzTMCVYFuVskYnj6fDlCuYrlv0FdF1-KuhJO8Cw3C64A3_YnDyPvjWjzReX0_GkIXvhjxTYwDxTjonhszpsfhfENG3m8weu8uEZgfMISqEkEEKLF_JY4_-LrOBxk5gazOV-8oMMyEBLNXNlKdsbazYKsmNH-82Bugaouk2vagQ0xnRQILrQ2OOs2sztjrnLQpJCXRwPBrkdDitTrLUDXyw'
-      },
-      {
-        productId: 'prod-emerald-silk',
-        productName: 'Emerald Jacquard Silk Tie Set',
-        price: 150,
-        quantity: 1,
-        selectedSize: 'One Size',
-        selectedColor: 'Emerald Green',
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD3GGmGC1lq3ebCU1W9mOX-CfsyMwa4SWAdF9TyTo1wg7-ga-zvcf_MDn5JW_wtISyBjg2HNciG8q-CCdHS96i2TIsWXLlFbJDRpyNsOVqrcftwcWSFDQKUyp1N6J5g21PI941CMbXy5XaX2bncnqHxnDRk1QnC9Doz53_m_8W99oeomA9E9yp8Sz40LQVf9o_x1ayUjuzCDH6sxZrKUsxdw4tpyjR1Z5guKYUyAkqbvsKk9IWfUaMlDw'
-      }
-    ],
-    shippingAddress: {
-      country: 'Uganda',
-      district: 'Kampala',
-      city: 'Lubowa',
-      address: 'Plot 42, Executive Rise, Lubowa'
-    },
-    paymentMethod: 'Visa'
-  },
-  {
-    id: toValidUUID('ORD-9902'),
-    orderNumber: 'ORD-9902',
-    customerName: 'Patrick Kaboyo',
-    customerEmail: 'kaboyo@corporate.co.ug',
-    customerPhone: '+256 781 112233',
-    amount: 1250,
-    status: 'Processing',
-    date: '2026-06-20',
-    items: [
-      {
-        productId: 'prod-monaco-navy',
-        productName: 'Monaco Navy Tailored Suit',
-        price: 1250,
-        quantity: 1,
-        selectedSize: '50R',
-        selectedColor: 'Midnight Navy',
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC6IMogg257U3uh1MtNS7HPgjGVwT2a6GeLfzTMCVYFuVskYnj6fDlCuYrlv0FdF1-KuhJO8Cw3C64A3_YnDyPvjWjzReX0_GkIXvhjxTYwDxTjonhszpsfhfENG3m8weu8uEZgfMISqEkEEKLF_JY4_-LrOBxk5gazOV-8oMMyEBLNXNlKdsbazYKsmNH-82Bugaouk2vagQ0xnRQILrQ2OOs2sztjrnLQpJCXRwPBrkdDitTrLUDXyw'
-      }
-    ],
-    shippingAddress: {
-      country: 'Uganda',
-      district: 'Wakiso',
-      city: 'Entebbe',
-      address: 'Presidential Runway Drive, Entebbe'
-    },
-    paymentMethod: 'Mobile Money'
-  }
-];
-
-const INITIAL_AUDIT_LOGS: AuditLog[] = [
-  {
-    id: 'log-1',
-    userId: 'usr-admin',
-    userName: 'Robert Mugabe Mukasa',
-    userRole: 'Super Admin',
-    action: 'System Bootstrapped',
-    details: 'Initial inventory and premium executive profiles successfully initialized.',
-    timestamp: '2026-06-25T12:00:00Z'
-  }
-];
-
-const INITIAL_PAYMENTS: Payment[] = [
-  {
-    id: 'PAY-9841',
-    orderId: toValidUUID('ORD-9841'),
-    customerName: 'Amama Mbabazi',
-    customerEmail: 'amama@diplomats.gov',
-    amount: 1400,
-    paymentMethod: 'Visa',
-    status: 'Paid',
-    transactionId: 'TXN-VISA-9841A',
-    date: '2026-05-12'
-  },
-  {
-    id: 'PAY-9902',
-    orderId: toValidUUID('ORD-9902'),
-    customerName: 'Patrick Kaboyo',
-    customerEmail: 'kaboyo@corporate.co.ug',
-    amount: 1250,
-    paymentMethod: 'Mobile Money',
-    status: 'Paid',
-    transactionId: 'TXN-MM-9902B',
-    date: '2026-06-20'
-  }
-];
-
-const INITIAL_SETTINGS: AppSettings = {
+const DEFAULT_SETTINGS: AppSettings = {
   showroomHours: 'Sunday to Friday: 9:00 AM to 7:00 PM (Saturdays Closed)',
   supportPhone: '+256 772 123456',
+  conciergePhone: '+256 772 123456',
   freeShippingThreshold: 2000,
   taxRate: 18,
   aiGreetingPrefix: 'Good day, Executive.',
@@ -536,36 +202,6 @@ const INITIAL_SETTINGS: AppSettings = {
     pickup: true
   }
 };
-
-export const INITIAL_TESTIMONIALS: Testimonial[] = [
-  {
-    id: toValidUUID('testi-ssewankambo'),
-    quote: "Blue Hills Designers has completely reshaped corporate fashion in East Africa. The fit of their Savile suit is unmatched. Perfect boardroom armory.",
-    name: "Dr. David Ssewankambo",
-    role: "Managing Director",
-    company: "Standard Capital Uganda",
-    displayOrder: 1,
-    isActive: true
-  },
-  {
-    id: toValidUUID('testi-mukasa'),
-    quote: "The Egyptian Poplin White shirt stays exceptionally crisp during long diplomatic flights and state banquets. Their concierge delivery is top tier.",
-    name: "Hon. Andrew Mukasa",
-    role: "Senior Diplomat",
-    company: "Ministry of Foreign Affairs",
-    displayOrder: 2,
-    isActive: true
-  },
-  {
-    id: toValidUUID('testi-mugisha'),
-    quote: "I visited their Lubowa showroom for a ready-made corporate suit. The level of personal attention, refreshment service, and premium clothing quality was truly top tier.",
-    name: "Charles Mugisha",
-    role: "Investment VP",
-    company: "Ascent Capital Africa",
-    displayOrder: 3,
-    isActive: true
-  }
-];
 
 // Helper functions to map between camelCase (Zustand state) and snake_case (standard relational databases / Supabase)
 function keysToCamel(obj: any): any {
@@ -1382,7 +1018,7 @@ export const useStore = create<StoreState>()(
       currentUser: null,
       cart: [],
       appliedCoupon: null,
-      coupons: VALID_COUPONS,
+      coupons: [],
       categories: [],
       testimonials: [],
       selectedShippingMethod: 'standard',
@@ -1391,7 +1027,7 @@ export const useStore = create<StoreState>()(
       clearAdminError: () => set({ adminError: null }),
       orders: [],
       payments: [],
-      settings: INITIAL_SETTINGS,
+      settings: DEFAULT_SETTINGS,
       bookings: [],
       subscribers: [],
       auditLogs: [],
@@ -1404,116 +1040,10 @@ export const useStore = create<StoreState>()(
         if (!supabase) return;
 
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const activeUserId = session?.user?.id;
-          let loggedInUserRole = 'Guest';
-          if (activeUserId) {
-            const { data: myProfile } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', activeUserId)
-              .maybeSingle();
-            if (myProfile) {
-              loggedInUserRole = myProfile.role?.toLowerCase() || 'customer';
-            }
-          }
-          const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(loggedInUserRole);
-          if (!isAdminOrStaff) return;
-
-          // Check categories
+          // Ensure essential category rows exist if categories table is empty
           const { data: dbCats } = await supabase.from('categories').select('id, slug').limit(5);
           if (!dbCats || dbCats.length === 0) {
             await seedCategories();
-          }
-
-          // Check profiles
-          const { data: dbProfiles } = await supabase.from('profiles').select('id').limit(1);
-          if (!dbProfiles || dbProfiles.length === 0) {
-            for (const user of INITIAL_USERS) {
-              if (isUUID(user.id)) {
-                await safeSupabaseUpsert('profiles', user);
-              }
-            }
-          }
-
-          // Check products
-          const { data: dbProducts } = await supabase.from('products').select('id').limit(1);
-          if (!dbProducts || dbProducts.length === 0) {
-            for (const prod of INITIAL_PRODUCTS) {
-              const prodToSave = { ...prod };
-              if (prodToSave.isDealOfTheDay && !prodToSave.dealExpiresAt) {
-                const days = typeof prodToSave.dealDays === 'number' ? prodToSave.dealDays : 0;
-                const hours = typeof prodToSave.dealHours === 'number' ? prodToSave.dealHours : 14;
-                const minutes = typeof prodToSave.dealMins === 'number' ? prodToSave.dealMins : 40;
-                const seconds = typeof prodToSave.dealSecs === 'number' ? prodToSave.dealSecs : 17;
-                const durationMs = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
-                prodToSave.dealExpiresAt = new Date(Date.now() + durationMs).toISOString();
-              }
-              await safeSupabaseUpsert('products', prodToSave);
-              if (prod.images && prod.images.length > 0) {
-                for (let i = 0; i < prod.images.length; i++) {
-                  await safeSupabaseUpsert('product_images', {
-                    productId: prod.id,
-                    imageUrl: prod.images[i],
-                    displayOrder: i + 1
-                  });
-                }
-              }
-              for (const rev of prod.reviews || []) {
-                const matchedUser = INITIAL_USERS.find(u => u.name.toLowerCase() === rev.userName.toLowerCase());
-                const reviewerUserId = matchedUser && isUUID(matchedUser.id) ? matchedUser.id : null;
-                if (reviewerUserId) {
-                  await safeSupabaseUpsert('profiles', {
-                    id: reviewerUserId,
-                    name: rev.userName,
-                    email: matchedUser?.email || `${rev.userName.toLowerCase().replace(/[^a-z0-9]+/g, '')}@example.com`,
-                    phone: matchedUser?.phone || '',
-                    role: matchedUser?.role || 'Customer',
-                    spending: matchedUser?.spending || 0,
-                    rewardsPoints: matchedUser?.rewardsPoints || 0
-                  });
-                  await safeSupabaseUpsert('reviews', { ...rev, productId: prod.id, userId: reviewerUserId });
-                }
-              }
-            }
-          }
-
-          // Check orders
-          const { data: dbOrders } = await supabase.from('orders').select('id').limit(1);
-          if (!dbOrders || dbOrders.length === 0) {
-            for (const order of INITIAL_ORDERS) {
-              await safeSupabaseUpsert('orders', order);
-              for (const item of order.items) {
-                await safeSupabaseUpsert('order_items', { ...item, orderId: order.id });
-              }
-              await safeSupabaseUpsert('order_addresses', { ...order.shippingAddress, orderId: order.id });
-            }
-          }
-
-          // Check testimonials
-          const { data: dbTesti } = await supabase.from('testimonials').select('id').limit(1);
-          if (!dbTesti || dbTesti.length === 0) {
-            for (const t of INITIAL_TESTIMONIALS) {
-              await safeSupabaseUpsert('testimonials', t);
-            }
-          }
-
-          // Check coupons
-          const { data: dbCoupons } = await supabase.from('coupons').select('id').limit(1);
-          if (!dbCoupons || dbCoupons.length === 0) {
-            for (const c of VALID_COUPONS) {
-              await safeSupabaseUpsert('coupons', {
-                id: c.id,
-                code: c.code,
-                discount_type: c.discountType,
-                discount_value: c.discountValue,
-                is_active: c.isActive ?? true,
-                min_subtotal: c.minSubtotal || null,
-                expires_at: c.expiresAt || null,
-                usage_limit: c.usageLimit || null,
-                times_used: c.timesUsed || 0
-              });
-            }
           }
         } catch (e) {
           console.warn('[seedIfEmpty] Seeding error:', e);
@@ -1543,15 +1073,15 @@ export const useStore = create<StoreState>()(
         if (dbSettings) {
           set({
             settings: {
-              showroomHours: dbSettings.showroom_hours || INITIAL_SETTINGS.showroomHours,
-              supportPhone: dbSettings.support_phone || dbSettings.concierge_phone || INITIAL_SETTINGS.supportPhone,
-              conciergePhone: dbSettings.concierge_phone || dbSettings.support_phone || INITIAL_SETTINGS.supportPhone,
-              freeShippingThreshold: dbSettings.free_shipping_threshold !== null && dbSettings.free_shipping_threshold !== undefined ? Number(dbSettings.free_shipping_threshold) : INITIAL_SETTINGS.freeShippingThreshold,
-              taxRate: dbSettings.tax_rate !== null && dbSettings.tax_rate !== undefined ? Number(dbSettings.tax_rate) : INITIAL_SETTINGS.taxRate,
-              aiGreetingPrefix: dbSettings.ai_greeting_prefix || INITIAL_SETTINGS.aiGreetingPrefix,
+              showroomHours: dbSettings.showroom_hours || DEFAULT_SETTINGS.showroomHours,
+              supportPhone: dbSettings.support_phone || dbSettings.concierge_phone || DEFAULT_SETTINGS.supportPhone,
+              conciergePhone: dbSettings.concierge_phone || dbSettings.support_phone || DEFAULT_SETTINGS.supportPhone,
+              freeShippingThreshold: dbSettings.free_shipping_threshold !== null && dbSettings.free_shipping_threshold !== undefined ? Number(dbSettings.free_shipping_threshold) : DEFAULT_SETTINGS.freeShippingThreshold,
+              taxRate: dbSettings.tax_rate !== null && dbSettings.tax_rate !== undefined ? Number(dbSettings.tax_rate) : DEFAULT_SETTINGS.taxRate,
+              aiGreetingPrefix: dbSettings.ai_greeting_prefix || DEFAULT_SETTINGS.aiGreetingPrefix,
               enableNewsBanner: dbSettings.enable_news_banner !== undefined && dbSettings.enable_news_banner !== null ? dbSettings.enable_news_banner : true,
               maintenanceMode: dbSettings.maintenance_mode !== undefined && dbSettings.maintenance_mode !== null ? dbSettings.maintenance_mode : false,
-              currencySymbol: dbSettings.currency_symbol || INITIAL_SETTINGS.currencySymbol,
+              currencySymbol: dbSettings.currency_symbol || DEFAULT_SETTINGS.currencySymbol,
               enableSecretOffer: dbSettings.enable_secret_offer !== undefined && dbSettings.enable_secret_offer !== null ? dbSettings.enable_secret_offer : true,
               paymentMethods: {
                 mobileMoney: dbSettings.payment_method_mobile_money !== undefined && dbSettings.payment_method_mobile_money !== null ? dbSettings.payment_method_mobile_money : true,
@@ -1559,9 +1089,9 @@ export const useStore = create<StoreState>()(
                 cashOnDelivery: dbSettings.payment_method_cash_on_delivery !== undefined && dbSettings.payment_method_cash_on_delivery !== null ? dbSettings.payment_method_cash_on_delivery : true
               },
               courierFees: {
-                standard: dbSettings.courier_standard_fee !== null && dbSettings.courier_standard_fee !== undefined ? Number(dbSettings.courier_standard_fee) : INITIAL_SETTINGS.courierFees.standard,
-                express: dbSettings.courier_express_fee !== null && dbSettings.courier_express_fee !== undefined ? Number(dbSettings.courier_express_fee) : INITIAL_SETTINGS.courierFees.express,
-                pickup: dbSettings.courier_pickup_fee !== null && dbSettings.courier_pickup_fee !== undefined ? Number(dbSettings.courier_pickup_fee) : INITIAL_SETTINGS.courierFees.pickup,
+                standard: dbSettings.courier_standard_fee !== null && dbSettings.courier_standard_fee !== undefined ? Number(dbSettings.courier_standard_fee) : DEFAULT_SETTINGS.courierFees.standard,
+                express: dbSettings.courier_express_fee !== null && dbSettings.courier_express_fee !== undefined ? Number(dbSettings.courier_express_fee) : DEFAULT_SETTINGS.courierFees.express,
+                pickup: dbSettings.courier_pickup_fee !== null && dbSettings.courier_pickup_fee !== undefined ? Number(dbSettings.courier_pickup_fee) : DEFAULT_SETTINGS.courierFees.pickup,
               },
               courierMethods: {
                 standard: dbSettings.courier_method_standard !== undefined && dbSettings.courier_method_standard !== null ? !!dbSettings.courier_method_standard : true,
@@ -3450,7 +2980,7 @@ export const useStore = create<StoreState>()(
 
       setShippingMethod: (method) => {
         const { settings } = get();
-        const enabled = settings?.courierMethods || INITIAL_SETTINGS.courierMethods;
+        const enabled = settings?.courierMethods || DEFAULT_SETTINGS.courierMethods;
         if (!enabled[method]) {
           const current = get().selectedShippingMethod;
           if (enabled[current]) {
@@ -4742,7 +4272,6 @@ export const useStore = create<StoreState>()(
         cart: state.cart,
         wishlist: state.wishlist,
         savedAddresses: state.savedAddresses,
-        settings: state.settings,
         currentUserId: state.currentUser?.id || null,
         appliedCoupon: state.appliedCoupon,
         selectedShippingMethod: state.selectedShippingMethod,
