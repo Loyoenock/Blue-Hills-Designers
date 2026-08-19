@@ -30,7 +30,7 @@ function getTimeLeftFromEnd(endMs: number) {
 export default function HomeClient() {
   const router = useRouter();
   const { 
-    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing, testimonials, expireDealLocally 
+    products, addToCart, wishlist, toggleWishlist, bookConsultation, subscribeNewsletter, settings, isSyncing, testimonials, expireDealLocally, categories 
   } = useStore();
   const currency = settings?.currencySymbol || 'Ugx';
   
@@ -75,6 +75,39 @@ export default function HomeClient() {
   const featuredProducts = products.filter(p => p.isFeatured && !p.isDealOfTheDay).slice(0, 3);
   const newArrivals = products.filter(p => p.isNew && !p.isDealOfTheDay).slice(0, 4);
   const dealProduct = products.find(p => p.isDealOfTheDay);
+
+  // Curated departments dynamically derived from database categories and products
+  // Display categories in a responsive grid, capped at 4 or wrapping cleanly based on screen size
+  const departmentCards = useMemo(() => {
+    if (!categories || categories.length === 0) return [];
+
+    return categories.map((cat) => {
+      // Case-insensitive / trimmed match against category name or slug to count matching products
+      const count = products.filter(
+        p => (p.category && p.category.trim().toLowerCase() === cat.name.trim().toLowerCase()) ||
+             (p.category && cat.slug && p.category.trim().toLowerCase() === cat.slug.trim().toLowerCase())
+      ).length;
+
+      // Find first available product image in this category, or fallback to a neutral placeholder
+      const matchingProduct = products.find(
+        p => ((p.category && p.category.trim().toLowerCase() === cat.name.trim().toLowerCase()) ||
+              (p.category && cat.slug && p.category.trim().toLowerCase() === cat.slug.trim().toLowerCase())) &&
+             p.images && p.images.length > 0
+      );
+      const catImage = matchingProduct?.images?.[0] ||
+        `https://picsum.photos/seed/${encodeURIComponent(cat.slug || cat.name.toLowerCase())}/600/800`;
+
+      return {
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug || cat.name.toLowerCase(),
+        category: cat.name,
+        count: count === 1 ? '1 Item' : `${count} Items`,
+        rawCount: count,
+        image: getSafeImageSrc(catImage)
+      };
+    });
+  }, [categories, products]);
 
   // Synchronize endMsRef and timeLeft with dealProduct when identity or timer config changes
   useEffect(() => {
@@ -387,7 +420,7 @@ export default function HomeClient() {
       </section>
 
       {/* CATEGORY GRID */}
-      {/* Note: This curated section assumes the four default category names ('Suits', 'Shirts', 'Shoes', 'Accessories') continue to exist in the system */}
+      {/* Note: Curated departments are dynamically driven from database categories and products */}
       <section className="py-24 bg-[#F7F5F0]">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="text-center mb-16">
@@ -397,58 +430,52 @@ export default function HomeClient() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                name: "Suits & Blazers",
-                count: `${products.filter(p => p.category === 'Suits').length || 6} Items`,
-                image: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6IMogg257U3uh1MtNS7HPgjGVwT2a6GeLfzTMCVYFuVskYnj6fDlCuYrlv0FdF1-KuhJO8Cw3C64A3_YnDyPvjWjzReX0_GkIXvhjxTYwDxTjonhszpsfhfENG3m8weu8uEZgfMISqEkEEKLF_JY4_-LrOBxk5gazOV-8oMMyEBLNXNlKdsbazYKsmNH-82Bugaouk2vagQ0xnRQILrQ2OOs2sztjrnLQpJCXRwPBrkdDitTrLUDXyw",
-                category: "Suits"
-              },
-              {
-                name: "Formal Shirts",
-                count: `${products.filter(p => p.category === 'Shirts').length || 4} Items`,
-                image: "https://lh3.googleusercontent.com/aida-public/AB6AXuChMtp4jLNpzg9FCNudNK17V5dgPQ7gdqkInztWABOY1s9Wo0WquLDnHGVLaFpcTJ4l9h6f7O76xtk__qJO_Ydu6Yi8rjMn_p2JvvfRREDwwJDPBy83dd3IQCntFWraFkYmJ3LGWRlxwD6c1rBnh-lIF619KM6eoScw650fwNxZT1n7azvn0SlmFjNVIFyK5tBpwfFwh1WTbVRuvsh2okhFkLe5EGxiuvMmY0nIuf3ePWzFrNsg5MqpzA",
-                category: "Shirts"
-              },
-              {
-                name: "Elite Footwear",
-                count: `${products.filter(p => p.category === 'Shoes').length || 3} Items`,
-                image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBJyBXI8NaRR-Ck9F2JIpri68oWsCpNA7Ie-oMwo57RWPijvkzyQJtObOPa0rGqyJX9b2iSarTYZ0B-ZUf5YMtgLQLVIFHtgXW-hXS8HqXtoVijqL3nTsOuMFOmp8oazTtu0fjyeKdouINqfmtXIPlV_BiBb50VRTLlLwy-kRcaqVwlXhGkWDIIi3Z_0V7dZlsIQyDe7Swp-FIz1670sbanWFsYnbJPpp_gKYtjtWNCKOGLCw9haspdWA",
-                category: "Shoes"
-              },
-              {
-                name: "Luxury Accessories",
-                count: `${products.filter(p => p.category === 'Accessories').length || 2} Items`,
-                image: "https://lh3.googleusercontent.com/aida-public/AB6AXuD3GGmGC1lq3ebCU1W9mOX-CfsyMwa4SWAdF9TyTo1wg7-ga-zvcf_MDn5JW_wtISyBjg2HNciG8q-CCdHS96i2TIsWXLlFbJDRpyNsOVqrcftwcWSFDQKUyp1N6J5g21PI941CMbXy5XaX2bncnqHxnDRk1QnC9Doz53_m_8W99oeomA9E9yp8Sz40LQVf9o_x1ayUjuzCDH6sxZrKUsxdw4tpyjR1Z5guKYUyAkqbvsKk9IWfUaMlDw",
-                category: "Accessories"
-              }
-            ].map((cat, index) => (
-              <Link 
-                href={`/shop?category=${cat.category}`} 
-                key={index}
-                className="relative h-[480px] rounded-2xl overflow-hidden group block"
-              >
-                <Image 
-                  src={cat.image}
-                  alt={cat.name}
-                  fill
-                  className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 transition-opacity duration-300 group-hover:opacity-95" />
-                
-                <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
-                  <div className="space-y-1">
-                    <span className="text-[10px] tracking-widest text-[#C6A15B] font-mono uppercase">{cat.count}</span>
-                    <h3 className="font-serif text-xl md:text-2xl text-white font-medium">{cat.name}</h3>
+            {(isSyncing && departmentCards.length === 0) ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div 
+                  key={`dept-skeleton-${i}`} 
+                  className="relative h-[480px] rounded-2xl overflow-hidden bg-neutral-200 border border-[#657892]/20 animate-pulse flex flex-col justify-end p-8"
+                >
+                  <div className="space-y-3 w-full">
+                    <div className="h-3 bg-neutral-300 rounded w-1/3 animate-pulse" />
+                    <div className="h-6 bg-neutral-300 rounded w-2/3 animate-pulse" />
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 text-white group-hover:bg-[#1C4D8D] group-hover:text-white transition-all duration-300">
-                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
-                  </div>
+                  <div className="absolute bottom-8 right-8 w-10 h-10 rounded-full bg-neutral-300 animate-pulse" />
                 </div>
-              </Link>
-            ))}
+              ))
+            ) : departmentCards.length === 0 ? (
+              <div className="col-span-full py-12 text-center text-[#657892] text-sm font-light">
+                No boutique departments available at this time.
+              </div>
+            ) : (
+              departmentCards.map((cat) => (
+                <Link 
+                  href={`/shop?category=${encodeURIComponent(cat.category)}`} 
+                  key={cat.id || cat.name}
+                  className="relative h-[480px] rounded-2xl overflow-hidden group block"
+                >
+                  <Image 
+                    src={cat.image}
+                    alt={cat.name}
+                    fill
+                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 transition-opacity duration-300 group-hover:opacity-95" />
+                  
+                  <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
+                    <div className="space-y-1">
+                      <span className="text-[10px] tracking-widest text-[#C6A15B] font-mono uppercase">{cat.count}</span>
+                      <h3 className="font-serif text-xl md:text-2xl text-white font-medium">{cat.name}</h3>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 text-white group-hover:bg-[#1C4D8D] group-hover:text-white transition-all duration-300">
+                      <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
