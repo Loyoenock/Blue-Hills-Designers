@@ -41,9 +41,9 @@ function isValidUrl(val: string): boolean {
 
 /**
  * Helper to perform fetch requests with an AbortController timeout.
- * Reduced per-call timeout to 3000ms to stay safely within Vercel Edge runtime constraints.
+ * Softened per-call timeout to allow realistic network latency while staying within Edge runtime limits.
  */
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 3000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -98,11 +98,13 @@ export async function middleware(request: NextRequest) {
     const refreshToken = request.cookies.get('sb-refresh-token')?.value;
 
     const authStartTime = Date.now();
-    const AUTH_TOTAL_TIMEOUT_MS = 6000;
+    // Admin routes get a softened total budget of 12s, customer routes get 8s
+    const AUTH_TOTAL_TIMEOUT_MS = isProtectedAdmin ? 12000 : 8000;
+    const perCallTimeout = isProtectedAdmin ? 8000 : 4000;
 
-    const getRemainingTimeout = (maxTimeoutMs = 3000) => {
+    const getRemainingTimeout = (maxTimeoutMs = perCallTimeout) => {
       const remaining = AUTH_TOTAL_TIMEOUT_MS - (Date.now() - authStartTime);
-      return Math.max(100, Math.min(maxTimeoutMs, remaining));
+      return Math.max(200, Math.min(maxTimeoutMs, remaining));
     };
 
     let user: any = null;
@@ -115,7 +117,7 @@ export async function middleware(request: NextRequest) {
     // 1. Try to validate existing access token
     if (accessToken) {
       try {
-        const timeout = getRemainingTimeout(3000);
+        const timeout = getRemainingTimeout(perCallTimeout);
         const response = await fetchWithTimeout(`${sanitizedBaseUrl}/auth/v1/user`, {
           method: 'GET',
           headers: {
@@ -144,7 +146,7 @@ export async function middleware(request: NextRequest) {
     if ((!user || !user.id) && refreshToken && (Date.now() - authStartTime < AUTH_TOTAL_TIMEOUT_MS)) {
       log.info('[MIDDLEWARE] Access token missing or invalid. Attempting silent token refresh.');
       try {
-        const timeout = getRemainingTimeout(3000);
+        const timeout = getRemainingTimeout(perCallTimeout);
         const refreshResponse = await fetchWithTimeout(`${sanitizedBaseUrl}/auth/v1/token?grant_type=refresh_token`, {
           method: 'POST',
           headers: {
@@ -206,7 +208,7 @@ export async function middleware(request: NextRequest) {
       } else if (Date.now() - authStartTime < AUTH_TOTAL_TIMEOUT_MS) {
         // Query the database profiles table directly via REST API using the validated JWT
         try {
-          const timeout = getRemainingTimeout(3000);
+          const timeout = getRemainingTimeout(perCallTimeout);
           const profileRes = await fetchWithTimeout(
             `${sanitizedBaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=*`,
             {

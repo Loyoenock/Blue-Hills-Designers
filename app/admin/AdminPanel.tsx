@@ -17,19 +17,66 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, User, Coupon, Category, Testimonial } from '../../types';
 import { getSupabaseClient } from '../../lib/supabase';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
-import DashboardTab from './components/DashboardTab';
-import ProductsTab from './components/ProductsTab';
-import CategoriesTab from './components/CategoriesTab';
-import TestimonialsTab from './components/TestimonialsTab';
-import CouponsTab from './components/CouponsTab';
-import OrdersTab from './components/OrdersTab';
-import CustomersTab from './components/CustomersTab';
-import UsersTab from './components/UsersTab';
-import PaymentsTab from './components/PaymentsTab';
-import BookingsTab from './components/BookingsTab';
-import LogsTab from './components/LogsTab';
-import ReconciliationTab from './components/ReconciliationTab';
-import SettingsTab from './components/SettingsTab';
+import dynamic from 'next/dynamic';
+
+function TabLoadingSkeleton({ name }: { name: string }) {
+  return (
+    <div className="bg-[#111111] border border-white/10 rounded-2xl p-8 space-y-6 animate-pulse" id={`tab-skeleton-${name.toLowerCase().replace(/\s+/g, '-')}`}>
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <div className="h-6 w-48 bg-white/10 rounded"></div>
+          <div className="h-3 w-32 bg-white/5 rounded"></div>
+        </div>
+        <div className="h-8 w-24 bg-white/10 rounded-lg"></div>
+      </div>
+      <div className="space-y-3 pt-4">
+        <div className="h-12 w-full bg-white/5 rounded-xl"></div>
+        <div className="h-12 w-full bg-white/5 rounded-xl"></div>
+        <div className="h-12 w-full bg-white/5 rounded-xl"></div>
+      </div>
+    </div>
+  );
+}
+
+const DashboardTab = dynamic(() => import('./components/DashboardTab'), {
+  loading: () => <TabLoadingSkeleton name="Boutique Pulse" />,
+});
+const ProductsTab = dynamic(() => import('./components/ProductsTab'), {
+  loading: () => <TabLoadingSkeleton name="Apparel Registry" />,
+});
+const CategoriesTab = dynamic(() => import('./components/CategoriesTab'), {
+  loading: () => <TabLoadingSkeleton name="Categories" />,
+});
+const TestimonialsTab = dynamic(() => import('./components/TestimonialsTab'), {
+  loading: () => <TabLoadingSkeleton name="Testimonials" />,
+});
+const CouponsTab = dynamic(() => import('./components/CouponsTab'), {
+  loading: () => <TabLoadingSkeleton name="Coupons" />,
+});
+const OrdersTab = dynamic(() => import('./components/OrdersTab'), {
+  loading: () => <TabLoadingSkeleton name="Order Ledger" />,
+});
+const CustomersTab = dynamic(() => import('./components/CustomersTab'), {
+  loading: () => <TabLoadingSkeleton name="VIP Clientele" />,
+});
+const UsersTab = dynamic(() => import('./components/UsersTab'), {
+  loading: () => <TabLoadingSkeleton name="Authorized Staff" />,
+});
+const PaymentsTab = dynamic(() => import('./components/PaymentsTab'), {
+  loading: () => <TabLoadingSkeleton name="Payment Ledger" />,
+});
+const BookingsTab = dynamic(() => import('./components/BookingsTab'), {
+  loading: () => <TabLoadingSkeleton name="Style Bookings" />,
+});
+const LogsTab = dynamic(() => import('./components/LogsTab'), {
+  loading: () => <TabLoadingSkeleton name="Security Audits" />,
+});
+const ReconciliationTab = dynamic(() => import('./components/ReconciliationTab'), {
+  loading: () => <TabLoadingSkeleton name="Reconciliation" />,
+});
+const SettingsTab = dynamic(() => import('./components/SettingsTab'), {
+  loading: () => <TabLoadingSkeleton name="Boutique Settings" />,
+});
 
 const DEFAULT_REVENUE_TARGET = 50000;
 
@@ -523,9 +570,12 @@ export default function Admin() {
 
   // Filter products list
   const filteredProducts = useMemo(() => {
-    let list = products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-                          p.description.toLowerCase().includes(productSearch.toLowerCase());
+    let list = (products || []).filter(p => {
+      if (!p) return false;
+      const pName = p.name || '';
+      const pDesc = p.description || '';
+      const matchSearch = pName.toLowerCase().includes(productSearch.toLowerCase()) || 
+                          pDesc.toLowerCase().includes(productSearch.toLowerCase());
       const matchCat = productCategoryFilter === 'All' || p.category === productCategoryFilter;
       
       const matchStock = stockStatusFilter === 'All' || 
@@ -542,15 +592,15 @@ export default function Admin() {
     });
     
     if (productSort === 'PriceAsc') {
-      list = [...list].sort((a, b) => a.price - b.price);
+      list = [...list].sort((a, b) => (a.price || 0) - (b.price || 0));
     } else if (productSort === 'PriceDesc') {
-      list = [...list].sort((a, b) => b.price - a.price);
+      list = [...list].sort((a, b) => (b.price || 0) - (a.price || 0));
     } else if (productSort === 'StockAsc') {
-      list = [...list].sort((a, b) => a.stock - b.stock);
+      list = [...list].sort((a, b) => (a.stock || 0) - (b.stock || 0));
     } else if (productSort === 'StockDesc') {
-      list = [...list].sort((a, b) => b.stock - a.stock);
+      list = [...list].sort((a, b) => (b.stock || 0) - (a.stock || 0));
     } else if (productSort === 'NameAsc') {
-      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+      list = [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     }
     
     return list;
@@ -644,24 +694,31 @@ export default function Admin() {
   }
 
   // Dashboard calculations
-  const totalRevenue = orders
-    .filter(o => o.status !== 'Cancelled')
-    .reduce((sum, o) => sum + o.amount, 0);
+  const totalRevenue = (orders || [])
+    .filter(o => o && o.status !== 'Cancelled')
+    .reduce((sum, o) => sum + (o?.amount || 0), 0);
 
-  const activeCustomers = users.filter(u => u.role === 'Customer').length;
+  const activeCustomers = (users || []).filter(u => u && u.role === 'Customer').length;
 
   // Filter orders list
-  const filteredOrders = orders.filter(o => {
-    const matchSearch = o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) || o.id.toLowerCase().includes(orderSearch.toLowerCase());
+  const filteredOrders = (orders || []).filter(o => {
+    if (!o) return false;
+    const custName = o.customerName || '';
+    const orderId = o.id || '';
+    const matchSearch = custName.toLowerCase().includes(orderSearch.toLowerCase()) || orderId.toLowerCase().includes(orderSearch.toLowerCase());
     const matchStatus = orderStatusFilter === 'All' || o.status === orderStatusFilter;
     return matchSearch && matchStatus;
   });
 
   // Filter users list
-  const filteredUsers = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
-                        u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-                        (u.phone && u.phone.toLowerCase().includes(userSearch.toLowerCase()));
+  const filteredUsers = (users || []).filter(u => {
+    if (!u) return false;
+    const name = u.name || '';
+    const email = u.email || '';
+    const phone = u.phone || '';
+    const matchSearch = name.toLowerCase().includes(userSearch.toLowerCase()) || 
+                        email.toLowerCase().includes(userSearch.toLowerCase()) ||
+                        (phone && phone.toLowerCase().includes(userSearch.toLowerCase()));
     const matchRole = userRoleFilter === 'All' || u.role === userRoleFilter;
     return matchSearch && matchRole;
   });
@@ -1181,13 +1238,13 @@ export default function Admin() {
               { id: 'categories', name: 'Categories', icon: Layers, count: (categories || []).length },
               { id: 'testimonials', name: 'Testimonials', icon: MessageSquare, count: (testimonials || []).length },
               { id: 'coupons', name: 'Coupons', icon: Tag, count: (coupons || []).length },
-              { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: orders.length },
-              { id: 'customers', name: 'VIP Clientele', icon: UserCircle, count: customerUsers.length },
+              { id: 'orders', name: 'Order Ledger', icon: ShoppingBag, count: (orders || []).length },
+              { id: 'customers', name: 'VIP Clientele', icon: UserCircle, count: (customerUsers || []).length },
               { id: 'bookings', name: 'Style Bookings', icon: Calendar, count: (bookings || []).length },
               { id: 'payments', name: 'Payment Ledger', icon: CreditCard, count: (payments || []).length },
               { id: 'users', name: 'Authorized Staff', icon: Users },
-              { id: 'logs', name: 'Security Audits', icon: FileText, count: auditLogs.length },
-              { id: 'reconciliation', name: 'Reconciliation', icon: ShieldAlert, count: reconciliationFlags.length },
+              { id: 'logs', name: 'Security Audits', icon: FileText, count: (auditLogs || []).length },
+              { id: 'reconciliation', name: 'Reconciliation', icon: ShieldAlert, count: (reconciliationFlags || []).length },
               { id: 'settings', name: 'Boutique Settings', icon: Settings }
             ].map((tab) => {
               const Icon = tab.icon;
