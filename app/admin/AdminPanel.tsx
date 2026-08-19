@@ -77,6 +77,12 @@ const ReconciliationTab = dynamic(() => import('./components/ReconciliationTab')
 const SettingsTab = dynamic(() => import('./components/SettingsTab'), {
   loading: () => <TabLoadingSkeleton name="Boutique Settings" />,
 });
+const OrderFormModal = dynamic(() => import('./components/OrderFormModal'), {
+  ssr: false,
+});
+const DeleteOrderModal = dynamic(() => import('./components/DeleteOrderModal'), {
+  ssr: false,
+});
 
 const DEFAULT_REVENUE_TARGET = 50000;
 
@@ -86,6 +92,7 @@ export default function Admin() {
     currentUser, login, products, orders, users, auditLogs, payments, settings, bookings, coupons, categories, testimonials,
     adminError, clearAdminError,
     addProduct, updateProduct, deleteProduct, updateOrderStatus, updatePaymentStatus,
+    adminCreateOrder, adminUpdateOrder, adminDeleteOrder,
     adminAddUser, adminUpdateUser, adminDeleteUser, adminResetUserPassword, updateSettings,
     deleteReview, updateProductStockQuick, updateBookingStatus,
     addCoupon, updateCoupon, deleteCoupon,
@@ -513,6 +520,49 @@ export default function Admin() {
   // Selected Order for detail overlay modal
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
 
+  // Order CRUD modal states
+  const [isOrderFormModalOpen, setIsOrderFormModalOpen] = useState(false);
+  const [orderFormMode, setOrderFormMode] = useState<'create' | 'edit'>('create');
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+
+  const [isDeleteOrderModalOpen, setIsDeleteOrderModalOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+
+  const handleOpenCreateOrderModal = () => {
+    setOrderFormMode('create');
+    setEditingOrder(null);
+    setIsOrderFormModalOpen(true);
+  };
+
+  const handleOpenEditOrderModal = (o: Order) => {
+    setOrderFormMode('edit');
+    setEditingOrder(o);
+    setIsOrderFormModalOpen(true);
+  };
+
+  const handleOpenDeleteOrderModal = (o: Order) => {
+    setOrderToDelete(o);
+    setIsDeleteOrderModalOpen(true);
+  };
+
+  const handleSaveOrder = async (orderData: any) => {
+    const adminName = currentUser?.name || 'Master Admin';
+    const adminRole = currentUser?.role || 'Super Admin';
+
+    if (orderFormMode === 'create') {
+      return await adminCreateOrder(orderData, adminName, adminRole);
+    } else if (editingOrder) {
+      return await adminUpdateOrder(editingOrder.id, orderData, adminName, adminRole);
+    }
+    return { success: false, error: 'No order selected for update.' };
+  };
+
+  const handleConfirmDeleteOrder = async (orderId: string) => {
+    const adminName = currentUser?.name || 'Master Admin';
+    const adminRole = currentUser?.role || 'Super Admin';
+    return await adminDeleteOrder(orderId, adminName, adminRole);
+  };
+
   // Boutique Settings state
   const [sHours, setSHours] = useState(() => settings?.showroomHours || '');
   const [sPhone, setSPhone] = useState(() => settings?.conciergePhone || settings?.supportPhone || '');
@@ -655,6 +705,8 @@ export default function Admin() {
   // Role based access restrictions
   const canModifyProducts = userRole === 'Super Admin' || userRole === 'Admin' || userRole === 'Manager';
   const canModifyOrders = userRole === 'Super Admin' || userRole === 'Admin' || userRole === 'Manager' || userRole === 'Staff';
+  const canCreateOrders = userRole === 'Super Admin' || userRole === 'Admin';
+  const canDeleteOrders = userRole === 'Super Admin' || userRole === 'Admin';
   const canDeleteProducts = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeLogs = userRole === 'Super Admin' || userRole === 'Admin';
   const canSeeReconciliation = userRole === 'Super Admin' || userRole === 'Admin';
@@ -1383,9 +1435,14 @@ export default function Admin() {
                 setOrderStatusFilter={setOrderStatusFilter}
                 filteredOrders={filteredOrders}
                 canModifyOrders={canModifyOrders}
+                canCreateOrders={canCreateOrders}
+                canDeleteOrders={canDeleteOrders}
                 updateOrderStatus={updateOrderStatus}
                 currentUser={currentUser}
                 setSelectedOrderDetails={setSelectedOrderDetails}
+                onCreateOrder={handleOpenCreateOrderModal}
+                onEditOrder={handleOpenEditOrderModal}
+                onDeleteOrder={handleOpenDeleteOrderModal}
               />
             )}
 
@@ -2119,6 +2176,30 @@ export default function Admin() {
           </>
         )}
       </AnimatePresence>
+
+      {/* ORDER CREATE / EDIT MODAL */}
+      <OrderFormModal
+        isOpen={isOrderFormModalOpen}
+        onClose={() => {
+          setIsOrderFormModalOpen(false);
+          setEditingOrder(null);
+        }}
+        mode={orderFormMode}
+        initialOrder={editingOrder}
+        products={products || []}
+        onSave={handleSaveOrder}
+      />
+
+      {/* ORDER DELETE CONFIRMATION MODAL */}
+      <DeleteOrderModal
+        isOpen={isDeleteOrderModalOpen}
+        onClose={() => {
+          setIsDeleteOrderModalOpen(false);
+          setOrderToDelete(null);
+        }}
+        order={orderToDelete}
+        onConfirmDelete={handleConfirmDeleteOrder}
+      />
 
       {/* USER MANAGEMENT FORM MODAL */}
       <AnimatePresence>

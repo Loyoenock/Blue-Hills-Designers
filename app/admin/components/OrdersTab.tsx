@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Download, Printer, Search } from 'lucide-react';
+import { Download, Printer, Search, Plus, Edit2, Trash2, Eye } from 'lucide-react';
 import { Order, User } from '../../../types';
 
 interface OrdersTabProps {
@@ -12,9 +12,14 @@ interface OrdersTabProps {
   setOrderStatusFilter: (s: string) => void;
   filteredOrders: Order[];
   canModifyOrders: boolean;
+  canCreateOrders?: boolean;
+  canDeleteOrders?: boolean;
   updateOrderStatus: (id: string, status: any, name: string, role: string) => Promise<any>;
   currentUser: User | null;
   setSelectedOrderDetails: (order: Order) => void;
+  onCreateOrder?: () => void;
+  onEditOrder?: (order: Order) => void;
+  onDeleteOrder?: (order: Order) => void;
 }
 
 export default function OrdersTab({
@@ -25,9 +30,14 @@ export default function OrdersTab({
   setOrderStatusFilter,
   filteredOrders,
   canModifyOrders,
+  canCreateOrders = false,
+  canDeleteOrders = false,
   updateOrderStatus,
   currentUser,
   setSelectedOrderDetails,
+  onCreateOrder,
+  onEditOrder,
+  onDeleteOrder,
 }: OrdersTabProps) {
   return (
     <motion.div 
@@ -38,18 +48,29 @@ export default function OrdersTab({
       className="space-y-6"
     >
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="font-serif text-xl text-white font-bold">BHD Orders Ledger</h3>
+        <div>
+          <h3 className="font-serif text-xl text-white font-bold">BHD Orders Ledger</h3>
+          <p className="text-white/40 text-xs mt-0.5">Sartorial dispatches, boutique commissions, and ledger status</p>
+        </div>
 
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {canCreateOrders && onCreateOrder && (
+            <button
+              onClick={onCreateOrder}
+              className="bg-[#C6A15B] hover:bg-[#b08e4d] text-black font-bold px-3.5 py-1.5 rounded-lg text-xs font-mono uppercase flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Record Order
+            </button>
+          )}
           <button 
             onClick={() => handleExportData('csv')}
-            className="bg-[#111111] hover:bg-white/5 border border-white/10 px-3 py-1.5 rounded text-xs text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="bg-[#111111] hover:bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-xs text-white flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-[#20D9A1]" /> Export CSV
           </button>
           <button 
             onClick={() => handleExportData('print')}
-            className="bg-[#111111] hover:bg-white/5 border border-white/10 px-3 py-1.5 rounded text-xs text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="bg-[#111111] hover:bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-xs text-white flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5 text-[#5F39FF]" /> Print Ledger
           </button>
@@ -64,7 +85,7 @@ export default function OrdersTab({
             type="text" 
             value={orderSearch}
             onChange={(e) => setOrderSearch(e.target.value)}
-            placeholder="Search Order ID, Client names..."
+            placeholder="Search Order ID, Client names, items..."
             className="bg-transparent border-0 outline-none text-xs text-white placeholder-white/35 w-full focus:ring-0"
           />
         </div>
@@ -72,7 +93,7 @@ export default function OrdersTab({
           <select 
             value={orderStatusFilter}
             onChange={(e) => setOrderStatusFilter(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none"
+            className="w-full bg-black/40 border border-white/10 rounded-lg text-xs py-2 px-3 text-white focus:outline-none focus:border-[#C6A15B]"
           >
             <option value="All">All Dispatches</option>
             <option value="Pending">Pending</option>
@@ -84,7 +105,7 @@ export default function OrdersTab({
       </div>
 
       {/* Ledger lists */}
-      <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 overflow-hidden">
+      <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse font-sans text-xs">
             <thead>
@@ -94,61 +115,94 @@ export default function OrdersTab({
                 <th className="py-3 px-2 font-mono">DATE RECORDED</th>
                 <th className="py-3 px-2 font-mono">TOTAL SUM</th>
                 <th className="py-3 px-2 font-mono">STATUS STATE</th>
-                <th className="py-3 px-2 text-right">Action</th>
+                <th className="py-3 px-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredOrders.map((o) => (
-                <tr key={o.id} className="hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{o.orderNumber || o.id}</td>
-                  <td className="py-3 px-2 space-y-0.5">
-                    <span className="font-semibold text-white block">{o.customerName}</span>
-                    <span className="text-[10px] text-white/40 block">{o.customerEmail}</span>
-                  </td>
-                  <td className="py-3 px-2 font-mono text-white/50">{o.date}</td>
-                  <td className="py-3 px-2 font-mono font-bold text-white">Ugx {o.amount}</td>
-                  <td className="py-3 px-2">
-                    {/* Status state modifier dropdown */}
-                    {canModifyOrders ? (
-                      <select
-                        value={o.status}
-                        onChange={(e) => updateOrderStatus(
-                          o.id, 
-                          e.target.value as any,
-                          currentUser?.name || 'Master Admin',
-                          currentUser?.role || 'Super Admin'
-                        )}
-                        className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
-                          o.status === 'Delivered' ? 'text-green-400' :
-                          o.status === 'Processing' ? 'text-blue-400' :
-                          o.status === 'Cancelled' ? 'text-red-400' :
-                          'text-yellow-400'
-                        }`}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Processing">Processing</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
-                    ) : (
-                      <span className={`text-[10px] font-mono uppercase font-bold px-2.5 py-1 rounded-full ${
-                        o.status === 'Delivered' ? 'bg-green-500/10 text-green-400' :
-                        'bg-yellow-500/10 text-yellow-400'
-                      }`}>
-                        {o.status}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-2 text-right">
-                    <button 
-                      onClick={() => setSelectedOrderDetails(o)}
-                      className="bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] uppercase font-mono px-2.5 py-1.5 rounded transition-all cursor-pointer"
-                    >
-                      Review
-                    </button>
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-white/40 font-mono text-xs">
+                    No orders match your filter criteria.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredOrders.map((o) => (
+                  <tr key={o.id} className="hover:bg-white/5 transition-colors">
+                    <td className="py-3 px-2 font-mono font-bold text-[#20D9A1]">{o.orderNumber || o.id}</td>
+                    <td className="py-3 px-2 space-y-0.5">
+                      <span className="font-semibold text-white block">{o.customerName}</span>
+                      <span className="text-[10px] text-white/40 block">{o.customerEmail}</span>
+                    </td>
+                    <td className="py-3 px-2 font-mono text-white/50">{o.date?.split('T')[0] || o.date}</td>
+                    <td className="py-3 px-2 font-mono font-bold text-white">Ugx {o.amount.toLocaleString()}</td>
+                    <td className="py-3 px-2">
+                      {/* Status state modifier dropdown */}
+                      {canModifyOrders ? (
+                        <select
+                          value={o.status}
+                          onChange={(e) => updateOrderStatus(
+                            o.id, 
+                            e.target.value as any,
+                            currentUser?.name || 'Master Admin',
+                            currentUser?.role || 'Super Admin'
+                          )}
+                          className={`text-[10px] font-mono uppercase font-bold py-1 px-2.5 rounded-full bg-black border border-white/10 outline-none focus:border-[#5F39FF] ${
+                            o.status === 'Delivered' ? 'text-green-400' :
+                            o.status === 'Processing' ? 'text-blue-400' :
+                            o.status === 'Cancelled' ? 'text-red-400' :
+                            'text-yellow-400'
+                          }`}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Processing">Processing</option>
+                          <option value="Delivered">Delivered</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      ) : (
+                        <span className={`text-[10px] font-mono uppercase font-bold px-2.5 py-1 rounded-full ${
+                          o.status === 'Delivered' ? 'bg-green-500/10 text-green-400' :
+                          o.status === 'Processing' ? 'bg-blue-500/10 text-blue-400' :
+                          o.status === 'Cancelled' ? 'bg-red-500/10 text-red-400' :
+                          'bg-yellow-500/10 text-yellow-400'
+                        }`}>
+                          {o.status}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-2 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button 
+                          onClick={() => setSelectedOrderDetails(o)}
+                          className="bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] uppercase font-mono px-2.5 py-1.5 rounded transition-all cursor-pointer flex items-center gap-1"
+                          title="Review Record"
+                        >
+                          <Eye className="w-3 h-3 text-[#20D9A1]" /> Review
+                        </button>
+                        
+                        {canModifyOrders && onEditOrder && (
+                          <button
+                            onClick={() => onEditOrder(o)}
+                            className="bg-white/5 border border-white/10 hover:bg-white/10 text-white hover:text-[#C6A15B] text-[10px] uppercase font-mono px-2 py-1.5 rounded transition-all cursor-pointer flex items-center gap-1"
+                            title="Edit Order"
+                          >
+                            <Edit2 className="w-3 h-3" /> Edit
+                          </button>
+                        )}
+
+                        {canDeleteOrders && onDeleteOrder && (
+                          <button
+                            onClick={() => onDeleteOrder(o)}
+                            className="bg-white/5 border border-white/10 hover:bg-red-500/20 text-white/60 hover:text-red-400 text-[10px] uppercase font-mono px-2 py-1.5 rounded transition-all cursor-pointer flex items-center gap-1"
+                            title="Delete Order"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

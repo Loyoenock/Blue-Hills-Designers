@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 import { isNetworkOrConnectionError, getEffectivePrice } from '../lib/utils';
+import { toDbOrderStatus, toUiOrderStatus } from '../lib/orderStatus';
 import { VALID_COUPONS } from '../lib/coupons';
 
 interface StoreState {
@@ -84,6 +85,54 @@ interface StoreState {
   placeOrder: (orderData: Omit<Order, 'id' | 'date'> & { id?: string; date?: string; paymentId?: string; paymentStatus?: Payment['status']; paymentTransactionId?: string; }, skipDbSync?: boolean) => Order;
   updateOrderStatus: (orderId: string, status: Order['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
   cancelOrder: (orderId: string) => Promise<{ success: boolean; error?: string }>;
+  adminCreateOrder: (
+    payload: {
+      customerName: string;
+      customerEmail: string;
+      customerPhone?: string;
+      userId?: string | null;
+      items: Array<{
+        productId?: string;
+        productName: string;
+        price: number;
+        quantity: number;
+        selectedSize?: string;
+        selectedColor?: string;
+        image?: string;
+      }>;
+      shippingAddress: {
+        country: string;
+        district: string;
+        city: string;
+        address: string;
+      };
+      paymentMethod: Order['paymentMethod'];
+      notes?: string;
+      status?: Order['status'];
+    },
+    adminName: string,
+    adminRole: string
+  ) => Promise<{ success: boolean; error?: string; order?: Order }>;
+  adminUpdateOrder: (
+    orderId: string,
+    updates: Partial<{
+      customerName: string;
+      customerEmail: string;
+      customerPhone: string;
+      notes: string;
+      status: Order['status'];
+      paymentMethod: Order['paymentMethod'];
+      shippingAddress: Partial<Order['shippingAddress']>;
+      items: Order['items'];
+    }>,
+    adminName: string,
+    adminRole: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  adminDeleteOrder: (
+    orderId: string,
+    adminName: string,
+    adminRole: string
+  ) => Promise<{ success: boolean; error?: string }>;
   updatePaymentStatus: (paymentId: string, status: Payment['status'], modifierName: string, modifierRole: string) => Promise<{ success: boolean; error?: string }>;
   updateSettings: (newSettings: Partial<AppSettings>, updaterName: string, updaterRole: string) => Promise<{ success: boolean; error?: string }>;
 
@@ -1721,13 +1770,7 @@ export const useStore = create<StoreState>()(
             customerEmail: profile?.email || '',
             customerPhone: profile?.phone || '',
             amount: o.amount,
-            status: (() => {
-              const s = o.status?.toLowerCase() || 'pending';
-              if (s === 'completed' || s === 'delivered') return 'Delivered';
-              if (s === 'processing') return 'Processing';
-              if (s === 'cancelled') return 'Cancelled';
-              return 'Pending';
-            })(),
+            status: toUiOrderStatus(o.status),
             date: o.created_at,
             paymentMethod: o.payment_method,
             notes: o.notes,
@@ -2125,13 +2168,7 @@ export const useStore = create<StoreState>()(
           const existingIndex = orders.findIndex(o => o.id === orderId || o.orderNumber === newRow.order_number);
           const existing = existingIndex !== -1 ? orders[existingIndex] : null;
 
-          const formattedStatus = (() => {
-            const s = newRow.status?.toLowerCase() || 'pending';
-            if (s === 'completed' || s === 'delivered') return 'Delivered';
-            if (s === 'processing') return 'Processing';
-            if (s === 'cancelled') return 'Cancelled';
-            return 'Pending';
-          })();
+          const formattedStatus = toUiOrderStatus(newRow.status);
 
           const matchedUser = get().users?.find(u => u.id === newRow.user_id);
 
@@ -3609,6 +3646,218 @@ export const useStore = create<StoreState>()(
           return { success: false, error: `This order can no longer be cancelled (status: ${order.status}).` };
         }
         return get().updateOrderStatus(order.id, 'Cancelled', currentUser.name || 'Customer', 'Customer');
+      },
+
+      adminCreateOrder: async (payload, adminName, adminRole) => {
+        if (!payload.customerName || !payload.customerName.trim()) {
+          return { success: false, error: 'Customer name is required.' };
+        }
+        if (!payload.customerEmail || !payload.customerEmail.trim()) {
+          return { success: false, error: 'Customer email is required.' };
+        }
+        if (!payload.shippingAddress || !payload.shippingAddress.address?.trim()) {
+          return { success: false, error: 'Shipping street address is required.' };
+        }
+        if (!payload.items || payload.items.length === 0) {
+          return { success: false, error: 'At least one line item is required.' };
+        }
+
+        try {
+          const headers = await getAuthHeaders();
+          const response = await fetchWithRetry('/api/admin/orders', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+          });
+
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || !res.success) {
+            const errorMsg = res.error || 'Failed to create order ledger entry.';
+            set({ adminError: errorMsg });
+            return { success: false, error: errorMsg };
+          }
+
+          const createdOrder: Order = res.order;
+          const createdPayment: Payment | undefined = res.payment;
+
+          set(state => ({
+            orders: [createdOrder, ...(state.orders || [])],
+            payments: createdPayment ? [createdPayment, ...(state.payments || [])] : (state.payments || [])
+          }));
+
+          get().addAuditLog(
+            'Order Created',
+            `Admin registered boutique order #${createdOrder.orderNumber || createdOrder.id} for client '${createdOrder.customerName}' (Total: Ugx ${createdOrder.amount}).`,
+            'admin-creator',
+            adminName,
+            adminRole as User['role']
+          );
+
+          return { success: true, order: createdOrder };
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Failed to create order ledger entry.';
+          set({ adminError: errorMsg });
+          return { success: false, error: errorMsg };
+        }
+      },
+
+      adminUpdateOrder: async (orderId, updates, adminName, adminRole) => {
+        if (!isUUID(orderId)) {
+          return {
+            success: false,
+            error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+          };
+        }
+
+        const previousOrders = get().orders || [];
+        const previousPayments = get().payments || [];
+        const targetOrder = previousOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+
+        if (!targetOrder) {
+          return { success: false, error: 'Order not found.' };
+        }
+
+        // Compute optimistic updated order
+        const newItems = updates.items || targetOrder.items;
+        const newAmount = updates.items
+          ? updates.items.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0)
+          : targetOrder.amount;
+
+        const optimisticOrder: Order = {
+          ...targetOrder,
+          customerName: updates.customerName !== undefined ? updates.customerName : targetOrder.customerName,
+          customerEmail: updates.customerEmail !== undefined ? updates.customerEmail : targetOrder.customerEmail,
+          customerPhone: updates.customerPhone !== undefined ? updates.customerPhone : targetOrder.customerPhone,
+          notes: updates.notes !== undefined ? updates.notes : targetOrder.notes,
+          status: updates.status ? toUiOrderStatus(updates.status) : targetOrder.status,
+          paymentMethod: updates.paymentMethod || targetOrder.paymentMethod,
+          shippingAddress: {
+            ...targetOrder.shippingAddress,
+            ...(updates.shippingAddress || {})
+          },
+          items: newItems,
+          amount: newAmount
+        };
+
+        // Optimistic payments update if status changed
+        let updatedPayments = previousPayments;
+        if (updates.status && updates.status !== targetOrder.status) {
+          const uiStatus = toUiOrderStatus(updates.status);
+          updatedPayments = previousPayments.map(p => {
+            if (p.orderId === targetOrder.id || p.orderId === targetOrder.orderNumber) {
+              if (uiStatus === 'Delivered' && p.status === 'Pending') {
+                return { ...p, status: 'Paid' as Payment['status'] };
+              }
+              if (uiStatus === 'Cancelled' && p.status !== 'Refunded') {
+                return { ...p, status: 'Cancelled' as Payment['status'] };
+              }
+            }
+            return p;
+          });
+        }
+
+        set({
+          orders: previousOrders.map(o => o.id === targetOrder.id ? optimisticOrder : o),
+          payments: updatedPayments
+        });
+
+        try {
+          const headers = await getAuthHeaders();
+          const response = await fetchWithRetry(`/api/admin/orders/${targetOrder.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify(updates)
+          });
+
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || !res.success) {
+            const errorMsg = res.error || 'Failed to update order.';
+            set({
+              orders: previousOrders,
+              payments: previousPayments,
+              adminError: `Failed to update order #${targetOrder.orderNumber || orderId}: ${errorMsg}`
+            });
+            return { success: false, error: errorMsg };
+          }
+
+          get().addAuditLog(
+            'Order Updated',
+            `Admin updated order #${targetOrder.orderNumber || orderId} (${optimisticOrder.customerName}, Status: ${optimisticOrder.status}, Sum: Ugx ${optimisticOrder.amount}).`,
+            'admin-modifier',
+            adminName,
+            adminRole as User['role']
+          );
+
+          return { success: true };
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Failed to update order.';
+          set({
+            orders: previousOrders,
+            payments: previousPayments,
+            adminError: `Failed to update order #${targetOrder.orderNumber || orderId}: ${errorMsg}`
+          });
+          return { success: false, error: errorMsg };
+        }
+      },
+
+      adminDeleteOrder: async (orderId, adminName, adminRole) => {
+        if (!isUUID(orderId)) {
+          return {
+            success: false,
+            error: 'This record only exists locally and has no corresponding database entry to delete/update. Refresh the page — if it persists, this is a demo/seed record that should be removed from the codebase, not deleted via the admin panel.'
+          };
+        }
+
+        const previousOrders = get().orders || [];
+        const previousPayments = get().payments || [];
+        const targetOrder = previousOrders.find(o => o.id === orderId || o.orderNumber === orderId);
+
+        if (!targetOrder) {
+          return { success: false, error: 'Order not found in state.' };
+        }
+
+        // Optimistic remove
+        set(state => ({
+          orders: (state.orders || []).filter(o => o.id !== targetOrder.id),
+          payments: (state.payments || []).filter(p => p.orderId !== targetOrder.id && p.orderId !== targetOrder.orderNumber)
+        }));
+
+        try {
+          const headers = await getAuthHeaders();
+          const response = await fetchWithRetry(`/api/admin/orders/${targetOrder.id}`, {
+            method: 'DELETE',
+            headers
+          });
+
+          const res = await response.json().catch(() => ({}));
+          if (!response.ok || !res.success) {
+            const errorMsg = res.error || 'Failed to delete order.';
+            set({
+              orders: previousOrders,
+              payments: previousPayments,
+              adminError: `Failed to delete order #${targetOrder.orderNumber || orderId}: ${errorMsg}`
+            });
+            return { success: false, error: errorMsg };
+          }
+
+          get().addAuditLog(
+            'Order Deleted',
+            `Admin deleted order #${targetOrder.orderNumber || orderId} for client '${targetOrder.customerName}' (Ugx ${targetOrder.amount}).`,
+            'admin-deleter',
+            adminName,
+            adminRole as User['role']
+          );
+
+          return { success: true };
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Failed to delete order.';
+          set({
+            orders: previousOrders,
+            payments: previousPayments,
+            adminError: `Failed to delete order #${targetOrder.orderNumber || orderId}: ${errorMsg}`
+          });
+          return { success: false, error: errorMsg };
+        }
       },
 
       updatePaymentStatus: async (paymentId, status, modifierName, modifierRole) => {
