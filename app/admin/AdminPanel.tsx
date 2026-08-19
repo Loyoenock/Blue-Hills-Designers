@@ -93,8 +93,8 @@ export default function Admin() {
     addTestimonial, updateTestimonial, deleteTestimonial
   } = useStore();
 
-  // Admin-specific Realtime subscriptions for orders and profiles
-  useRealtimeSync({ orders: true, profiles: true });
+  // Admin-specific Realtime subscriptions for profiles (orders/payments handled by Header)
+  useRealtimeSync({ profiles: true });
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'categories' | 'testimonials' | 'coupons' | 'orders' | 'customers' | 'users' | 'logs' | 'payments' | 'settings' | 'bookings' | 'reconciliation'>('dashboard');

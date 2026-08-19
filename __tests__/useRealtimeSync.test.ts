@@ -1,10 +1,179 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  useRealtimeSync,
+  registerChannelCallback,
+  unregisterChannelCallback,
+  __getRealtimeChannelRegistry,
+  __resetRealtimeChannelRegistry
+} from '@/hooks/useRealtimeSync';
 import { useStore } from '@/store/useStore';
+import * as supabaseModule from '@/lib/supabase';
 
 describe('useRealtimeSync Hook Module', () => {
   it('exports useRealtimeSync function correctly', () => {
     expect(typeof useRealtimeSync).toBe('function');
+  });
+
+  describe('Realtime Channel Singleton & Multi-Subscriber Registry', () => {
+    let mockChannelInstance: any;
+    let mockSupabase: any;
+    let registeredPostgresHandler: ((payload: any) => void) | null = null;
+    let onCallCount = 0;
+    let subscribeCallCount = 0;
+    let removeChannelCallCount = 0;
+
+    beforeEach(() => {
+      __resetRealtimeChannelRegistry();
+      onCallCount = 0;
+      subscribeCallCount = 0;
+      removeChannelCallCount = 0;
+      registeredPostgresHandler = null;
+
+      mockChannelInstance = {
+        name: 'orders-changes',
+        on: vi.fn((event: string, filter: any, handler: (payload: any) => void) => {
+          onCallCount++;
+          registeredPostgresHandler = handler;
+          return mockChannelInstance;
+        }),
+        subscribe: vi.fn((statusCallback: (status: string) => void) => {
+          subscribeCallCount++;
+          if (statusCallback) statusCallback('SUBSCRIBED');
+          return mockChannelInstance;
+        }),
+      };
+
+      mockSupabase = {
+        channel: vi.fn((name: string) => mockChannelInstance),
+        removeChannel: vi.fn((ch: any) => {
+          removeChannelCallCount++;
+        }),
+      };
+
+      vi.spyOn(supabaseModule, 'getSupabaseClient').mockReturnValue(mockSupabase);
+    });
+
+    it('(a) two sequential calls with the same channel name only create and subscribe the channel once', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+
+      const config = {
+        channelName: 'orders-changes',
+        table: 'orders',
+        logLabel: 'Orders',
+        changeMsg: 'Order changed',
+        statusMsg: 'Status changed',
+      };
+
+      // First subscriber (e.g. Header)
+      const unsub1 = registerChannelCallback(config, cb1);
+
+      expect(mockSupabase.channel).toHaveBeenCalledTimes(1);
+      expect(mockChannelInstance.on).toHaveBeenCalledTimes(1);
+      expect(mockChannelInstance.subscribe).toHaveBeenCalledTimes(1);
+
+      // Second subscriber (e.g. AdminPanel)
+      const unsub2 = registerChannelCallback(config, cb2);
+
+      // Channel, .on, and .subscribe should NOT be called again
+      expect(mockSupabase.channel).toHaveBeenCalledTimes(1);
+      expect(mockChannelInstance.on).toHaveBeenCalledTimes(1);
+      expect(mockChannelInstance.subscribe).toHaveBeenCalledTimes(1);
+
+      const registry = __getRealtimeChannelRegistry();
+      expect(registry.has('orders-changes')).toBe(true);
+      expect(registry.get('orders-changes')?.callbacks.size).toBe(2);
+
+      unsub1();
+      unsub2();
+    });
+
+    it('(b) adding a second subscriber only registers an extra callback and fans out payloads without re-calling .on()', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+
+      const config = {
+        channelName: 'orders-changes',
+        table: 'orders',
+        logLabel: 'Orders',
+        changeMsg: 'Order changed',
+        statusMsg: 'Status changed',
+      };
+
+      const unsub1 = registerChannelCallback(config, cb1);
+      const unsub2 = registerChannelCallback(config, cb2);
+
+      expect(onCallCount).toBe(1);
+
+      // Simulate a Postgres change event fired by Supabase
+      const payload = { eventType: 'UPDATE', new: { id: 'ord-1', status: 'delivered' } };
+      expect(registeredPostgresHandler).toBeDefined();
+      registeredPostgresHandler!(payload);
+
+      // Both callbacks must receive the broadcast payload
+      expect(cb1).toHaveBeenCalledWith(payload);
+      expect(cb2).toHaveBeenCalledWith(payload);
+
+      unsub1();
+      unsub2();
+    });
+
+    it('(c) unmounting one subscriber leaves the channel alive while the other is still active', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+
+      const config = {
+        channelName: 'orders-changes',
+        table: 'orders',
+        logLabel: 'Orders',
+        changeMsg: 'Order changed',
+        statusMsg: 'Status changed',
+      };
+
+      const unsub1 = registerChannelCallback(config, cb1);
+      const unsub2 = registerChannelCallback(config, cb2);
+
+      // Unmount subscriber 2 (e.g. Admin navigating away)
+      unsub2();
+
+      // Channel should still be alive in registry with 1 subscriber (Header)
+      const registry = __getRealtimeChannelRegistry();
+      expect(registry.has('orders-changes')).toBe(true);
+      expect(registry.get('orders-changes')?.callbacks.size).toBe(1);
+      expect(removeChannelCallCount).toBe(0);
+
+      // Trigger change event: subscriber 1 should still receive it
+      const payload = { eventType: 'UPDATE', new: { id: 'ord-2', status: 'processing' } };
+      registeredPostgresHandler!(payload);
+      expect(cb1).toHaveBeenCalledWith(payload);
+      expect(cb2).not.toHaveBeenCalledWith(payload);
+
+      // Now unmount subscriber 1
+      unsub1();
+    });
+
+    it('(d) unmounting the last subscriber removes the channel and deletes the registry entry', () => {
+      const cb1 = vi.fn();
+
+      const config = {
+        channelName: 'orders-changes',
+        table: 'orders',
+        logLabel: 'Orders',
+        changeMsg: 'Order changed',
+        statusMsg: 'Status changed',
+      };
+
+      const unsub1 = registerChannelCallback(config, cb1);
+      const registry = __getRealtimeChannelRegistry();
+      expect(registry.has('orders-changes')).toBe(true);
+
+      // Unmount the only subscriber
+      unsub1();
+
+      // Channel should be cleaned up from registry and Supabase removeChannel invoked
+      expect(removeChannelCallCount).toBe(1);
+      expect(registry.has('orders-changes')).toBe(false);
+    });
   });
 
   describe('Realtime Product Updates & Leftover Guard', () => {
@@ -171,4 +340,3 @@ describe('useRealtimeSync Hook Module', () => {
     });
   });
 });
-
