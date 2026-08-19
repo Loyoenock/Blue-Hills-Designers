@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { 
-  User, ShoppingBag, MapPin, Key, ChevronRight, Award, 
+  User, ShoppingBag, MapPin, Key, Award, 
   Clock, CheckCircle, Ship, Compass, ShieldCheck, Edit3, LogOut, Heart, Plus, Trash2
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function AccountClient() {
   const router = useRouter();
   const { 
-    currentUser, orders, updateProfile, updateAddress, updatePassword, logout, login, users,
+    currentUser, orders, updateProfile, updateAddress, updatePassword, logout, login,
     wishlist, toggleWishlist, products, addToCart,
     savedAddresses, addSavedAddress, updateSavedAddress, deleteSavedAddress, setDefaultAddress,
     cancelOrder
@@ -89,30 +89,6 @@ export default function AccountClient() {
             >
               Sign In to Your Account
             </Link>
-            
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#657892]/20"></div></div>
-              <span className="relative bg-[#F7F5F0] px-3 text-[10px] text-[#657892]/60 uppercase tracking-widest font-mono">Or Quick Validate As</span>
-            </div>
-
-            {/* Sign in shortcuts */}
-            <div className="grid grid-cols-1 gap-2">
-              {users.slice(0, 2).map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => {
-                    router.push('/login');
-                  }}
-                  className="bg-[#B9CDE5]/10 hover:bg-[#B9CDE5]/20 border border-[#657892]/20 rounded-lg p-2.5 text-xs text-left text-[#1D2B3F] flex justify-between items-center transition-all cursor-pointer"
-                >
-                  <div>
-                    <span className="font-semibold block">{u.name}</span>
-                    <span className="text-[10px] text-[#657892] font-mono">{u.role} Account</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[#657892]/50" />
-                </button>
-              ))}
-            </div>
           </div>
         </main>
       </div>

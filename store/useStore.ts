@@ -1226,6 +1226,19 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     if (supabase) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
+        // If session is expired or expiring in the next 30 seconds, attempt a clean refresh
+        const expiresAt = session.expires_at ? session.expires_at * 1000 : null;
+        if (expiresAt && Date.now() > expiresAt - 30000) {
+          try {
+            const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+            if (!refreshErr && refreshData.session?.access_token) {
+              headers['Authorization'] = `Bearer ${refreshData.session.access_token}`;
+              return headers;
+            }
+          } catch {
+            // If refresh fails, continue with existing session token
+          }
+        }
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
     }
@@ -1704,21 +1717,19 @@ export const useStore = create<StoreState>()(
         if (privatePaths.length > 0) {
           try {
             const headers = await getAuthHeaders();
-            if (headers.Authorization || headers['Authorization']) {
-              const response = await fetchWithRetry('/api/storage', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
-              });
-              if (response.ok) {
-                const data = await response.json();
-                if (data.signedUrls) {
-                  data.signedUrls.forEach((item: any) => {
-                    if (item.signedUrl) {
-                      signedUrlsMap[item.path] = item.signedUrl;
-                    }
-                  });
-                }
+            const response = await fetchWithRetry('/api/storage', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ action: 'getSignedUrls', paths: privatePaths })
+            });
+            if (response.ok) {
+              const data = await response.json();
+              if (data.signedUrls) {
+                data.signedUrls.forEach((item: any) => {
+                  if (item.signedUrl) {
+                    signedUrlsMap[item.path] = item.signedUrl;
+                  }
+                });
               }
             }
           } catch (e) {

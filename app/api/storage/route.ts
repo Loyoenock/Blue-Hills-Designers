@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, requireAuth } from '@/lib/apiUtils';
+import { enforceRateLimit, createErrorResponse, logger, validateFields, ApiError, authenticate } from '@/lib/apiUtils';
 import crypto from 'crypto';
 
 // Whitelist of allowed extensions for media storage uploads to prevent malicious scripts
@@ -47,21 +47,15 @@ export async function POST(req: NextRequest) {
     // 1. Rate Limiting Check (Max 150 storage requests per minute per IP to prevent exhaustion attacks while enabling batch uploads)
     await enforceRateLimit(req, 150, 60000);
 
-    // 2. Authentication Check
-    const authUser = await requireAuth(req);
-    const isAdminOrStaff = ['super admin', 'admin', 'manager', 'staff'].includes(
-      (authUser.role || '').toLowerCase().trim()
-    );
-
     const body = await req.json().catch(() => ({}));
     
-    // 3. Base Input Validation
+    // 2. Base Input Validation
     validateFields(body, {
       action: 'string'
     });
 
     const { action, userId, featureName, itemId, fileBase64, extension, mimeType, path, paths } = body;
-    const actionLower = action.toLowerCase();
+    const actionLower = (action || '').toLowerCase().trim();
 
     if (!['upload', 'getsignedurl', 'getsignedurls', 'delete'].includes(actionLower)) {
       throw new ApiError(`Invalid action specified: "${action}". Only upload, getSignedUrl, getSignedUrls, and delete are allowed.`, 400);
@@ -74,7 +68,17 @@ export async function POST(req: NextRequest) {
 
     const bucketName = await getBucketName(supabase);
 
+    // Authenticate optionally or strictly depending on the action
+    const authUser = await authenticate(req);
+    const isAdminOrStaff = authUser ? ['super admin', 'admin', 'manager', 'staff'].includes(
+      (authUser.role || '').toLowerCase().trim()
+    ) : false;
+
     if (actionLower === 'upload') {
+      if (!authUser) {
+        throw new ApiError('Authentication token is missing, invalid, or expired.', 401);
+      }
+
       if (!userId || !featureName || !itemId || !fileBase64 || !extension) {
         throw new ApiError('Missing required upload parameters.', 400);
       }
@@ -172,9 +176,12 @@ export async function POST(req: NextRequest) {
         throw new ApiError('Malicious path traversal block activated.', 400);
       }
 
-      // Check ownership or admin/staff privileges
-      const pathUserId = path.split('/')[0];
-      if (!isAdminOrStaff && pathUserId !== authUser.id) {
+      const pathParts = path.split('/');
+      const pathUserId = pathParts[0];
+      const isPublicCatalogAsset = pathParts.includes('products') || pathParts.includes('catalog') || pathParts.includes('banners') || pathParts.includes('categories');
+
+      // Check ownership, public catalog status, or admin/staff privileges
+      if (!isPublicCatalogAsset && !isAdminOrStaff && (!authUser || pathUserId !== authUser.id)) {
         throw new ApiError('Forbidden: You do not have permission to access this storage object.', 403);
       }
 
@@ -203,11 +210,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Check ownership or admin/staff privileges
+      // Check ownership or admin/staff privileges or public catalog assets
       if (!isAdminOrStaff) {
         for (const p of paths) {
-          const pathUserId = p.split('/')[0];
-          if (pathUserId !== authUser.id) {
+          const pathParts = p.split('/');
+          const pathUserId = pathParts[0];
+          const isPublicCatalogAsset = pathParts.includes('products') || pathParts.includes('catalog') || pathParts.includes('banners') || pathParts.includes('categories');
+          if (!isPublicCatalogAsset && (!authUser || pathUserId !== authUser.id)) {
             throw new ApiError('Forbidden: You do not have permission to access one or more requested storage objects.', 403);
           }
         }
@@ -227,6 +236,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ signedUrls: data });
 
     } else if (actionLower === 'delete') {
+      if (!authUser) {
+        throw new ApiError('Authentication token is missing, invalid, or expired.', 401);
+      }
+
       if (!path || typeof path !== 'string') {
         throw new ApiError('Missing required parameter: path string.', 400);
       }
